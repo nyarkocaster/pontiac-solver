@@ -1,0 +1,9 @@
+target/
+node_modules/
+dist/
+__pycache__/
+*.egg-info/
+*.pontiac
+.pytest_cache/
+checks/*.log
+winbuild.log

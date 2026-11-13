@@ -1,0 +1,7405 @@
+{
+  "compressed": false,
+  "ev_bb": {
+    "BB": 4.8,
+    "SB": 7.2
+  },
+  "exploitability_ignoring_locks_pct": 0.198,
+  "exploitability_pct": 0.198,
+  "in_position": "SB",
+  "iterations": 50,
+  "locked_decisions": 0,
+  "memory_mb": 0.2,
+  "nodes": {
+    "river": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 1.0,
+          "name": "check",
+          "path": "river/BB_check"
+        },
+        {
+          "amount_bb": 6.0,
+          "frequency": 0.0,
+          "name": "bet0.5",
+          "path": "river/BB_bet0.5"
+        },
+        {
+          "amount_bb": 14.0,
+          "frequency": 0.0,
+          "name": "allin",
+          "path": "river/BB_allin"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {
+        "54s": {
+          "combos": 3.0,
+          "equity": 0.3036,
+          "ev_bb": 0.456,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "64s": {
+          "combos": 4.0,
+          "equity": 1.0,
+          "ev_bb": 22.876,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "66": {
+          "combos": 6.0,
+          "equity": 0.3168,
+          "ev_bb": 0.72,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "77": {
+          "combos": 6.0,
+          "equity": 0.3293,
+          "ev_bb": 0.917,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "87s": {
+          "combos": 3.0,
+          "equity": 0.3544,
+          "ev_bb": 1.02,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "98s": {
+          "combos": 3.0,
+          "equity": 0.359,
+          "ev_bb": 1.18,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "99": {
+          "combos": 6.0,
+          "equity": 0.3758,
+          "ev_bb": 1.653,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "A3s": {
+          "combos": 3.0,
+          "equity": 0.292,
+          "ev_bb": 0.344,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "A4s": {
+          "combos": 4.0,
+          "equity": 0.9951,
+          "ev_bb": 22.588,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "A5s": {
+          "combos": 3.0,
+          "equity": 0.3216,
+          "ev_bb": 0.732,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "A8s": {
+          "combos": 3.0,
+          "equity": 0.3909,
+          "ev_bb": 1.491,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "J9s": {
+          "combos": 1.0,
+          "equity": 0.0933,
+          "ev_bb": 0.005,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "JJ": {
+          "combos": 1.5,
+          "equity": 0.415,
+          "ev_bb": 2.114,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "K8s": {
+          "combos": 3.0,
+          "equity": 0.4,
+          "ev_bb": 1.94,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "KQo": {
+          "combos": 4.5,
+          "equity": 0.715,
+          "ev_bb": 10.717,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "KTs": {
+          "combos": 1.0,
+          "equity": 0.1299,
+          "ev_bb": 0.062,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "Q7s": {
+          "combos": 3.0,
+          "equity": 0.5,
+          "ev_bb": 4.074,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "Q8s": {
+          "combos": 2.0,
+          "equity": 0.9077,
+          "ev_bb": 18.743,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "Q9o": {
+          "combos": 9.0,
+          "equity": 0.4866,
+          "ev_bb": 3.654,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "Q9s": {
+          "combos": 3.0,
+          "equity": 0.4874,
+          "ev_bb": 3.643,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "TT": {
+          "combos": 6.0,
+          "equity": 0.3791,
+          "ev_bb": 1.75,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        }
+      },
+      "by_combo": {
+        "5c4c": {
+          "equity": 0.3012,
+          "ev_bb": 0.448,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "5h4h": {
+          "equity": 0.3086,
+          "ev_bb": 0.473,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "5s4s": {
+          "equity": 0.3012,
+          "ev_bb": 0.448,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6c4c": {
+          "equity": 1.0,
+          "ev_bb": 22.907,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6d4d": {
+          "equity": 1.0,
+          "ev_bb": 22.788,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6d6c": {
+          "equity": 0.321,
+          "ev_bb": 0.791,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6h4h": {
+          "equity": 1.0,
+          "ev_bb": 22.895,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6h6c": {
+          "equity": 0.3125,
+          "ev_bb": 0.649,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6h6d": {
+          "equity": 0.321,
+          "ev_bb": 0.781,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s4s": {
+          "equity": 1.0,
+          "ev_bb": 22.915,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s6c": {
+          "equity": 0.3125,
+          "ev_bb": 0.656,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s6d": {
+          "equity": 0.321,
+          "ev_bb": 0.788,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s6h": {
+          "equity": 0.3125,
+          "ev_bb": 0.651,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "7d7c": {
+          "equity": 0.3293,
+          "ev_bb": 0.924,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "7h7c": {
+          "equity": 0.3293,
+          "ev_bb": 0.913,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "7h7d": {
+          "equity": 0.3293,
+          "ev_bb": 0.909,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s7c": {
+          "equity": 0.3293,
+          "ev_bb": 0.926,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s7d": {
+          "equity": 0.3293,
+          "ev_bb": 0.919,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s7h": {
+          "equity": 0.3293,
+          "ev_bb": 0.91,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "8d7d": {
+          "equity": 0.3544,
+          "ev_bb": 1.02,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "8h7h": {
+          "equity": 0.3544,
+          "ev_bb": 1.016,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "8s7s": {
+          "equity": 0.3544,
+          "ev_bb": 1.024,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9d8d": {
+          "equity": 0.359,
+          "ev_bb": 1.193,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9d9c": {
+          "equity": 0.3797,
+          "ev_bb": 1.754,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9h8h": {
+          "equity": 0.359,
+          "ev_bb": 1.158,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9h9c": {
+          "equity": 0.3797,
+          "ev_bb": 1.713,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9h9d": {
+          "equity": 0.3718,
+          "ev_bb": 1.549,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s8s": {
+          "equity": 0.359,
+          "ev_bb": 1.19,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s9c": {
+          "equity": 0.3797,
+          "ev_bb": 1.752,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s9d": {
+          "equity": 0.3718,
+          "ev_bb": 1.598,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s9h": {
+          "equity": 0.3718,
+          "ev_bb": 1.549,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ac3c": {
+          "equity": 0.2895,
+          "ev_bb": 0.347,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ac4c": {
+          "equity": 0.9936,
+          "ev_bb": 22.397,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ac5c": {
+          "equity": 0.3182,
+          "ev_bb": 0.743,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ad3d": {
+          "equity": 0.2933,
+          "ev_bb": 0.355,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ad4d": {
+          "equity": 0.9935,
+          "ev_bb": 22.532,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ad8d": {
+          "equity": 0.3919,
+          "ev_bb": 1.515,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ah4h": {
+          "equity": 1.0,
+          "ev_bb": 22.865,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ah5h": {
+          "equity": 0.3243,
+          "ev_bb": 0.729,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ah8h": {
+          "equity": 0.3889,
+          "ev_bb": 1.453,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "As3s": {
+          "equity": 0.2933,
+          "ev_bb": 0.332,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "As4s": {
+          "equity": 0.9935,
+          "ev_bb": 22.566,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "As5s": {
+          "equity": 0.3224,
+          "ev_bb": 0.725,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "As8s": {
+          "equity": 0.3919,
+          "ev_bb": 1.502,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "JdJc": {
+          "equity": 0.4189,
+          "ev_bb": 2.11,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.25
+        },
+        "Jh9h": {
+          "equity": 0.0933,
+          "ev_bb": 0.005,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "JhJc": {
+          "equity": 0.411,
+          "ev_bb": 2.124,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.25
+        },
+        "JhJd": {
+          "equity": 0.411,
+          "ev_bb": 2.128,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.25
+        },
+        "JsJc": {
+          "equity": 0.4189,
+          "ev_bb": 2.101,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.25
+        },
+        "JsJd": {
+          "equity": 0.4189,
+          "ev_bb": 2.105,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.25
+        },
+        "JsJh": {
+          "equity": 0.411,
+          "ev_bb": 2.119,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.25
+        },
+        "KcQd": {
+          "equity": 0.7164,
+          "ev_bb": 10.78,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "KcQs": {
+          "equity": 0.7164,
+          "ev_bb": 10.78,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "Kd8d": {
+          "equity": 0.4026,
+          "ev_bb": 2.034,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "KdQc": {
+          "equity": 0.7164,
+          "ev_bb": 10.819,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "KdQs": {
+          "equity": 0.7164,
+          "ev_bb": 10.78,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "Kh8h": {
+          "equity": 0.3947,
+          "ev_bb": 1.749,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "KhQc": {
+          "equity": 0.7121,
+          "ev_bb": 10.59,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "KhQd": {
+          "equity": 0.7121,
+          "ev_bb": 10.551,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "KhQs": {
+          "equity": 0.7121,
+          "ev_bb": 10.551,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "KhTh": {
+          "equity": 0.1299,
+          "ev_bb": 0.062,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ks8s": {
+          "equity": 0.4026,
+          "ev_bb": 2.034,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "KsQc": {
+          "equity": 0.7164,
+          "ev_bb": 10.819,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "KsQd": {
+          "equity": 0.7164,
+          "ev_bb": 10.78,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 0.5
+        },
+        "Qc7c": {
+          "equity": 0.5,
+          "ev_bb": 3.974,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qc9c": {
+          "equity": 0.4925,
+          "ev_bb": 3.607,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qc9d": {
+          "equity": 0.4848,
+          "ev_bb": 3.52,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qc9h": {
+          "equity": 0.4848,
+          "ev_bb": 3.583,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qc9s": {
+          "equity": 0.4848,
+          "ev_bb": 3.522,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qd7d": {
+          "equity": 0.5,
+          "ev_bb": 4.126,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qd8d": {
+          "equity": 0.9077,
+          "ev_bb": 18.743,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qd9c": {
+          "equity": 0.4925,
+          "ev_bb": 3.746,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qd9d": {
+          "equity": 0.4848,
+          "ev_bb": 3.661,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qd9h": {
+          "equity": 0.4848,
+          "ev_bb": 3.724,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qd9s": {
+          "equity": 0.4848,
+          "ev_bb": 3.662,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qs7s": {
+          "equity": 0.5,
+          "ev_bb": 4.121,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qs8s": {
+          "equity": 0.9077,
+          "ev_bb": 18.743,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qs9c": {
+          "equity": 0.4925,
+          "ev_bb": 3.746,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qs9d": {
+          "equity": 0.4848,
+          "ev_bb": 3.661,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qs9h": {
+          "equity": 0.4848,
+          "ev_bb": 3.724,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Qs9s": {
+          "equity": 0.4848,
+          "ev_bb": 3.662,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "TdTc": {
+          "equity": 0.3816,
+          "ev_bb": 1.812,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "ThTc": {
+          "equity": 0.3766,
+          "ev_bb": 1.704,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "ThTd": {
+          "equity": 0.3766,
+          "ev_bb": 1.718,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "TsTc": {
+          "equity": 0.3816,
+          "ev_bb": 1.783,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "TsTd": {
+          "equity": 0.3816,
+          "ev_bb": 1.798,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "TsTh": {
+          "equity": 0.3766,
+          "ev_bb": 1.69,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        }
+      },
+      "kind": "decision",
+      "line_frequency": 1.0,
+      "locked": false,
+      "path": "river",
+      "player": "BB",
+      "pot_bb": 12.0,
+      "range_combos": 78.0,
+      "range_equity": 0.4688,
+      "range_ev_bb": 4.8,
+      "reached": true,
+      "street": "river"
+    },
+    "river/BB_allin": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.4167,
+          "name": "fold",
+          "path": "river/BB_allin/SB_fold"
+        },
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.5833,
+          "name": "call",
+          "path": "river/BB_allin/SB_call"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {
+        "33": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "65s": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "76s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "88": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "98s": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "A4s": {
+          "combos": 1.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "A5s": {
+          "combos": 1.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "A8s": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "A9s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "AJs": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "AQo": {
+          "combos": 9.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "AQs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "ATs": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "JTs": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "KJs": {
+          "combos": 1.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "KQo": {
+          "combos": 9.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "KQs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "QJo": {
+          "combos": 9.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "QJs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "QQ": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "QTs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "T9s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        }
+      },
+      "by_combo": {
+        "3d3c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "3s3c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "3s3d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6c5c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6h5h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s5s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7c6c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7d6d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7h6h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s6s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "8h8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "8s8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "8s8h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "9d8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "9h8h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s8s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ac9c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AcJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AcQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcTc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ad8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ad9d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AdJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AdQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdTd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ah4h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ah5h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ah8h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ah9h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AhJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AhQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhTh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "As8s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "As9s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AsJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "AsQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsTs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "JcTc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "JdTd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "JhTh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "JsTs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "KcQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KcQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KcQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "KhQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcTc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdTd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsTs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Tc9c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Td9d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Th9h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ts9s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        }
+      },
+      "kind": "decision",
+      "line_frequency": 0.0,
+      "locked": false,
+      "path": "river/BB_allin",
+      "player": "SB",
+      "pot_bb": 26.0,
+      "range_combos": 84.0,
+      "range_equity": 0.0,
+      "range_ev_bb": 0.0,
+      "reached": false,
+      "street": "river"
+    },
+    "river/BB_bet0.5": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.3432,
+          "name": "fold",
+          "path": "river/BB_bet0.5/SB_fold"
+        },
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.0264,
+          "name": "call",
+          "path": "river/BB_bet0.5/SB_call"
+        },
+        {
+          "amount_bb": 14.0,
+          "frequency": 0.6304,
+          "name": "allin",
+          "path": "river/BB_bet0.5/SB_allin"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {
+        "33": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "65s": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0332,
+            "call": 0.0,
+            "fold": 0.9668
+          }
+        },
+        "76s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0059,
+            "call": 0.0,
+            "fold": 0.9941
+          }
+        },
+        "88": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "98s": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2718,
+            "call": 0.3628,
+            "fold": 0.3654
+          }
+        },
+        "A4s": {
+          "combos": 1.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "A5s": {
+          "combos": 1.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.1348,
+            "call": 0.0,
+            "fold": 0.8652
+          }
+        },
+        "A8s": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.219,
+            "call": 0.3754,
+            "fold": 0.4056
+          }
+        },
+        "A9s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.1816,
+            "call": 0.0,
+            "fold": 0.8184
+          }
+        },
+        "AJs": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0451,
+            "call": 0.0,
+            "fold": 0.9549
+          }
+        },
+        "AQo": {
+          "combos": 9.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "AQs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "ATs": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0439,
+            "call": 0.0,
+            "fold": 0.9561
+          }
+        },
+        "JTs": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0434,
+            "call": 0.0,
+            "fold": 0.9566
+          }
+        },
+        "KJs": {
+          "combos": 1.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.018,
+            "call": 0.0,
+            "fold": 0.982
+          }
+        },
+        "KQo": {
+          "combos": 9.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "KQs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "QJo": {
+          "combos": 9.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "QJs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "QQ": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "QTs": {
+          "combos": 3.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "T9s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2372,
+            "call": 0.0,
+            "fold": 0.7628
+          }
+        }
+      },
+      "by_combo": {
+        "3d3c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "3s3c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "3s3d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6c5c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0344,
+            "call": 0.0,
+            "fold": 0.9656
+          },
+          "weight": 1.0
+        },
+        "6h5h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0327,
+            "call": 0.0,
+            "fold": 0.9673
+          },
+          "weight": 1.0
+        },
+        "6s5s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0327,
+            "call": 0.0,
+            "fold": 0.9673
+          },
+          "weight": 1.0
+        },
+        "7c6c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0235,
+            "call": 0.0,
+            "fold": 0.9765
+          },
+          "weight": 1.0
+        },
+        "7d6d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7h6h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s6s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "8h8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "8s8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "8s8h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "9d8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2742,
+            "call": 0.3716,
+            "fold": 0.3541
+          },
+          "weight": 1.0
+        },
+        "9h8h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2658,
+            "call": 0.3456,
+            "fold": 0.3886
+          },
+          "weight": 1.0
+        },
+        "9s8s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2754,
+            "call": 0.3711,
+            "fold": 0.3535
+          },
+          "weight": 1.0
+        },
+        "Ac9c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2684,
+            "call": 0.0,
+            "fold": 0.7316
+          },
+          "weight": 1.0
+        },
+        "AcJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0443,
+            "call": 0.0,
+            "fold": 0.9557
+          },
+          "weight": 1.0
+        },
+        "AcQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcTc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0354,
+            "call": 0.0,
+            "fold": 0.9646
+          },
+          "weight": 1.0
+        },
+        "Ad8d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.22,
+            "call": 0.38,
+            "fold": 0.4
+          },
+          "weight": 1.0
+        },
+        "Ad9d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.1839,
+            "call": 0.0,
+            "fold": 0.8161
+          },
+          "weight": 1.0
+        },
+        "AdJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0768,
+            "call": 0.0,
+            "fold": 0.9232
+          },
+          "weight": 1.0
+        },
+        "AdQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdTd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0685,
+            "call": 0.0,
+            "fold": 0.9315
+          },
+          "weight": 1.0
+        },
+        "Ah4h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ah5h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.1348,
+            "call": 0.0,
+            "fold": 0.8652
+          },
+          "weight": 1.0
+        },
+        "Ah8h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2281,
+            "call": 0.3764,
+            "fold": 0.3954
+          },
+          "weight": 1.0
+        },
+        "Ah9h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.129,
+            "call": 0.0,
+            "fold": 0.871
+          },
+          "weight": 1.0
+        },
+        "AhJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0295,
+            "call": 0.0,
+            "fold": 0.9705
+          },
+          "weight": 1.0
+        },
+        "AhQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhTh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0449,
+            "call": 0.0,
+            "fold": 0.9551
+          },
+          "weight": 1.0
+        },
+        "As8s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2089,
+            "call": 0.3697,
+            "fold": 0.4214
+          },
+          "weight": 1.0
+        },
+        "As9s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.1453,
+            "call": 0.0,
+            "fold": 0.8547
+          },
+          "weight": 1.0
+        },
+        "AsJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0298,
+            "call": 0.0,
+            "fold": 0.9702
+          },
+          "weight": 1.0
+        },
+        "AsQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsTs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0269,
+            "call": 0.0,
+            "fold": 0.9731
+          },
+          "weight": 1.0
+        },
+        "JcTc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.053,
+            "call": 0.0,
+            "fold": 0.947
+          },
+          "weight": 1.0
+        },
+        "JdTd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0535,
+            "call": 0.0,
+            "fold": 0.9465
+          },
+          "weight": 1.0
+        },
+        "JhTh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0135,
+            "call": 0.0,
+            "fold": 0.9865
+          },
+          "weight": 1.0
+        },
+        "JsTs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.0538,
+            "call": 0.0,
+            "fold": 0.9462
+          },
+          "weight": 1.0
+        },
+        "KcQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KcQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KcQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.018,
+            "call": 0.0,
+            "fold": 0.982
+          },
+          "weight": 1.0
+        },
+        "KhQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcTc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdTd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsQc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsQd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsTs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Tc9c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.3582,
+            "call": 0.0,
+            "fold": 0.6418
+          },
+          "weight": 1.0
+        },
+        "Td9d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2442,
+            "call": 0.0,
+            "fold": 0.7558
+          },
+          "weight": 1.0
+        },
+        "Th9h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.1009,
+            "call": 0.0,
+            "fold": 0.8991
+          },
+          "weight": 1.0
+        },
+        "Ts9s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "allin": 0.2457,
+            "call": 0.0,
+            "fold": 0.7543
+          },
+          "weight": 1.0
+        }
+      },
+      "kind": "decision",
+      "line_frequency": 0.0,
+      "locked": false,
+      "path": "river/BB_bet0.5",
+      "player": "SB",
+      "pot_bb": 18.0,
+      "range_combos": 84.0,
+      "range_equity": 0.0,
+      "range_ev_bb": 0.0,
+      "reached": false,
+      "street": "river"
+    },
+    "river/BB_bet0.5/SB_allin": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.0,
+          "name": "fold",
+          "path": "river/BB_bet0.5/SB_allin/BB_fold"
+        },
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.0,
+          "name": "call",
+          "path": "river/BB_bet0.5/SB_allin/BB_call"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {},
+      "kind": "decision",
+      "line_frequency": 0.0,
+      "locked": false,
+      "path": "river/BB_bet0.5/SB_allin",
+      "player": "BB",
+      "pot_bb": 32.0,
+      "range_combos": 0.0,
+      "range_equity": 0.0,
+      "range_ev_bb": 0.0,
+      "reached": false,
+      "street": "river"
+    },
+    "river/BB_check": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.1497,
+          "name": "check",
+          "path": "river/BB_check/SB_check"
+        },
+        {
+          "amount_bb": 6.0,
+          "frequency": 0.3241,
+          "name": "bet0.5",
+          "path": "river/BB_check/SB_bet0.5"
+        },
+        {
+          "amount_bb": 14.0,
+          "frequency": 0.5262,
+          "name": "allin",
+          "path": "river/BB_check/SB_allin"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {
+        "33": {
+          "combos": 3.0,
+          "equity": 0.8947,
+          "ev_bb": 13.991,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          }
+        },
+        "65s": {
+          "combos": 3.0,
+          "equity": 0.0972,
+          "ev_bb": 1.166,
+          "freqs": {
+            "allin": 0.0001,
+            "bet0.5": 0.0002,
+            "check": 0.9996
+          }
+        },
+        "76s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.168,
+          "freqs": {
+            "allin": 0.4205,
+            "bet0.5": 0.5711,
+            "check": 0.0084
+          }
+        },
+        "88": {
+          "combos": 3.0,
+          "equity": 0.8835,
+          "ev_bb": 13.386,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          }
+        },
+        "98s": {
+          "combos": 3.0,
+          "equity": 0.3831,
+          "ev_bb": 4.597,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "A4s": {
+          "combos": 1.0,
+          "equity": 0.9384,
+          "ev_bb": 15.554,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          }
+        },
+        "A5s": {
+          "combos": 1.0,
+          "equity": 0.1081,
+          "ev_bb": 1.311,
+          "freqs": {
+            "allin": 0.0013,
+            "bet0.5": 0.1313,
+            "check": 0.8673
+          }
+        },
+        "A8s": {
+          "combos": 3.0,
+          "equity": 0.4038,
+          "ev_bb": 4.845,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          }
+        },
+        "A9s": {
+          "combos": 4.0,
+          "equity": 0.0258,
+          "ev_bb": 0.664,
+          "freqs": {
+            "allin": 0.8845,
+            "bet0.5": 0.1153,
+            "check": 0.0002
+          }
+        },
+        "AJs": {
+          "combos": 4.0,
+          "equity": 0.0237,
+          "ev_bb": 0.573,
+          "freqs": {
+            "allin": 0.6659,
+            "bet0.5": 0.3331,
+            "check": 0.001
+          }
+        },
+        "AQo": {
+          "combos": 9.0,
+          "equity": 0.8767,
+          "ev_bb": 12.321,
+          "freqs": {
+            "allin": 0.8611,
+            "bet0.5": 0.1389,
+            "check": 0.0
+          }
+        },
+        "AQs": {
+          "combos": 3.0,
+          "equity": 0.8765,
+          "ev_bb": 12.332,
+          "freqs": {
+            "allin": 0.9115,
+            "bet0.5": 0.0885,
+            "check": 0.0
+          }
+        },
+        "ATs": {
+          "combos": 4.0,
+          "equity": 0.0245,
+          "ev_bb": 0.221,
+          "freqs": {
+            "allin": 0.4288,
+            "bet0.5": 0.1601,
+            "check": 0.4111
+          }
+        },
+        "JTs": {
+          "combos": 4.0,
+          "equity": 0.0102,
+          "ev_bb": 0.144,
+          "freqs": {
+            "allin": 0.4663,
+            "bet0.5": 0.4028,
+            "check": 0.1309
+          }
+        },
+        "KJs": {
+          "combos": 1.0,
+          "equity": 0.0,
+          "ev_bb": 0.75,
+          "freqs": {
+            "allin": 0.9933,
+            "bet0.5": 0.0067,
+            "check": 0.0
+          }
+        },
+        "KQo": {
+          "combos": 9.0,
+          "equity": 0.8479,
+          "ev_bb": 11.082,
+          "freqs": {
+            "allin": 0.4543,
+            "bet0.5": 0.5457,
+            "check": 0.0
+          }
+        },
+        "KQs": {
+          "combos": 3.0,
+          "equity": 0.8506,
+          "ev_bb": 11.132,
+          "freqs": {
+            "allin": 0.412,
+            "bet0.5": 0.588,
+            "check": 0.0
+          }
+        },
+        "QJo": {
+          "combos": 9.0,
+          "equity": 0.8232,
+          "ev_bb": 10.264,
+          "freqs": {
+            "allin": 0.4163,
+            "bet0.5": 0.5837,
+            "check": 0.0
+          }
+        },
+        "QJs": {
+          "combos": 3.0,
+          "equity": 0.824,
+          "ev_bb": 10.272,
+          "freqs": {
+            "allin": 0.4195,
+            "bet0.5": 0.5805,
+            "check": 0.0
+          }
+        },
+        "QQ": {
+          "combos": 3.0,
+          "equity": 0.8743,
+          "ev_bb": 11.822,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 1.0,
+            "check": 0.0
+          }
+        },
+        "QTs": {
+          "combos": 3.0,
+          "equity": 0.8182,
+          "ev_bb": 10.253,
+          "freqs": {
+            "allin": 0.4051,
+            "bet0.5": 0.5949,
+            "check": 0.0
+          }
+        },
+        "T9s": {
+          "combos": 4.0,
+          "equity": 0.0,
+          "ev_bb": 0.193,
+          "freqs": {
+            "allin": 0.659,
+            "bet0.5": 0.2562,
+            "check": 0.0848
+          }
+        }
+      },
+      "by_combo": {
+        "3d3c": {
+          "equity": 0.8947,
+          "ev_bb": 13.996,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "3s3c": {
+          "equity": 0.8947,
+          "ev_bb": 13.989,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "3s3d": {
+          "equity": 0.8947,
+          "ev_bb": 13.988,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "6c5c": {
+          "equity": 0.0972,
+          "ev_bb": 1.166,
+          "freqs": {
+            "allin": 0.0001,
+            "bet0.5": 0.0002,
+            "check": 0.9996
+          },
+          "weight": 1.0
+        },
+        "6h5h": {
+          "equity": 0.0972,
+          "ev_bb": 1.166,
+          "freqs": {
+            "allin": 0.0001,
+            "bet0.5": 0.0002,
+            "check": 0.9997
+          },
+          "weight": 1.0
+        },
+        "6s5s": {
+          "equity": 0.0972,
+          "ev_bb": 1.166,
+          "freqs": {
+            "allin": 0.0001,
+            "bet0.5": 0.0002,
+            "check": 0.9996
+          },
+          "weight": 1.0
+        },
+        "7c6c": {
+          "equity": 0.0,
+          "ev_bb": 0.24,
+          "freqs": {
+            "allin": 0.5347,
+            "bet0.5": 0.4653,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "7d6d": {
+          "equity": 0.0,
+          "ev_bb": 0.205,
+          "freqs": {
+            "allin": 0.4069,
+            "bet0.5": 0.5931,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "7h6h": {
+          "equity": 0.0,
+          "ev_bb": 0.051,
+          "freqs": {
+            "allin": 0.2923,
+            "bet0.5": 0.6745,
+            "check": 0.0332
+          },
+          "weight": 1.0
+        },
+        "7s6s": {
+          "equity": 0.0,
+          "ev_bb": 0.178,
+          "freqs": {
+            "allin": 0.4482,
+            "bet0.5": 0.5516,
+            "check": 0.0001
+          },
+          "weight": 1.0
+        },
+        "8h8d": {
+          "equity": 0.8841,
+          "ev_bb": 13.472,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "8s8d": {
+          "equity": 0.8824,
+          "ev_bb": 13.263,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "8s8h": {
+          "equity": 0.8841,
+          "ev_bb": 13.421,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "9d8d": {
+          "equity": 0.3881,
+          "ev_bb": 4.657,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9h8h": {
+          "equity": 0.3731,
+          "ev_bb": 4.478,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s8s": {
+          "equity": 0.3881,
+          "ev_bb": 4.657,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ac9c": {
+          "equity": 0.029,
+          "ev_bb": 0.802,
+          "freqs": {
+            "allin": 0.9961,
+            "bet0.5": 0.0039,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcJc": {
+          "equity": 0.0269,
+          "ev_bb": 0.587,
+          "freqs": {
+            "allin": 0.6574,
+            "bet0.5": 0.3419,
+            "check": 0.0007
+          },
+          "weight": 1.0
+        },
+        "AcQc": {
+          "equity": 0.8686,
+          "ev_bb": 12.101,
+          "freqs": {
+            "allin": 0.882,
+            "bet0.5": 0.118,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcQd": {
+          "equity": 0.8815,
+          "ev_bb": 12.489,
+          "freqs": {
+            "allin": 0.9815,
+            "bet0.5": 0.0185,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcQs": {
+          "equity": 0.8815,
+          "ev_bb": 12.489,
+          "freqs": {
+            "allin": 0.9815,
+            "bet0.5": 0.0185,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AcTc": {
+          "equity": 0.0278,
+          "ev_bb": 0.247,
+          "freqs": {
+            "allin": 0.4027,
+            "bet0.5": 0.1386,
+            "check": 0.4588
+          },
+          "weight": 1.0
+        },
+        "Ad8d": {
+          "equity": 0.4085,
+          "ev_bb": 4.901,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ad9d": {
+          "equity": 0.0294,
+          "ev_bb": 0.66,
+          "freqs": {
+            "allin": 0.8473,
+            "bet0.5": 0.1527,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdJd": {
+          "equity": 0.0269,
+          "ev_bb": 0.615,
+          "freqs": {
+            "allin": 0.6691,
+            "bet0.5": 0.3309,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdQc": {
+          "equity": 0.8686,
+          "ev_bb": 12.088,
+          "freqs": {
+            "allin": 0.834,
+            "bet0.5": 0.166,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdQd": {
+          "equity": 0.8815,
+          "ev_bb": 12.478,
+          "freqs": {
+            "allin": 0.9422,
+            "bet0.5": 0.0578,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdQs": {
+          "equity": 0.8815,
+          "ev_bb": 12.478,
+          "freqs": {
+            "allin": 0.9422,
+            "bet0.5": 0.0578,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AdTd": {
+          "equity": 0.0278,
+          "ev_bb": 0.248,
+          "freqs": {
+            "allin": 0.4612,
+            "bet0.5": 0.1787,
+            "check": 0.3601
+          },
+          "weight": 1.0
+        },
+        "Ah4h": {
+          "equity": 0.9384,
+          "ev_bb": 15.554,
+          "freqs": {
+            "allin": 1.0,
+            "bet0.5": 0.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ah5h": {
+          "equity": 0.1081,
+          "ev_bb": 1.311,
+          "freqs": {
+            "allin": 0.0013,
+            "bet0.5": 0.1313,
+            "check": 0.8673
+          },
+          "weight": 1.0
+        },
+        "Ah8h": {
+          "equity": 0.4028,
+          "ev_bb": 4.833,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ah9h": {
+          "equity": 0.0149,
+          "ev_bb": 0.59,
+          "freqs": {
+            "allin": 0.8723,
+            "bet0.5": 0.1277,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhJh": {
+          "equity": 0.0137,
+          "ev_bb": 0.528,
+          "freqs": {
+            "allin": 0.7067,
+            "bet0.5": 0.2933,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhQc": {
+          "equity": 0.8686,
+          "ev_bb": 12.044,
+          "freqs": {
+            "allin": 0.7221,
+            "bet0.5": 0.2779,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhQd": {
+          "equity": 0.8815,
+          "ev_bb": 12.426,
+          "freqs": {
+            "allin": 0.7933,
+            "bet0.5": 0.2067,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhQs": {
+          "equity": 0.8815,
+          "ev_bb": 12.426,
+          "freqs": {
+            "allin": 0.7933,
+            "bet0.5": 0.2067,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AhTh": {
+          "equity": 0.0141,
+          "ev_bb": 0.142,
+          "freqs": {
+            "allin": 0.5031,
+            "bet0.5": 0.2143,
+            "check": 0.2825
+          },
+          "weight": 1.0
+        },
+        "As8s": {
+          "equity": 0.4,
+          "ev_bb": 4.8,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 0.0,
+            "check": 1.0
+          },
+          "weight": 1.0
+        },
+        "As9s": {
+          "equity": 0.0299,
+          "ev_bb": 0.6,
+          "freqs": {
+            "allin": 0.8195,
+            "bet0.5": 0.1795,
+            "check": 0.001
+          },
+          "weight": 1.0
+        },
+        "AsJs": {
+          "equity": 0.0273,
+          "ev_bb": 0.56,
+          "freqs": {
+            "allin": 0.6304,
+            "bet0.5": 0.3664,
+            "check": 0.0032
+          },
+          "weight": 1.0
+        },
+        "AsQc": {
+          "equity": 0.8667,
+          "ev_bb": 12.034,
+          "freqs": {
+            "allin": 0.7944,
+            "bet0.5": 0.2056,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsQd": {
+          "equity": 0.8797,
+          "ev_bb": 12.423,
+          "freqs": {
+            "allin": 0.9107,
+            "bet0.5": 0.0893,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsQs": {
+          "equity": 0.8797,
+          "ev_bb": 12.423,
+          "freqs": {
+            "allin": 0.9106,
+            "bet0.5": 0.0894,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "AsTs": {
+          "equity": 0.0282,
+          "ev_bb": 0.246,
+          "freqs": {
+            "allin": 0.3481,
+            "bet0.5": 0.1089,
+            "check": 0.5429
+          },
+          "weight": 1.0
+        },
+        "JcTc": {
+          "equity": 0.0135,
+          "ev_bb": 0.208,
+          "freqs": {
+            "allin": 0.5103,
+            "bet0.5": 0.4283,
+            "check": 0.0614
+          },
+          "weight": 1.0
+        },
+        "JdTd": {
+          "equity": 0.0135,
+          "ev_bb": 0.207,
+          "freqs": {
+            "allin": 0.5122,
+            "bet0.5": 0.4237,
+            "check": 0.0641
+          },
+          "weight": 1.0
+        },
+        "JhTh": {
+          "equity": 0.0,
+          "ev_bb": -0.052,
+          "freqs": {
+            "allin": 0.3259,
+            "bet0.5": 0.3341,
+            "check": 0.34
+          },
+          "weight": 1.0
+        },
+        "JsTs": {
+          "equity": 0.0135,
+          "ev_bb": 0.207,
+          "freqs": {
+            "allin": 0.5129,
+            "bet0.5": 0.4233,
+            "check": 0.0638
+          },
+          "weight": 1.0
+        },
+        "KcQc": {
+          "equity": 0.844,
+          "ev_bb": 10.993,
+          "freqs": {
+            "allin": 0.5661,
+            "bet0.5": 0.4339,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KcQd": {
+          "equity": 0.8536,
+          "ev_bb": 11.309,
+          "freqs": {
+            "allin": 0.5816,
+            "bet0.5": 0.4184,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KcQs": {
+          "equity": 0.8536,
+          "ev_bb": 11.309,
+          "freqs": {
+            "allin": 0.5816,
+            "bet0.5": 0.4184,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQc": {
+          "equity": 0.8393,
+          "ev_bb": 10.824,
+          "freqs": {
+            "allin": 0.2548,
+            "bet0.5": 0.7452,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQd": {
+          "equity": 0.854,
+          "ev_bb": 11.203,
+          "freqs": {
+            "allin": 0.3327,
+            "bet0.5": 0.6673,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KdQs": {
+          "equity": 0.8514,
+          "ev_bb": 11.168,
+          "freqs": {
+            "allin": 0.3154,
+            "bet0.5": 0.6846,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhJh": {
+          "equity": 0.0,
+          "ev_bb": 0.75,
+          "freqs": {
+            "allin": 0.9933,
+            "bet0.5": 0.0067,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhQc": {
+          "equity": 0.8394,
+          "ev_bb": 10.807,
+          "freqs": {
+            "allin": 0.5664,
+            "bet0.5": 0.4336,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhQd": {
+          "equity": 0.8519,
+          "ev_bb": 11.168,
+          "freqs": {
+            "allin": 0.6143,
+            "bet0.5": 0.3857,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KhQs": {
+          "equity": 0.8519,
+          "ev_bb": 11.168,
+          "freqs": {
+            "allin": 0.6143,
+            "bet0.5": 0.3857,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQc": {
+          "equity": 0.8393,
+          "ev_bb": 10.824,
+          "freqs": {
+            "allin": 0.2549,
+            "bet0.5": 0.7451,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQd": {
+          "equity": 0.8514,
+          "ev_bb": 11.168,
+          "freqs": {
+            "allin": 0.3155,
+            "bet0.5": 0.6845,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "KsQs": {
+          "equity": 0.854,
+          "ev_bb": 11.203,
+          "freqs": {
+            "allin": 0.3327,
+            "bet0.5": 0.6673,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJc": {
+          "equity": 0.8163,
+          "ev_bb": 10.064,
+          "freqs": {
+            "allin": 0.3494,
+            "bet0.5": 0.6506,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJd": {
+          "equity": 0.8163,
+          "ev_bb": 10.064,
+          "freqs": {
+            "allin": 0.35,
+            "bet0.5": 0.65,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJh": {
+          "equity": 0.8136,
+          "ev_bb": 10.039,
+          "freqs": {
+            "allin": 0.3362,
+            "bet0.5": 0.6638,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcJs": {
+          "equity": 0.8163,
+          "ev_bb": 10.064,
+          "freqs": {
+            "allin": 0.349,
+            "bet0.5": 0.651,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QcTc": {
+          "equity": 0.8102,
+          "ev_bb": 10.044,
+          "freqs": {
+            "allin": 0.3314,
+            "bet0.5": 0.6686,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJc": {
+          "equity": 0.828,
+          "ev_bb": 10.377,
+          "freqs": {
+            "allin": 0.4549,
+            "bet0.5": 0.5451,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJd": {
+          "equity": 0.828,
+          "ev_bb": 10.377,
+          "freqs": {
+            "allin": 0.4555,
+            "bet0.5": 0.5445,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJh": {
+          "equity": 0.8255,
+          "ev_bb": 10.354,
+          "freqs": {
+            "allin": 0.4473,
+            "bet0.5": 0.5527,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdJs": {
+          "equity": 0.828,
+          "ev_bb": 10.377,
+          "freqs": {
+            "allin": 0.4546,
+            "bet0.5": 0.5454,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdQc": {
+          "equity": 0.875,
+          "ev_bb": 11.899,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 1.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdTd": {
+          "equity": 0.8222,
+          "ev_bb": 10.359,
+          "freqs": {
+            "allin": 0.4425,
+            "bet0.5": 0.5575,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJc": {
+          "equity": 0.828,
+          "ev_bb": 10.377,
+          "freqs": {
+            "allin": 0.4548,
+            "bet0.5": 0.5452,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJd": {
+          "equity": 0.828,
+          "ev_bb": 10.377,
+          "freqs": {
+            "allin": 0.4555,
+            "bet0.5": 0.5445,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJh": {
+          "equity": 0.8255,
+          "ev_bb": 10.354,
+          "freqs": {
+            "allin": 0.4472,
+            "bet0.5": 0.5528,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsJs": {
+          "equity": 0.828,
+          "ev_bb": 10.377,
+          "freqs": {
+            "allin": 0.4545,
+            "bet0.5": 0.5455,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsQc": {
+          "equity": 0.875,
+          "ev_bb": 11.899,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 1.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsQd": {
+          "equity": 0.873,
+          "ev_bb": 11.665,
+          "freqs": {
+            "allin": 0.0,
+            "bet0.5": 1.0,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsTs": {
+          "equity": 0.8222,
+          "ev_bb": 10.359,
+          "freqs": {
+            "allin": 0.4426,
+            "bet0.5": 0.5574,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "Tc9c": {
+          "equity": 0.0,
+          "ev_bb": 0.393,
+          "freqs": {
+            "allin": 0.8574,
+            "bet0.5": 0.1426,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "Td9d": {
+          "equity": 0.0,
+          "ev_bb": 0.218,
+          "freqs": {
+            "allin": 0.6768,
+            "bet0.5": 0.3232,
+            "check": 0.0
+          },
+          "weight": 1.0
+        },
+        "Th9h": {
+          "equity": 0.0,
+          "ev_bb": -0.064,
+          "freqs": {
+            "allin": 0.3975,
+            "bet0.5": 0.2545,
+            "check": 0.348
+          },
+          "weight": 1.0
+        },
+        "Ts9s": {
+          "equity": 0.0,
+          "ev_bb": 0.215,
+          "freqs": {
+            "allin": 0.6937,
+            "bet0.5": 0.3063,
+            "check": 0.0
+          },
+          "weight": 1.0
+        }
+      },
+      "kind": "decision",
+      "line_frequency": 1.0,
+      "locked": false,
+      "path": "river/BB_check",
+      "player": "SB",
+      "pot_bb": 12.0,
+      "range_combos": 84.0,
+      "range_equity": 0.5312,
+      "range_ev_bb": 7.2,
+      "reached": true,
+      "street": "river"
+    },
+    "river/BB_check/SB_allin": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.5903,
+          "name": "fold",
+          "path": "river/BB_check/SB_allin/BB_fold"
+        },
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.4097,
+          "name": "call",
+          "path": "river/BB_check/SB_allin/BB_call"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {
+        "54s": {
+          "combos": 3.0,
+          "equity": 0.3443,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0044,
+            "fold": 0.9956
+          }
+        },
+        "64s": {
+          "combos": 4.0,
+          "equity": 1.0,
+          "ev_bb": 26.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "66": {
+          "combos": 6.0,
+          "equity": 0.3289,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "77": {
+          "combos": 6.0,
+          "equity": 0.3289,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "87s": {
+          "combos": 3.0,
+          "equity": 0.3521,
+          "ev_bb": 0.021,
+          "freqs": {
+            "call": 0.2285,
+            "fold": 0.7715
+          }
+        },
+        "98s": {
+          "combos": 3.0,
+          "equity": 0.3353,
+          "ev_bb": -0.001,
+          "freqs": {
+            "call": 0.001,
+            "fold": 0.999
+          }
+        },
+        "99": {
+          "combos": 6.0,
+          "equity": 0.2923,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "A3s": {
+          "combos": 3.0,
+          "equity": 0.3506,
+          "ev_bb": 0.002,
+          "freqs": {
+            "call": 0.0344,
+            "fold": 0.9656
+          }
+        },
+        "A4s": {
+          "combos": 4.0,
+          "equity": 0.9905,
+          "ev_bb": 25.618,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "A5s": {
+          "combos": 3.0,
+          "equity": 0.334,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "A8s": {
+          "combos": 3.0,
+          "equity": 0.352,
+          "ev_bb": 0.025,
+          "freqs": {
+            "call": 0.2246,
+            "fold": 0.7754
+          }
+        },
+        "J9s": {
+          "combos": 1.0,
+          "equity": 0.0987,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "JJ": {
+          "combos": 1.5,
+          "equity": 0.317,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "K8s": {
+          "combos": 3.0,
+          "equity": 0.3633,
+          "ev_bb": 0.507,
+          "freqs": {
+            "call": 0.9207,
+            "fold": 0.0793
+          }
+        },
+        "KQo": {
+          "combos": 4.5,
+          "equity": 0.5691,
+          "ev_bb": 8.762,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "KTs": {
+          "combos": 1.0,
+          "equity": 0.1358,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "Q7s": {
+          "combos": 3.0,
+          "equity": 0.4025,
+          "ev_bb": 2.1,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "Q8s": {
+          "combos": 2.0,
+          "equity": 0.8546,
+          "ev_bb": 20.185,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "Q9o": {
+          "combos": 9.0,
+          "equity": 0.3848,
+          "ev_bb": 1.39,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "Q9s": {
+          "combos": 3.0,
+          "equity": 0.3827,
+          "ev_bb": 1.306,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "TT": {
+          "combos": 6.0,
+          "equity": 0.2964,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        }
+      },
+      "by_combo": {
+        "5c4c": {
+          "equity": 0.3417,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "5h4h": {
+          "equity": 0.3496,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0134,
+            "fold": 0.9866
+          },
+          "weight": 1.0
+        },
+        "5s4s": {
+          "equity": 0.3417,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6c4c": {
+          "equity": 1.0,
+          "ev_bb": 26.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6d4d": {
+          "equity": 1.0,
+          "ev_bb": 26.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6d6c": {
+          "equity": 0.3274,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6h4h": {
+          "equity": 1.0,
+          "ev_bb": 26.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6h6c": {
+          "equity": 0.3292,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6h6d": {
+          "equity": 0.3311,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s4s": {
+          "equity": 1.0,
+          "ev_bb": 26.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6s6c": {
+          "equity": 0.3267,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s6d": {
+          "equity": 0.3287,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "6s6h": {
+          "equity": 0.3305,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7d7c": {
+          "equity": 0.3274,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7h7c": {
+          "equity": 0.3292,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7h7d": {
+          "equity": 0.3311,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s7c": {
+          "equity": 0.3267,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s7d": {
+          "equity": 0.3287,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "7s7h": {
+          "equity": 0.3305,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "8d7d": {
+          "equity": 0.3517,
+          "ev_bb": 0.014,
+          "freqs": {
+            "call": 0.2066,
+            "fold": 0.7934
+          },
+          "weight": 1.0
+        },
+        "8h7h": {
+          "equity": 0.3535,
+          "ev_bb": 0.04,
+          "freqs": {
+            "call": 0.2865,
+            "fold": 0.7135
+          },
+          "weight": 1.0
+        },
+        "8s7s": {
+          "equity": 0.3511,
+          "ev_bb": 0.008,
+          "freqs": {
+            "call": 0.1921,
+            "fold": 0.8079
+          },
+          "weight": 1.0
+        },
+        "9d8d": {
+          "equity": 0.3339,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0007,
+            "fold": 0.9993
+          },
+          "weight": 1.0
+        },
+        "9d9c": {
+          "equity": 0.2872,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "9h8h": {
+          "equity": 0.338,
+          "ev_bb": -0.001,
+          "freqs": {
+            "call": 0.0014,
+            "fold": 0.9986
+          },
+          "weight": 1.0
+        },
+        "9h9c": {
+          "equity": 0.2916,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "9h9d": {
+          "equity": 0.2972,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s8s": {
+          "equity": 0.334,
+          "ev_bb": -0.001,
+          "freqs": {
+            "call": 0.0011,
+            "fold": 0.9989
+          },
+          "weight": 1.0
+        },
+        "9s9c": {
+          "equity": 0.2874,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s9d": {
+          "equity": 0.2931,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "9s9h": {
+          "equity": 0.2974,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ac3c": {
+          "equity": 0.3498,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0182,
+            "fold": 0.9818
+          },
+          "weight": 1.0
+        },
+        "Ac4c": {
+          "equity": 0.9873,
+          "ev_bb": 25.49,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ac5c": {
+          "equity": 0.332,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ad3d": {
+          "equity": 0.35,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0222,
+            "fold": 0.9778
+          },
+          "weight": 1.0
+        },
+        "Ad4d": {
+          "equity": 0.9873,
+          "ev_bb": 25.493,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ad8d": {
+          "equity": 0.35,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0404,
+            "fold": 0.9596
+          },
+          "weight": 1.0
+        },
+        "Ah4h": {
+          "equity": 1.0,
+          "ev_bb": 26.0,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ah5h": {
+          "equity": 0.3355,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0001,
+            "fold": 0.9999
+          },
+          "weight": 1.0
+        },
+        "Ah8h": {
+          "equity": 0.3538,
+          "ev_bb": 0.05,
+          "freqs": {
+            "call": 0.3311,
+            "fold": 0.6689
+          },
+          "weight": 1.0
+        },
+        "As3s": {
+          "equity": 0.3521,
+          "ev_bb": 0.005,
+          "freqs": {
+            "call": 0.0626,
+            "fold": 0.9374
+          },
+          "weight": 1.0
+        },
+        "As4s": {
+          "equity": 0.9874,
+          "ev_bb": 25.496,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "As5s": {
+          "equity": 0.3344,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "As8s": {
+          "equity": 0.3522,
+          "ev_bb": 0.026,
+          "freqs": {
+            "call": 0.3037,
+            "fold": 0.6963
+          },
+          "weight": 1.0
+        },
+        "JdJc": {
+          "equity": 0.3243,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.25
+        },
+        "Jh9h": {
+          "equity": 0.0987,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "JhJc": {
+          "equity": 0.3092,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.25
+        },
+        "JhJd": {
+          "equity": 0.309,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.25
+        },
+        "JsJc": {
+          "equity": 0.3249,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.25
+        },
+        "JsJd": {
+          "equity": 0.3247,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.25
+        },
+        "JsJh": {
+          "equity": 0.3096,
+          "ev_bb": -0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.25
+        },
+        "KcQd": {
+          "equity": 0.5736,
+          "ev_bb": 8.944,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KcQs": {
+          "equity": 0.5736,
+          "ev_bb": 8.944,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "Kd8d": {
+          "equity": 0.3658,
+          "ev_bb": 0.631,
+          "freqs": {
+            "call": 0.9988,
+            "fold": 0.0012
+          },
+          "weight": 1.0
+        },
+        "KdQc": {
+          "equity": 0.5723,
+          "ev_bb": 8.891,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KdQs": {
+          "equity": 0.5724,
+          "ev_bb": 8.898,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "Kh8h": {
+          "equity": 0.3581,
+          "ev_bb": 0.245,
+          "freqs": {
+            "call": 0.757,
+            "fold": 0.243
+          },
+          "weight": 1.0
+        },
+        "KhQc": {
+          "equity": 0.5614,
+          "ev_bb": 8.458,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KhQd": {
+          "equity": 0.5613,
+          "ev_bb": 8.452,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KhQs": {
+          "equity": 0.5613,
+          "ev_bb": 8.452,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KhTh": {
+          "equity": 0.1358,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "Ks8s": {
+          "equity": 0.3658,
+          "ev_bb": 0.631,
+          "freqs": {
+            "call": 0.9988,
+            "fold": 0.0012
+          },
+          "weight": 1.0
+        },
+        "KsQc": {
+          "equity": 0.5723,
+          "ev_bb": 8.891,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KsQd": {
+          "equity": 0.5725,
+          "ev_bb": 8.898,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "Qc7c": {
+          "equity": 0.3931,
+          "ev_bb": 1.724,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9c": {
+          "equity": 0.3707,
+          "ev_bb": 0.827,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9d": {
+          "equity": 0.3764,
+          "ev_bb": 1.057,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9h": {
+          "equity": 0.3808,
+          "ev_bb": 1.232,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9s": {
+          "equity": 0.3766,
+          "ev_bb": 1.065,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd7d": {
+          "equity": 0.4077,
+          "ev_bb": 2.307,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd8d": {
+          "equity": 0.8546,
+          "ev_bb": 20.185,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9c": {
+          "equity": 0.3829,
+          "ev_bb": 1.314,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9d": {
+          "equity": 0.3887,
+          "ev_bb": 1.547,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9h": {
+          "equity": 0.3931,
+          "ev_bb": 1.725,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9s": {
+          "equity": 0.3889,
+          "ev_bb": 1.555,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs7s": {
+          "equity": 0.407,
+          "ev_bb": 2.279,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs8s": {
+          "equity": 0.8546,
+          "ev_bb": 20.185,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9c": {
+          "equity": 0.3829,
+          "ev_bb": 1.314,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9d": {
+          "equity": 0.3887,
+          "ev_bb": 1.547,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9h": {
+          "equity": 0.3931,
+          "ev_bb": 1.724,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9s": {
+          "equity": 0.3889,
+          "ev_bb": 1.555,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "TdTc": {
+          "equity": 0.292,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "ThTc": {
+          "equity": 0.2962,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "ThTd": {
+          "equity": 0.299,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "TsTc": {
+          "equity": 0.2937,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "TsTd": {
+          "equity": 0.2966,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        },
+        "TsTh": {
+          "equity": 0.3007,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 1.0
+        }
+      },
+      "kind": "decision",
+      "line_frequency": 0.52622,
+      "locked": false,
+      "path": "river/BB_check/SB_allin",
+      "player": "BB",
+      "pot_bb": 26.0,
+      "range_combos": 78.0,
+      "range_equity": 0.4288,
+      "range_ev_bb": 3.964,
+      "reached": true,
+      "street": "river"
+    },
+    "river/BB_check/SB_bet0.5": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.3953,
+          "name": "fold",
+          "path": "river/BB_check/SB_bet0.5/BB_fold"
+        },
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.3827,
+          "name": "call",
+          "path": "river/BB_check/SB_bet0.5/BB_call"
+        },
+        {
+          "amount_bb": 14.0,
+          "frequency": 0.222,
+          "name": "allin",
+          "path": "river/BB_check/SB_bet0.5/BB_allin"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {
+        "54s": {
+          "combos": 3.0,
+          "equity": 0.2687,
+          "ev_bb": 0.25,
+          "freqs": {
+            "allin": 0.059,
+            "call": 0.5328,
+            "fold": 0.4082
+          }
+        },
+        "64s": {
+          "combos": 4.0,
+          "equity": 1.0,
+          "ev_bb": 22.547,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "66": {
+          "combos": 6.0,
+          "equity": 0.2415,
+          "ev_bb": -0.038,
+          "freqs": {
+            "allin": 0.001,
+            "call": 0.1892,
+            "fold": 0.8098
+          }
+        },
+        "77": {
+          "combos": 6.0,
+          "equity": 0.2415,
+          "ev_bb": -0.065,
+          "freqs": {
+            "allin": 0.0009,
+            "call": 0.3258,
+            "fold": 0.6733
+          }
+        },
+        "87s": {
+          "combos": 3.0,
+          "equity": 0.2566,
+          "ev_bb": 0.102,
+          "freqs": {
+            "allin": 0.003,
+            "call": 0.6432,
+            "fold": 0.3538
+          }
+        },
+        "98s": {
+          "combos": 3.0,
+          "equity": 0.261,
+          "ev_bb": 0.161,
+          "freqs": {
+            "allin": 0.0038,
+            "call": 0.6088,
+            "fold": 0.3875
+          }
+        },
+        "99": {
+          "combos": 6.0,
+          "equity": 0.2528,
+          "ev_bb": 0.028,
+          "freqs": {
+            "allin": 0.0016,
+            "call": 0.3278,
+            "fold": 0.6706
+          }
+        },
+        "A3s": {
+          "combos": 3.0,
+          "equity": 0.2545,
+          "ev_bb": 0.024,
+          "freqs": {
+            "allin": 0.0514,
+            "call": 0.2574,
+            "fold": 0.6912
+          }
+        },
+        "A4s": {
+          "combos": 4.0,
+          "equity": 1.0,
+          "ev_bb": 22.51,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "A5s": {
+          "combos": 3.0,
+          "equity": 0.2581,
+          "ev_bb": 0.091,
+          "freqs": {
+            "allin": 0.0207,
+            "call": 0.4615,
+            "fold": 0.5178
+          }
+        },
+        "A8s": {
+          "combos": 3.0,
+          "equity": 0.2586,
+          "ev_bb": 0.132,
+          "freqs": {
+            "allin": 0.013,
+            "call": 0.6473,
+            "fold": 0.3397
+          }
+        },
+        "J9s": {
+          "combos": 1.0,
+          "equity": 0.1239,
+          "ev_bb": -0.0,
+          "freqs": {
+            "allin": 0.0003,
+            "call": 0.0,
+            "fold": 0.9997
+          }
+        },
+        "JJ": {
+          "combos": 1.5,
+          "equity": 0.2678,
+          "ev_bb": 0.423,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.9877,
+            "fold": 0.0123
+          }
+        },
+        "K8s": {
+          "combos": 3.0,
+          "equity": 0.2921,
+          "ev_bb": 1.053,
+          "freqs": {
+            "allin": 0.2108,
+            "call": 0.7864,
+            "fold": 0.0028
+          }
+        },
+        "KQo": {
+          "combos": 4.5,
+          "equity": 0.8027,
+          "ev_bb": 13.574,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "KTs": {
+          "combos": 1.0,
+          "equity": 0.1703,
+          "ev_bb": 0.082,
+          "freqs": {
+            "allin": 0.2813,
+            "call": 0.0,
+            "fold": 0.7187
+          }
+        },
+        "Q7s": {
+          "combos": 3.0,
+          "equity": 0.3613,
+          "ev_bb": 2.681,
+          "freqs": {
+            "allin": 0.1588,
+            "call": 0.8412,
+            "fold": 0.0
+          }
+        },
+        "Q8s": {
+          "combos": 2.0,
+          "equity": 0.9504,
+          "ev_bb": 19.767,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          }
+        },
+        "Q9o": {
+          "combos": 9.0,
+          "equity": 0.3666,
+          "ev_bb": 2.81,
+          "freqs": {
+            "allin": 0.1626,
+            "call": 0.8374,
+            "fold": 0.0
+          }
+        },
+        "Q9s": {
+          "combos": 3.0,
+          "equity": 0.3668,
+          "ev_bb": 2.814,
+          "freqs": {
+            "allin": 0.1625,
+            "call": 0.8375,
+            "fold": 0.0
+          }
+        },
+        "TT": {
+          "combos": 6.0,
+          "equity": 0.235,
+          "ev_bb": -0.003,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0087,
+            "fold": 0.9913
+          }
+        }
+      },
+      "by_combo": {
+        "5c4c": {
+          "equity": 0.2682,
+          "ev_bb": 0.236,
+          "freqs": {
+            "allin": 0.0772,
+            "call": 0.5056,
+            "fold": 0.4172
+          },
+          "weight": 1.0
+        },
+        "5h4h": {
+          "equity": 0.2695,
+          "ev_bb": 0.278,
+          "freqs": {
+            "allin": 0.0223,
+            "call": 0.5876,
+            "fold": 0.3901
+          },
+          "weight": 1.0
+        },
+        "5s4s": {
+          "equity": 0.2682,
+          "ev_bb": 0.236,
+          "freqs": {
+            "allin": 0.0773,
+            "call": 0.5055,
+            "fold": 0.4172
+          },
+          "weight": 1.0
+        },
+        "6c4c": {
+          "equity": 1.0,
+          "ev_bb": 22.53,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6d4d": {
+          "equity": 1.0,
+          "ev_bb": 22.551,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6d6c": {
+          "equity": 0.2439,
+          "ev_bb": -0.04,
+          "freqs": {
+            "allin": 0.001,
+            "call": 0.271,
+            "fold": 0.728
+          },
+          "weight": 1.0
+        },
+        "6h4h": {
+          "equity": 1.0,
+          "ev_bb": 22.565,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6h6c": {
+          "equity": 0.2415,
+          "ev_bb": -0.031,
+          "freqs": {
+            "allin": 0.0011,
+            "call": 0.152,
+            "fold": 0.8469
+          },
+          "weight": 1.0
+        },
+        "6h6d": {
+          "equity": 0.2379,
+          "ev_bb": -0.056,
+          "freqs": {
+            "allin": 0.0008,
+            "call": 0.1915,
+            "fold": 0.8077
+          },
+          "weight": 1.0
+        },
+        "6s4s": {
+          "equity": 1.0,
+          "ev_bb": 22.544,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "6s6c": {
+          "equity": 0.2451,
+          "ev_bb": -0.024,
+          "freqs": {
+            "allin": 0.0013,
+            "call": 0.1953,
+            "fold": 0.8034
+          },
+          "weight": 1.0
+        },
+        "6s6d": {
+          "equity": 0.2414,
+          "ev_bb": -0.048,
+          "freqs": {
+            "allin": 0.0008,
+            "call": 0.2308,
+            "fold": 0.7684
+          },
+          "weight": 1.0
+        },
+        "6s6h": {
+          "equity": 0.2391,
+          "ev_bb": -0.025,
+          "freqs": {
+            "allin": 0.0009,
+            "call": 0.0942,
+            "fold": 0.9049
+          },
+          "weight": 1.0
+        },
+        "7d7c": {
+          "equity": 0.2439,
+          "ev_bb": -0.052,
+          "freqs": {
+            "allin": 0.001,
+            "call": 0.3492,
+            "fold": 0.6498
+          },
+          "weight": 1.0
+        },
+        "7h7c": {
+          "equity": 0.2416,
+          "ev_bb": -0.069,
+          "freqs": {
+            "allin": 0.0009,
+            "call": 0.3365,
+            "fold": 0.6625
+          },
+          "weight": 1.0
+        },
+        "7h7d": {
+          "equity": 0.2379,
+          "ev_bb": -0.084,
+          "freqs": {
+            "allin": 0.0008,
+            "call": 0.2856,
+            "fold": 0.7136
+          },
+          "weight": 1.0
+        },
+        "7s7c": {
+          "equity": 0.2451,
+          "ev_bb": -0.043,
+          "freqs": {
+            "allin": 0.0012,
+            "call": 0.3639,
+            "fold": 0.6349
+          },
+          "weight": 1.0
+        },
+        "7s7d": {
+          "equity": 0.2414,
+          "ev_bb": -0.066,
+          "freqs": {
+            "allin": 0.0008,
+            "call": 0.3164,
+            "fold": 0.6827
+          },
+          "weight": 1.0
+        },
+        "7s7h": {
+          "equity": 0.2391,
+          "ev_bb": -0.08,
+          "freqs": {
+            "allin": 0.0008,
+            "call": 0.3026,
+            "fold": 0.6966
+          },
+          "weight": 1.0
+        },
+        "8d7d": {
+          "equity": 0.257,
+          "ev_bb": 0.107,
+          "freqs": {
+            "allin": 0.003,
+            "call": 0.6422,
+            "fold": 0.3547
+          },
+          "weight": 1.0
+        },
+        "8h7h": {
+          "equity": 0.2547,
+          "ev_bb": 0.071,
+          "freqs": {
+            "allin": 0.0028,
+            "call": 0.6309,
+            "fold": 0.3663
+          },
+          "weight": 1.0
+        },
+        "8s7s": {
+          "equity": 0.2581,
+          "ev_bb": 0.128,
+          "freqs": {
+            "allin": 0.0032,
+            "call": 0.6563,
+            "fold": 0.3405
+          },
+          "weight": 1.0
+        },
+        "9d8d": {
+          "equity": 0.2602,
+          "ev_bb": 0.146,
+          "freqs": {
+            "allin": 0.0037,
+            "call": 0.5981,
+            "fold": 0.3982
+          },
+          "weight": 1.0
+        },
+        "9d9c": {
+          "equity": 0.2562,
+          "ev_bb": 0.055,
+          "freqs": {
+            "allin": 0.0021,
+            "call": 0.3759,
+            "fold": 0.6219
+          },
+          "weight": 1.0
+        },
+        "9h8h": {
+          "equity": 0.2628,
+          "ev_bb": 0.199,
+          "freqs": {
+            "allin": 0.0042,
+            "call": 0.6494,
+            "fold": 0.3464
+          },
+          "weight": 1.0
+        },
+        "9h9c": {
+          "equity": 0.2588,
+          "ev_bb": 0.089,
+          "freqs": {
+            "allin": 0.003,
+            "call": 0.4241,
+            "fold": 0.573
+          },
+          "weight": 1.0
+        },
+        "9h9d": {
+          "equity": 0.2496,
+          "ev_bb": -0.003,
+          "freqs": {
+            "allin": 0.0011,
+            "call": 0.3066,
+            "fold": 0.6922
+          },
+          "weight": 1.0
+        },
+        "9s8s": {
+          "equity": 0.26,
+          "ev_bb": 0.138,
+          "freqs": {
+            "allin": 0.0034,
+            "call": 0.5786,
+            "fold": 0.418
+          },
+          "weight": 1.0
+        },
+        "9s9c": {
+          "equity": 0.2559,
+          "ev_bb": 0.05,
+          "freqs": {
+            "allin": 0.0018,
+            "call": 0.3563,
+            "fold": 0.6419
+          },
+          "weight": 1.0
+        },
+        "9s9d": {
+          "equity": 0.2467,
+          "ev_bb": -0.018,
+          "freqs": {
+            "allin": 0.0005,
+            "call": 0.2179,
+            "fold": 0.7816
+          },
+          "weight": 1.0
+        },
+        "9s9h": {
+          "equity": 0.2493,
+          "ev_bb": -0.005,
+          "freqs": {
+            "allin": 0.0009,
+            "call": 0.2836,
+            "fold": 0.7154
+          },
+          "weight": 1.0
+        },
+        "Ac3c": {
+          "equity": 0.2566,
+          "ev_bb": 0.043,
+          "freqs": {
+            "allin": 0.033,
+            "call": 0.2816,
+            "fold": 0.6854
+          },
+          "weight": 1.0
+        },
+        "Ac4c": {
+          "equity": 1.0,
+          "ev_bb": 22.513,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ac5c": {
+          "equity": 0.259,
+          "ev_bb": 0.104,
+          "freqs": {
+            "allin": 0.012,
+            "call": 0.4814,
+            "fold": 0.5066
+          },
+          "weight": 1.0
+        },
+        "Ad3d": {
+          "equity": 0.2528,
+          "ev_bb": 0.008,
+          "freqs": {
+            "allin": 0.0888,
+            "call": 0.2633,
+            "fold": 0.6479
+          },
+          "weight": 1.0
+        },
+        "Ad4d": {
+          "equity": 1.0,
+          "ev_bb": 22.526,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ad8d": {
+          "equity": 0.2578,
+          "ev_bb": 0.126,
+          "freqs": {
+            "allin": 0.0126,
+            "call": 0.6829,
+            "fold": 0.3045
+          },
+          "weight": 1.0
+        },
+        "Ah4h": {
+          "equity": 1.0,
+          "ev_bb": 22.49,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Ah5h": {
+          "equity": 0.2589,
+          "ev_bb": 0.102,
+          "freqs": {
+            "allin": 0.0366,
+            "call": 0.4706,
+            "fold": 0.4929
+          },
+          "weight": 1.0
+        },
+        "Ah8h": {
+          "equity": 0.2589,
+          "ev_bb": 0.133,
+          "freqs": {
+            "allin": 0.0198,
+            "call": 0.623,
+            "fold": 0.3572
+          },
+          "weight": 1.0
+        },
+        "As3s": {
+          "equity": 0.254,
+          "ev_bb": 0.02,
+          "freqs": {
+            "allin": 0.0325,
+            "call": 0.2268,
+            "fold": 0.7406
+          },
+          "weight": 1.0
+        },
+        "As4s": {
+          "equity": 1.0,
+          "ev_bb": 22.512,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "As5s": {
+          "equity": 0.2565,
+          "ev_bb": 0.067,
+          "freqs": {
+            "allin": 0.0139,
+            "call": 0.4324,
+            "fold": 0.5536
+          },
+          "weight": 1.0
+        },
+        "As8s": {
+          "equity": 0.259,
+          "ev_bb": 0.137,
+          "freqs": {
+            "allin": 0.0066,
+            "call": 0.6356,
+            "fold": 0.3578
+          },
+          "weight": 1.0
+        },
+        "JdJc": {
+          "equity": 0.266,
+          "ev_bb": 0.381,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.9922,
+            "fold": 0.0078
+          },
+          "weight": 0.25
+        },
+        "Jh9h": {
+          "equity": 0.1239,
+          "ev_bb": -0.0,
+          "freqs": {
+            "allin": 0.0003,
+            "call": 0.0,
+            "fold": 0.9997
+          },
+          "weight": 1.0
+        },
+        "JhJc": {
+          "equity": 0.2703,
+          "ev_bb": 0.479,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.9835,
+            "fold": 0.0165
+          },
+          "weight": 0.25
+        },
+        "JhJd": {
+          "equity": 0.2708,
+          "ev_bb": 0.491,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.9848,
+            "fold": 0.0152
+          },
+          "weight": 0.25
+        },
+        "JsJc": {
+          "equity": 0.2649,
+          "ev_bb": 0.354,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.9911,
+            "fold": 0.0089
+          },
+          "weight": 0.25
+        },
+        "JsJd": {
+          "equity": 0.2654,
+          "ev_bb": 0.366,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.9918,
+            "fold": 0.0082
+          },
+          "weight": 0.25
+        },
+        "JsJh": {
+          "equity": 0.2697,
+          "ev_bb": 0.464,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.9829,
+            "fold": 0.0171
+          },
+          "weight": 0.25
+        },
+        "KcQd": {
+          "equity": 0.7946,
+          "ev_bb": 13.345,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KcQs": {
+          "equity": 0.7946,
+          "ev_bb": 13.346,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "Kd8d": {
+          "equity": 0.2956,
+          "ev_bb": 1.162,
+          "freqs": {
+            "allin": 0.2579,
+            "call": 0.7402,
+            "fold": 0.0019
+          },
+          "weight": 1.0
+        },
+        "KdQc": {
+          "equity": 0.8177,
+          "ev_bb": 14.008,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KdQs": {
+          "equity": 0.8033,
+          "ev_bb": 13.565,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "Kh8h": {
+          "equity": 0.2854,
+          "ev_bb": 0.844,
+          "freqs": {
+            "allin": 0.1196,
+            "call": 0.8759,
+            "fold": 0.0045
+          },
+          "weight": 1.0
+        },
+        "KhQc": {
+          "equity": 0.8076,
+          "ev_bb": 13.752,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KhQd": {
+          "equity": 0.794,
+          "ev_bb": 13.331,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KhQs": {
+          "equity": 0.794,
+          "ev_bb": 13.331,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KhTh": {
+          "equity": 0.1703,
+          "ev_bb": 0.082,
+          "freqs": {
+            "allin": 0.2813,
+            "call": 0.0,
+            "fold": 0.7187
+          },
+          "weight": 1.0
+        },
+        "Ks8s": {
+          "equity": 0.2956,
+          "ev_bb": 1.162,
+          "freqs": {
+            "allin": 0.258,
+            "call": 0.7401,
+            "fold": 0.0019
+          },
+          "weight": 1.0
+        },
+        "KsQc": {
+          "equity": 0.8177,
+          "ev_bb": 14.008,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "KsQd": {
+          "equity": 0.8033,
+          "ev_bb": 13.565,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 0.5
+        },
+        "Qc7c": {
+          "equity": 0.3784,
+          "ev_bb": 3.087,
+          "freqs": {
+            "allin": 0.1482,
+            "call": 0.8518,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9c": {
+          "equity": 0.3889,
+          "ev_bb": 3.338,
+          "freqs": {
+            "allin": 0.1498,
+            "call": 0.8502,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9d": {
+          "equity": 0.3781,
+          "ev_bb": 3.078,
+          "freqs": {
+            "allin": 0.1516,
+            "call": 0.8484,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9h": {
+          "equity": 0.3812,
+          "ev_bb": 3.153,
+          "freqs": {
+            "allin": 0.1512,
+            "call": 0.8488,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qc9s": {
+          "equity": 0.3778,
+          "ev_bb": 3.07,
+          "freqs": {
+            "allin": 0.1515,
+            "call": 0.8485,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd7d": {
+          "equity": 0.3524,
+          "ev_bb": 2.473,
+          "freqs": {
+            "allin": 0.1639,
+            "call": 0.8361,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd8d": {
+          "equity": 0.9504,
+          "ev_bb": 19.767,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9c": {
+          "equity": 0.3669,
+          "ev_bb": 2.82,
+          "freqs": {
+            "allin": 0.1666,
+            "call": 0.8334,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9d": {
+          "equity": 0.3563,
+          "ev_bb": 2.566,
+          "freqs": {
+            "allin": 0.1686,
+            "call": 0.8314,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9h": {
+          "equity": 0.3593,
+          "ev_bb": 2.639,
+          "freqs": {
+            "allin": 0.1681,
+            "call": 0.8319,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qd9s": {
+          "equity": 0.356,
+          "ev_bb": 2.558,
+          "freqs": {
+            "allin": 0.1685,
+            "call": 0.8315,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs7s": {
+          "equity": 0.3538,
+          "ev_bb": 2.506,
+          "freqs": {
+            "allin": 0.1639,
+            "call": 0.8361,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs8s": {
+          "equity": 0.9504,
+          "ev_bb": 19.767,
+          "freqs": {
+            "allin": 1.0,
+            "call": 0.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9c": {
+          "equity": 0.3669,
+          "ev_bb": 2.82,
+          "freqs": {
+            "allin": 0.1666,
+            "call": 0.8334,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9d": {
+          "equity": 0.3563,
+          "ev_bb": 2.566,
+          "freqs": {
+            "allin": 0.1686,
+            "call": 0.8314,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9h": {
+          "equity": 0.3593,
+          "ev_bb": 2.639,
+          "freqs": {
+            "allin": 0.1682,
+            "call": 0.8318,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "Qs9s": {
+          "equity": 0.356,
+          "ev_bb": 2.558,
+          "freqs": {
+            "allin": 0.1686,
+            "call": 0.8314,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "TdTc": {
+          "equity": 0.2383,
+          "ev_bb": -0.003,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0118,
+            "fold": 0.9882
+          },
+          "weight": 1.0
+        },
+        "ThTc": {
+          "equity": 0.2368,
+          "ev_bb": -0.002,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0064,
+            "fold": 0.9935
+          },
+          "weight": 1.0
+        },
+        "ThTd": {
+          "equity": 0.2292,
+          "ev_bb": -0.003,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0055,
+            "fold": 0.9945
+          },
+          "weight": 1.0
+        },
+        "TsTc": {
+          "equity": 0.241,
+          "ev_bb": -0.003,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0137,
+            "fold": 0.9863
+          },
+          "weight": 1.0
+        },
+        "TsTd": {
+          "equity": 0.2333,
+          "ev_bb": -0.004,
+          "freqs": {
+            "allin": 0.0,
+            "call": 0.0092,
+            "fold": 0.9908
+          },
+          "weight": 1.0
+        },
+        "TsTh": {
+          "equity": 0.2318,
+          "ev_bb": -0.002,
+          "freqs": {
+            "allin": 0.0001,
+            "call": 0.0055,
+            "fold": 0.9944
+          },
+          "weight": 1.0
+        }
+      },
+      "kind": "decision",
+      "line_frequency": 0.3241,
+      "locked": false,
+      "path": "river/BB_check/SB_bet0.5",
+      "player": "BB",
+      "pot_bb": 18.0,
+      "range_combos": 78.0,
+      "range_equity": 0.3909,
+      "range_ev_bb": 4.061,
+      "reached": true,
+      "street": "river"
+    },
+    "river/BB_check/SB_bet0.5/BB_allin": {
+      "actions": [
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.4821,
+          "name": "fold",
+          "path": "river/BB_check/SB_bet0.5/BB_allin/SB_fold"
+        },
+        {
+          "amount_bb": 0.0,
+          "frequency": 0.5179,
+          "name": "call",
+          "path": "river/BB_check/SB_bet0.5/BB_allin/SB_call"
+        }
+      ],
+      "board": "3h8cQh5d2s",
+      "by_class": {
+        "33": {
+          "combos": 0.0,
+          "equity": 0.5607,
+          "ev_bb": 14.43,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "65s": {
+          "combos": 0.001,
+          "equity": 0.0321,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "76s": {
+          "combos": 2.285,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "88": {
+          "combos": 0.0,
+          "equity": 0.5265,
+          "ev_bb": 13.059,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "A4s": {
+          "combos": 0.0,
+          "equity": 0.7228,
+          "ev_bb": 20.914,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "A5s": {
+          "combos": 0.131,
+          "equity": 0.035,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "A9s": {
+          "combos": 0.464,
+          "equity": 0.0168,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "AJs": {
+          "combos": 1.332,
+          "equity": 0.0163,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "AQo": {
+          "combos": 1.247,
+          "equity": 0.4116,
+          "ev_bb": 8.462,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "AQs": {
+          "combos": 0.265,
+          "equity": 0.4136,
+          "ev_bb": 8.544,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "ATs": {
+          "combos": 0.641,
+          "equity": 0.0109,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "JTs": {
+          "combos": 1.609,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "KJs": {
+          "combos": 0.007,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        },
+        "KQo": {
+          "combos": 4.901,
+          "equity": 0.2719,
+          "ev_bb": 2.876,
+          "freqs": {
+            "call": 0.9997,
+            "fold": 0.0003
+          }
+        },
+        "KQs": {
+          "combos": 1.768,
+          "equity": 0.2708,
+          "ev_bb": 2.832,
+          "freqs": {
+            "call": 0.9997,
+            "fold": 0.0003
+          }
+        },
+        "QJo": {
+          "combos": 5.251,
+          "equity": 0.1957,
+          "ev_bb": -0.08,
+          "freqs": {
+            "call": 0.467,
+            "fold": 0.533
+          }
+        },
+        "QJs": {
+          "combos": 1.741,
+          "equity": 0.1957,
+          "ev_bb": -0.082,
+          "freqs": {
+            "call": 0.48,
+            "fold": 0.52
+          }
+        },
+        "QQ": {
+          "combos": 3.0,
+          "equity": 0.3531,
+          "ev_bb": 6.123,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          }
+        },
+        "QTs": {
+          "combos": 1.783,
+          "equity": 0.1957,
+          "ev_bb": -0.077,
+          "freqs": {
+            "call": 0.4547,
+            "fold": 0.5453
+          }
+        },
+        "T9s": {
+          "combos": 1.027,
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          }
+        }
+      },
+      "by_combo": {
+        "3d3c": {
+          "equity": 0.5603,
+          "ev_bb": 14.411,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0
+        },
+        "3s3c": {
+          "equity": 0.5616,
+          "ev_bb": 14.465,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0
+        },
+        "3s3d": {
+          "equity": 0.5603,
+          "ev_bb": 14.412,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0
+        },
+        "6c5c": {
+          "equity": 0.0311,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.0002
+        },
+        "6h5h": {
+          "equity": 0.0342,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.0002
+        },
+        "6s5s": {
+          "equity": 0.0311,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.0002
+        },
+        "7c6c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.4653
+        },
+        "7d6d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.5931
+        },
+        "7h6h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.6745
+        },
+        "7s6s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.5516
+        },
+        "8h8d": {
+          "equity": 0.5264,
+          "ev_bb": 13.056,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0
+        },
+        "8s8h": {
+          "equity": 0.5266,
+          "ev_bb": 13.062,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0
+        },
+        "Ac9c": {
+          "equity": 0.0168,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.0039
+        },
+        "AcJc": {
+          "equity": 0.0163,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.3419
+        },
+        "AcQc": {
+          "equity": 0.4007,
+          "ev_bb": 8.028,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.118
+        },
+        "AcQd": {
+          "equity": 0.4259,
+          "ev_bb": 9.035,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0185
+        },
+        "AcQs": {
+          "equity": 0.4259,
+          "ev_bb": 9.035,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0185
+        },
+        "AcTc": {
+          "equity": 0.0163,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1386
+        },
+        "Ad9d": {
+          "equity": 0.0168,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1527
+        },
+        "AdJd": {
+          "equity": 0.0164,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.3309
+        },
+        "AdQc": {
+          "equity": 0.3985,
+          "ev_bb": 7.938,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.166
+        },
+        "AdQd": {
+          "equity": 0.4236,
+          "ev_bb": 8.942,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0578
+        },
+        "AdQs": {
+          "equity": 0.4236,
+          "ev_bb": 8.942,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0578
+        },
+        "AdTd": {
+          "equity": 0.0164,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1787
+        },
+        "Ah4h": {
+          "equity": 0.7228,
+          "ev_bb": 20.914,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0
+        },
+        "Ah5h": {
+          "equity": 0.035,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1313
+        },
+        "Ah9h": {
+          "equity": 0.0168,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1277
+        },
+        "AhJh": {
+          "equity": 0.0163,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.2933
+        },
+        "AhQc": {
+          "equity": 0.4003,
+          "ev_bb": 8.01,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.2779
+        },
+        "AhQd": {
+          "equity": 0.4254,
+          "ev_bb": 9.017,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.2067
+        },
+        "AhQs": {
+          "equity": 0.4254,
+          "ev_bb": 9.017,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.2067
+        },
+        "AhTh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.2143
+        },
+        "As9s": {
+          "equity": 0.0168,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1795
+        },
+        "AsJs": {
+          "equity": 0.0163,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.3664
+        },
+        "AsQc": {
+          "equity": 0.4004,
+          "ev_bb": 8.016,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.2056
+        },
+        "AsQd": {
+          "equity": 0.4256,
+          "ev_bb": 9.022,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0893
+        },
+        "AsQs": {
+          "equity": 0.4256,
+          "ev_bb": 9.022,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 0.0894
+        },
+        "AsTs": {
+          "equity": 0.0163,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1089
+        },
+        "JcTc": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.4283
+        },
+        "JdTd": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.4237
+        },
+        "JhTh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.3341
+        },
+        "JsTs": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.4233
+        },
+        "KcQc": {
+          "equity": 0.2697,
+          "ev_bb": 2.788,
+          "freqs": {
+            "call": 0.9996,
+            "fold": 0.0004
+          },
+          "weight": 0.4339
+        },
+        "KcQd": {
+          "equity": 0.2921,
+          "ev_bb": 3.684,
+          "freqs": {
+            "call": 0.9999,
+            "fold": 0.0001
+          },
+          "weight": 0.4184
+        },
+        "KcQs": {
+          "equity": 0.2921,
+          "ev_bb": 3.684,
+          "freqs": {
+            "call": 0.9999,
+            "fold": 0.0001
+          },
+          "weight": 0.4184
+        },
+        "KdQc": {
+          "equity": 0.2649,
+          "ev_bb": 2.597,
+          "freqs": {
+            "call": 0.9997,
+            "fold": 0.0003
+          },
+          "weight": 0.7452
+        },
+        "KdQd": {
+          "equity": 0.2712,
+          "ev_bb": 2.848,
+          "freqs": {
+            "call": 0.9997,
+            "fold": 0.0003
+          },
+          "weight": 0.6673
+        },
+        "KdQs": {
+          "equity": 0.2793,
+          "ev_bb": 3.17,
+          "freqs": {
+            "call": 0.9999,
+            "fold": 0.0001
+          },
+          "weight": 0.6846
+        },
+        "KhJh": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.0067
+        },
+        "KhQc": {
+          "equity": 0.2498,
+          "ev_bb": 1.989,
+          "freqs": {
+            "call": 0.9994,
+            "fold": 0.0006
+          },
+          "weight": 0.4336
+        },
+        "KhQd": {
+          "equity": 0.2635,
+          "ev_bb": 2.541,
+          "freqs": {
+            "call": 0.9996,
+            "fold": 0.0004
+          },
+          "weight": 0.3857
+        },
+        "KhQs": {
+          "equity": 0.2635,
+          "ev_bb": 2.541,
+          "freqs": {
+            "call": 0.9996,
+            "fold": 0.0004
+          },
+          "weight": 0.3857
+        },
+        "KsQc": {
+          "equity": 0.2649,
+          "ev_bb": 2.597,
+          "freqs": {
+            "call": 0.9997,
+            "fold": 0.0003
+          },
+          "weight": 0.7451
+        },
+        "KsQd": {
+          "equity": 0.2793,
+          "ev_bb": 3.17,
+          "freqs": {
+            "call": 0.9999,
+            "fold": 0.0001
+          },
+          "weight": 0.6845
+        },
+        "KsQs": {
+          "equity": 0.2712,
+          "ev_bb": 2.848,
+          "freqs": {
+            "call": 0.9997,
+            "fold": 0.0003
+          },
+          "weight": 0.6673
+        },
+        "QcJc": {
+          "equity": 0.1907,
+          "ev_bb": -0.177,
+          "freqs": {
+            "call": 0.4741,
+            "fold": 0.5259
+          },
+          "weight": 0.6506
+        },
+        "QcJd": {
+          "equity": 0.1907,
+          "ev_bb": -0.177,
+          "freqs": {
+            "call": 0.4741,
+            "fold": 0.5259
+          },
+          "weight": 0.65
+        },
+        "QcJh": {
+          "equity": 0.1907,
+          "ev_bb": -0.162,
+          "freqs": {
+            "call": 0.4335,
+            "fold": 0.5665
+          },
+          "weight": 0.6638
+        },
+        "QcJs": {
+          "equity": 0.1907,
+          "ev_bb": -0.177,
+          "freqs": {
+            "call": 0.4741,
+            "fold": 0.5259
+          },
+          "weight": 0.651
+        },
+        "QcTc": {
+          "equity": 0.1907,
+          "ev_bb": -0.166,
+          "freqs": {
+            "call": 0.4457,
+            "fold": 0.5543
+          },
+          "weight": 0.6686
+        },
+        "QdJc": {
+          "equity": 0.1989,
+          "ev_bb": -0.021,
+          "freqs": {
+            "call": 0.4838,
+            "fold": 0.5162
+          },
+          "weight": 0.5451
+        },
+        "QdJd": {
+          "equity": 0.1989,
+          "ev_bb": -0.021,
+          "freqs": {
+            "call": 0.4838,
+            "fold": 0.5162
+          },
+          "weight": 0.5445
+        },
+        "QdJh": {
+          "equity": 0.1989,
+          "ev_bb": -0.02,
+          "freqs": {
+            "call": 0.4466,
+            "fold": 0.5534
+          },
+          "weight": 0.5527
+        },
+        "QdJs": {
+          "equity": 0.1989,
+          "ev_bb": -0.021,
+          "freqs": {
+            "call": 0.4838,
+            "fold": 0.5162
+          },
+          "weight": 0.5454
+        },
+        "QdQc": {
+          "equity": 0.3714,
+          "ev_bb": 6.857,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QdTd": {
+          "equity": 0.1989,
+          "ev_bb": -0.02,
+          "freqs": {
+            "call": 0.4605,
+            "fold": 0.5395
+          },
+          "weight": 0.5575
+        },
+        "QsJc": {
+          "equity": 0.1989,
+          "ev_bb": -0.021,
+          "freqs": {
+            "call": 0.4837,
+            "fold": 0.5163
+          },
+          "weight": 0.5452
+        },
+        "QsJd": {
+          "equity": 0.1989,
+          "ev_bb": -0.021,
+          "freqs": {
+            "call": 0.4837,
+            "fold": 0.5163
+          },
+          "weight": 0.5445
+        },
+        "QsJh": {
+          "equity": 0.1989,
+          "ev_bb": -0.02,
+          "freqs": {
+            "call": 0.4466,
+            "fold": 0.5534
+          },
+          "weight": 0.5528
+        },
+        "QsJs": {
+          "equity": 0.1989,
+          "ev_bb": -0.021,
+          "freqs": {
+            "call": 0.4837,
+            "fold": 0.5163
+          },
+          "weight": 0.5455
+        },
+        "QsQc": {
+          "equity": 0.3714,
+          "ev_bb": 6.857,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsQd": {
+          "equity": 0.3129,
+          "ev_bb": 4.517,
+          "freqs": {
+            "call": 1.0,
+            "fold": 0.0
+          },
+          "weight": 1.0
+        },
+        "QsTs": {
+          "equity": 0.1989,
+          "ev_bb": -0.02,
+          "freqs": {
+            "call": 0.4605,
+            "fold": 0.5395
+          },
+          "weight": 0.5574
+        },
+        "Tc9c": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.1426
+        },
+        "Td9d": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.3232
+        },
+        "Th9h": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.2545
+        },
+        "Ts9s": {
+          "equity": 0.0,
+          "ev_bb": 0.0,
+          "freqs": {
+            "call": 0.0,
+            "fold": 1.0
+          },
+          "weight": 0.3063
+        }
+      },
+      "kind": "decision",
+      "line_frequency": 0.07195,
+      "locked": false,
+      "path": "river/BB_check/SB_bet0.5/BB_allin",
+      "player": "SB",
+      "pot_bb": 32.0,
+      "range_combos": 27.45,
+      "range_equity": 0.1789,
+      "range_ev_bb": 1.608,
+      "reached": true,
+      "street": "river"
+    }
+  },
+  "out_of_position": "BB",
+  "runtime_seconds": 0.0,
+  "spot": {
+    "bet_tree": {
+      "allin_threshold": 0.67,
+      "river": {
+        "bet": [
+          0.5,
+          1.0
+        ],
+        "raise": [
+          2.5
+        ]
+      }
+    },
+    "board": "Qh8c3h5d2s",
+    "effective_stack_bb": 14,
+    "max_seconds": 60,
+    "players": [
+      "SB",
+      "BB"
+    ],
+    "pot_bb": 12,
+    "ranges": {
+      "BB": "Q9s,Q8s,Q7s,Q9o,KQo:0.5,A8s,K8s,98s,87s,A3s,JJ:0.25,TT,99,77,66,KhTh,Jh9h,A5s,A4s,64s,54s",
+      "SB": "QQ,88,33,AQs-A9s,KQs,QJs,QTs,AQo,KQo,QJo,A8s,98s,JTs,T9s,KhJh,Ah5h,Ah4h,76s,65s"
+    },
+    "target_exploitability_pct": 0.2
+  },
+  "stopped_because": "target_reached",
+  "threads": 2,
+  "total_seconds": 0.0,
+  "units": "EVs and amounts in big blinds; ev_bb counts the pot at the start of the spot, so the two players' EVs add up to pot_bb when there is no rake; frequencies and equity are 0-1",
+  "version": "pontiac 0.4.0 (two-player engine: postflop-solver nodelock fork)"
+}

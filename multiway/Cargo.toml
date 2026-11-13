@@ -1,0 +1,13 @@
+[package]
+name = "multiway"
+version = "0.2.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Three-player no-limit hold'em postflop solver (part of Pontiac Solver)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+rayon = "1.8"
+
+[profile.release]
+opt-level = 3

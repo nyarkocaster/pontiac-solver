@@ -1,0 +1,19 @@
+{
+  "players": ["SB", "BB"],
+  "effective_stack_bb": 18,
+  "pot_bb": 4,
+  "board": "Qh8c3h",
+  "ranges": {
+    "SB": "22+,A2s+,K2s+,Q2s+,J4s+,T6s+,96s+,85s+,75s+,64s+,54s,A2o+,K5o+,Q8o+,J8o+,T8o+,98o",
+    "BB": "88-22,A9s-A2s,K2s+,Q2s+,J5s+,T6s+,96s+,85s+,75s+,64s+,54s,A9o-A2o,K6o+,Q8o+,J8o+,T8o+,97o+,87o"
+  },
+  "bet_tree": {
+    "flop": {"bet": [0.33, 0.75], "raise": [2.5]},
+    "turn": {"bet": [0.5, 1.0], "raise": [2.5]},
+    "river": {"bet": [0.5, 1.0], "raise": [2.5]},
+    "allin_threshold": 0.67
+  },
+  "rake": 0,
+  "target_exploitability_pct": 0.5,
+  "max_seconds": 600
+}

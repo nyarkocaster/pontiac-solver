@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pontiac-solver"
+version = "0.4.0"
+description = "Pontiac Solver: free no-limit hold'em postflop solver with node locking (headless Python and command-line interface)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+pontiac = "pontiac.__main__:main"
+
+[tool.setuptools]
+packages = ["pontiac"]
+
+[tool.setuptools.package-data]
+pontiac = ["bin/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

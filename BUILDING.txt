@@ -1,0 +1,10 @@
+Folders
+  engine/    two-player solver (b-inary postflop-solver, tonyyet nodelock fork, patched)
+  cli/       headless command-line program (pontiac solve / query / estimate); scripts/build_cli.sh rebuilds it
+  pontiac/   Python package around that program (pip install -e ".[test]" && pytest)
+  multiway/  three-player flop, turn and river solver (original). Other tools: mwexp (sampling accuracy on turn spots), mwsample (sampled vs exact hand values), mwflop (flop size and timing), mwbench (fixed speed benchmark with result fingerprint). `cargo run --release --bin mwcheck` runs its checks.
+  app/       Tauri + Vue desktop app
+  checks/    test tools and the browser dev server (`cargo run --release --bin devserver`, then `npx vite` in app/)
+
+Windows build:  cd app && npm install && npm run build && cd src-tauri && cargo build --release --target x86_64-pc-windows-gnu
+(needs the mingw-w64 linker; winbuild.sh is the script used in the cloud workspace, which also rebuilds the Rust standard library)
