@@ -231,6 +231,10 @@
             </button>
             <p v-if="board.length !== 3" class="text-sm text-[#B42318] mt-2">Pick three flop cards.</p>
             <p v-else-if="setupError" class="text-sm text-[#B42318] mt-2">{{ setupError }}</p>
+            <p v-if="setupError && memory.heldThreeMb > 200" class="text-sm mt-2">
+              3-Way Pots is holding {{ gb(memory.heldThreeMb) }} for its last solve.
+              <button class="text-felt underline font-bold" @click="releaseSolve('threeway')">Clear that solve to free it</button>
+            </p>
             <p v-else-if="memNeeded" class="hint mt-2">
               Uses about {{ memNeeded >= 1024 ? (memNeeded / 1024).toFixed(1) + ' GB' : memNeeded.toFixed(0) + ' MB' }} of memory<template v-if="freeMb">, {{ (freeMb / 1024).toFixed(1) }} GB free</template>.
               <template v-if="lowMemory"> Memory saver is on, so switching views later takes a few seconds.</template>
@@ -531,6 +535,7 @@ import {
   RANK_CHARS, SUIT_CHARS, SUIT_SYMBOL, SUIT_COLOR, randomFlop,
 } from "../../guided/data";
 import * as api from "../../guided/api";
+import { memory, releaseSolve, startMemoryWatch, gb } from "../../guided/memory";
 import { actionColors, describeNode, compareNodes, pct } from "../../guided/coach";
 
 const RANKS_DESC = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
@@ -617,8 +622,10 @@ const leakSummary = computed(() => {
   if (profileId.value !== "custom") return PROFILES.find((p) => p.id === profileId.value)?.label ?? "";
   return LEAKS.filter((l) => leakOn[l.id]).map((l) => l.label.split(" — ")[0].toLowerCase()).join(", ");
 });
-const freeMb = ref(0);
-api.systemMemory().then(([avail]) => (freeMb.value = avail / 1_048_576)).catch(() => {});
+// live reading; this tab's own stored solve is dropped when the next one starts, so it counts as free
+startMemoryWatch();
+const freeMb = computed(() => (memory.availMb ? memory.availMb + memory.heldGuidedMb : 0));
+watch(() => memory.released.guided, () => { step.value = "setup"; });
 // memory saver: park the normal solve on disk while the exploit solve runs, and keep only one solve
 // in memory while browsing. Turned on automatically when a normal solve won't fit comfortably.
 const lowMemory = computed(() => leakList.value.length > 0 && (forceSaver.value || (freeMb.value > 0 && memMb.value > freeMb.value * 0.6)));
@@ -626,7 +633,7 @@ const memNeeded = computed(() => (lowMemory.value ? memLow.value : memMb.value))
 const setupError = computed(() => {
   if (exploitOn.value && leakList.value.length === 0) return "Tick at least one habit, or choose “No habit”.";
   if (freeMb.value && memNeeded.value > freeMb.value * 0.85)
-    return `This needs about ${(memNeeded.value / 1024).toFixed(1)} GB of memory but only ${(freeMb.value / 1024).toFixed(1)} GB is free. Choose “One size per street”, a smaller stack or fewer habits, or close other programs.`;
+    return `This needs about ${(memNeeded.value / 1024).toFixed(1)} GB of memory but only ${(freeMb.value / 1024).toFixed(1)} GB of your ${gb(memory.totalMb)} is free right now. Choose “One size per street”, a smaller stack or fewer habits, or close other programs; the figure updates by itself.`;
   return "";
 });
 

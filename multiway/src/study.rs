@@ -432,6 +432,11 @@ pub fn node_view(game: &Game, history: &[usize], with_ev: bool) -> Result<NodeVi
 }
 
 impl State3 {
+    /// Memory held by the solves kept for browsing (released when the next solve starts).
+    pub fn held_bytes(&self) -> u64 {
+        [self.base.as_ref(), self.locked.as_ref()].iter().flatten().map(|g| g.memory_bytes() as u64).sum()
+    }
+
     pub fn view(&self, locked: bool, history: &[usize], with_ev: bool) -> Result<NodeView3, String> {
         let g = if locked { self.locked.as_ref() } else { self.base.as_ref() };
         node_view(g.ok_or("solve a spot first")?, history, with_ev)

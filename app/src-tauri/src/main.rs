@@ -38,6 +38,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             os_name,
             memory,
+            memory_status,
+            release_solve,
             set_num_threads,
             range_num_combos,
             range_clear,
@@ -126,9 +128,25 @@ fn os_name() -> String {
 
 #[tauri::command]
 fn memory() -> (u64, u64) {
-    let mut system = System::new_all();
+    let mut system = System::new();
     system.refresh_memory();
     (system.available_memory(), system.total_memory())
+}
+
+/// (free now, installed, held by the Guided Study solve, held by the 3-Way Pots solve), in bytes.
+/// A tab's own held solve is released when it starts its next solve, so it can be counted as free.
+#[tauri::command]
+fn memory_status(study: tauri::State<Mutex<StudyState>>, mw: tauri::State<std::sync::RwLock<multiway::study::State3>>) -> (u64, u64, u64, u64) {
+    let (avail, total) = memory();
+    let guided = study.try_lock().map(|s| s.held_bytes()).unwrap_or(0);
+    let three = mw.try_read().map(|s| s.held_bytes()).unwrap_or(0);
+    (avail, total, guided, three)
+}
+
+/// Drops a tab's stored solve to give its memory back ("guided" or "threeway").
+#[tauri::command]
+fn release_solve(study: tauri::State<Mutex<StudyState>>, mw: tauri::State<std::sync::RwLock<multiway::study::State3>>, which: String) {
+    if which == "guided" { study.lock().unwrap().reset(); } else { *mw.write().unwrap() = multiway::study::State3::default(); }
 }
 
 #[tauri::command]

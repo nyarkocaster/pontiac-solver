@@ -61,6 +61,11 @@ pub fn work_dir() -> PathBuf {
 }
 
 impl StudyState {
+    /// Memory held by the solves kept for browsing (released when the next solve starts).
+    pub fn held_bytes(&self) -> u64 {
+        [self.base.as_ref(), self.locked.as_ref()].iter().flatten().map(|g| g.memory_usage().1).sum()
+    }
+
     pub fn reset(&mut self) {
         self.base = None;
         self.locked = None;

@@ -53,6 +53,8 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
         }
         "cpu_threads" => Ok(json!(2)),
         "memory" => Ok(json!([6u64<<30, 8u64<<30])),
+        "memory_status" => Ok(json!([2u64<<30, 8u64<<30, state.try_lock().map(|s| s.held_bytes()).unwrap_or(0), mstate.try_read().map(|s| s.held_bytes()).unwrap_or(0)])),
+        "release_solve" => { if args["which"].as_str() == Some("guided") { state.lock().unwrap().reset(); } else { *mstate.write().unwrap() = mw::State3::default(); } Ok(Value::Null) }
         "study_progress" => Ok(json!([prog.phase.load(Ordering::Relaxed), prog.iter.load(Ordering::Relaxed), prog.max_iter.load(Ordering::Relaxed), prog.expl_milli_pct.load(Ordering::Relaxed) as f64 / 1000.0])),
         "study_cancel" => { prog.cancel.store(true, Ordering::Relaxed); Ok(Value::Null) }
         "study_memory_estimate" => {

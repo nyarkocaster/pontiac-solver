@@ -151,6 +151,10 @@
               <span v-if="estSecs > 600"> Pick simpler bet sizes to make it faster; you can also stop early and keep the result so far.</span>
             </p>
             <p v-if="memoryProblem" class="mt-3 text-sm font-bold text-[#B42318]">{{ memoryProblem }}</p>
+            <p v-if="memoryProblem && memory.heldGuidedMb > 200" class="mt-2 text-sm">
+              Guided Study is holding {{ gb(memory.heldGuidedMb) }} for its last solve.
+              <button class="text-felt underline font-bold" @click="releaseSolve('guided')">Clear that solve to free it</button>
+            </p>
             <p v-if="problem" class="mt-3 text-sm font-bold text-[#B42318]">{{ problem }}</p>
             <button class="btn-solve mt-4" :disabled="!!problem || !!memoryProblem || solving" @click="solve">Solve this spot</button>
             <div v-if="solving" class="mt-4">
@@ -335,7 +339,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import * as api from "../../guided/api3";
-import { studyRangeGrid, systemMemory } from "../../guided/api";
+import { studyRangeGrid } from "../../guided/api";
+import { memory, refreshMemory, releaseSolve, startMemoryWatch, gb } from "../../guided/memory";
 import { RANGES, PROFILES, LEAKS, RANK_CHARS, SUIT_CHARS, SUIT_SYMBOL, SUIT_COLOR, cardStr } from "../../guided/data";
 import { actionColors } from "../../guided/coach";
 import HandGrid from "./HandGrid.vue";
@@ -457,12 +462,14 @@ const estSecs = computed(() => {
   const e = estimate.value; if (!e) return 0;
   return e.secs_per_iter * (e.start === 3 ? 250 : e.start === 4 ? 130 : 200) * 1.2 * (leaks.value.length ? 1.6 : 1);
 });
-const freeMb = ref(0);
+// this tab's own stored solve is dropped when the next one starts, so it counts as free
+const freeMb = computed(() => (memory.availMb ? memory.availMb + memory.heldThreeMb : 0));
 const memoryProblem = computed(() => {
   const e = estimate.value; if (!e || !freeMb.value) return "";
   if (e.memory_mb < 0.8 * freeMb.value) return "";
-  return `This needs about ${(e.memory_mb / 1024).toFixed(1)} GB of memory and about ${(freeMb.value / 1024).toFixed(1)} GB is free. Choose simpler bet sizes or a smaller sample, or close other programs.`;
+  return `This needs about ${gb(e.memory_mb)} of memory and about ${gb(freeMb.value)} of your ${gb(memory.totalMb)} is free right now. Choose simpler bet sizes or a smaller sample, or close other programs; the figure updates by itself.`;
 });
+watch(() => memory.released.threeway, () => { step.value = "setup"; node.value = null; summary.value = null; });
 const duration = (s: number) => (s < 45 ? "under a minute" : s < 5400 ? `about ${Math.max(1, Math.round(s / 60))} minute${Math.round(s / 60) > 1 ? "s" : ""}` : `about ${(s / 3600).toFixed(1)} hours`);
 const timeText = computed(() => duration(estSecs.value));
 
@@ -484,6 +491,8 @@ const progressPct = computed(() => {
   return Math.round(100 * Math.max(byAccuracy, byIter));
 });
 async function solve() {
+  await refreshMemory();
+  if (memoryProblem.value) return;
   solving.value = true; error.value = ""; progress.value = [1, 0, spec.value.max_iter, 100];
   const began = Date.now(); elapsed.value = 0;
   const timer = window.setInterval(async () => { elapsed.value = Math.round((Date.now() - began) / 1000); try { progress.value = await api.mwProgress(); } catch { /* ignore */ } }, 400);
@@ -575,9 +584,9 @@ const notes = computed(() => {
   return out;
 });
 
-onMounted(async () => {
+onMounted(() => {
   pickScenario("open_two");
-  try { const m = await systemMemory(); freeMb.value = m[0] / 1048576; } catch { freeMb.value = 0; }
+  startMemoryWatch();
 });
 </script>
 
