@@ -11,7 +11,7 @@ For running the solver with nobody at the keyboard: a JSON spot file goes in, a 
   pip install -e ".[test]" && pytest
   ```
 
-  Seven tests, under a second. They solve a river spot, query the saved solve, and exercise full locks, partial locks, habits and error messages.
+  Fourteen tests, about 15 seconds. They solve a river spot, query the saved solve, exercise full locks, partial locks, habits and error messages, solve three-player spots, check push/fold ranges, and compare the two engines on the same spots.
 - **What gets installed:** a small Python package, `pontiac`, plus a prebuilt solver program for Linux x86-64 at `pontiac/bin/pontiac-linux-x86_64` (3 MB, no dependencies beyond glibc). If that program will not run on a machine, the package falls back to building it with `cargo build --release` in `cli/` (needs Rust; crates come from crates.io). `PONTIAC_BIN` overrides the choice.
 - **Where the code lives:** `github.com/nyarkocaster/pontiac-solver` (public). Saved solves (`*.pontiac`) are large and are git-ignored.
 
