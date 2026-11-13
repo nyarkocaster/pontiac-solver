@@ -85,7 +85,13 @@ pub fn spec_from(raw: &Value, players: &[String]) -> Result<(Spec3, [String; 3])
             action_freqs: freqs.iter().map(|(k, v)| Ok((k.clone(), v.as_f64().ok_or("node_locks: frequencies must be numbers")?))).collect::<Result<_, String>>()? })
     }).collect::<Result<Vec<_>, String>>()?;
     let max_raises = bt.get("max_raises").and_then(|x| x.as_u64()).unwrap_or(3) as usize;
+    let mut folded = [false; 3];
+    for n in raw.get("folded").and_then(|x| x.as_array()).cloned().unwrap_or_default() {
+        let k = names.iter().position(|p| Some(p.as_str()) == n.as_str()).ok_or("\"folded\" must name players from \"players\"")?;
+        folded[k] = true;
+    }
     let spec = Spec3 {
+        folded,
         ranges: [range(&names[0])?, range(&names[1])?, range(&names[2])?], board, pot: pot * CHIPS, stack: stacks[0], stacks: Some(stacks),
         flop_bet_sizes: pct_list(st("flop").get("bet"), "bet_tree.flop.bet")?, turn_bet_sizes: pct_list(st("turn").get("bet"), "bet_tree.turn.bet")?,
         bet_sizes: pct_list(st("river").get("bet"), "bet_tree.river.bet")?,

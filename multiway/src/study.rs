@@ -56,6 +56,9 @@ pub struct Spec3 {
     /// stack behind per player (in acting order); default: everyone has `stack`
     #[serde(default)]
     pub stacks: Option<[f64; 3]>,
+    /// players (in acting order) who folded before the spot starts; their chips stay in the pot
+    #[serde(default)]
+    pub folded: [bool; 3],
     /// rake as a share of the pot (0.05 = 5%) and its cap in chips (0 = no cap)
     #[serde(default)]
     pub rake_rate: f64,
@@ -209,6 +212,7 @@ pub fn build_game(spec: &Spec3, allocate: bool) -> Result<Game, String> {
     let board = parse_board(&spec.board)?;
     for i in 0..board.len() { for j in 0..i { if board[i] == board[j] { return Err("the board repeats a card".into()); } } }
     if spec.pot <= 0.0 { return Err("the pot must be above zero".into()); }
+    if spec.folded.iter().filter(|&&f| f).count() > 1 { return Err("at most one player can have folded already".into()); }
     if spec.stacks.map_or(spec.stack <= 0.0, |st| st.iter().any(|&x| x <= 0.0)) { return Err("every stack must be above zero".into()); }
     let ranges = [parse_range(&deck, &spec.ranges[0])?, parse_range(&deck, &spec.ranges[1])?, parse_range(&deck, &spec.ranges[2])?];
     let river_bets = parse_sizes(&spec.bet_sizes)?;
@@ -222,7 +226,7 @@ pub fn build_game(spec: &Spec3, allocate: bool) -> Result<Game, String> {
         flop_max_raises: if spec.flop_max_raises == 0 { turn_max } else { spec.flop_max_raises.clamp(1, 4) },
         turn_max_raises: turn_max, max_raises, allin_spr: spec.allin_spr.max(0.0),
         turn_cards: spec.turn_cards, river_cards: spec.river_cards,
-        extra: Extra { stacks: spec.stacks, folded: [false; 3], rake_rate: spec.rake_rate.max(0.0), rake_cap: spec.rake_cap.max(0.0), raise_mults: parse_mults(&spec.raise_mults)? },
+        extra: Extra { stacks: spec.stacks, folded: spec.folded, rake_rate: spec.rake_rate.max(0.0), rake_cap: spec.rake_cap.max(0.0), raise_mults: parse_mults(&spec.raise_mults)? },
     }, allocate)
 }
 

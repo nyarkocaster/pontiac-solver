@@ -126,3 +126,33 @@ def test_pushfold_matches_published_ranges():
 def test_pushfold_rejects_nonsense():
     with pytest.raises(pontiac.SolverError):
         pontiac.pushfold(0.5)
+
+
+# ---- the two engines against each other ----
+
+ALL_HANDS = ("22+,A2s+,K2s+,Q2s+,J2s+,T2s+,92s+,82s+,72s+,62s+,52s+,42s+,32s,"
+             "A2o+,K2o+,Q2o+,J2o+,T2o+,92o+,82o+,72o+,62o+,52o+,42o+,32o")
+
+
+@pytest.mark.parametrize("board,street", [("Qh8c3h5d2s", "river"), ("Qh8c3h5d", "turn")])
+def test_three_player_engine_agrees_with_two_player_engine(board, street):
+    """A three-way pot where one player has already folded is a heads-up pot. The three-player
+    engine (written for this project) and the two-player engine (postflop-solver) share no code,
+    so the same answer from both is an independent check on each."""
+    sb = "QQ,88,33,AQs-A9s,KQs,QJs,QTs,AQo,KQo,QJo,A8s,98s,JTs,T9s,76s,65s,55,44,KTs,K9s"
+    bb = "Q9s,Q8s,Q7s,Q9o,KQo:0.5,A8s,K8s,98s,87s,A3s,JJ:0.25,TT,99,77,66,A5s,A4s,64s,54s,KJo,J9s"
+    streets = {s: {"bet": [0.5], "raise": [2.5]} for s in ("turn", "river")}
+    two = pontiac.solve({
+        "players": ["SB", "BB"], "effective_stack_bb": 30, "pot_bb": 12, "board": board,
+        "ranges": {"SB": sb, "BB": bb}, "bet_tree": dict(streets, allin_threshold=0),
+        "target_exploitability_pct": 0.05, "max_seconds": 120})
+    three = pontiac.solve({
+        "players": ["BB", "CO", "BTN"], "folded": ["BTN"], "effective_stack_bb": 30, "pot_bb": 12, "board": board,
+        # the folded player's cards are unknown, so they hold every hand equally
+        "ranges": {"BB": bb, "CO": sb, "BTN": ALL_HANDS},
+        "bet_tree": dict(streets, max_raises=3, allin_spr=0.0), "later_cards": "exact",
+        "target_exploitability_pct": 0.05, "max_seconds": 300})
+    assert sorted(k.replace("SB_", "CO_") for k in two["nodes"]) == sorted(three["nodes"])
+    assert three["ev_bb"]["BTN"] == 0
+    assert three["ev_bb"]["BB"] == pytest.approx(two["ev_bb"]["BB"], abs=0.02)
+    assert three["ev_bb"]["CO"] == pytest.approx(two["ev_bb"]["SB"], abs=0.02)

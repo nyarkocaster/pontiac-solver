@@ -216,10 +216,13 @@ What differs from two players:
 - **Bet tree:** per street `bet` (shares of the pot) and `raise` (a number is a multiple of the bet being raised; a text like `"60%"` is a share of the pot). `max_raises` (default 3) caps raises per street; a bet becomes all-in when what is left behind is at most `allin_spr` times the pot (default 1.0).
 - **Later cards:** flop and turn spots can deal a balanced sample of later cards to save time and memory: `"later_cards": "sample"` (default on the flop), `"larger"`, `"all_turns"`, or `"exact"` (default on the turn; every card).
 - **Accuracy:** `exploitability_pct` is the most any one player could gain by changing only their own strategy, as a percent of the starting pot; `gain_pct_by_player` lists all three. With three players there can be more than one sound solution, so treat exact frequencies as a guide.
+- **A player who already folded:** `"folded": ["BTN"]` starts the spot with that player out and their chips in the pot. Their range still matters as dead cards; give every hand if you do not know what they folded.
 - **Node locks and habits** work as in section 3; paths name the player at every step (`river/BB_check/CO_bet0.33/BTN_fold`).
 - **Result:** `ev_bb` (three values, adding up to the pot less rake), and `nodes` for the first street, each with `actions`, `by_class`, `by_combo`, `stacks_bb` and who is still `in_hand`.
 
 Measured on the same 2-core container: the river example solves in about 1 second; the same spot started on the turn with one bet size and every river card takes about 35 seconds and 60 MB. Flop spots take minutes to hours depending on bet sizes and the card sample; check `pontiac.estimate` first (`seconds_per_iteration` times roughly 100 to 250 iterations).
+
+**Cross-check between the two engines.** A three-way pot with one player already folded is a heads-up pot, and the three-player and two-player engines share no code. The tests solve the same turn and river spots (30 bb behind, bet 50%, raise 2.5x, all-in) with both: the decision points match and the players' EVs agree within 0.002 bb of a 12 bb pot.
 
 ## 6. Heads-up push/fold
 
