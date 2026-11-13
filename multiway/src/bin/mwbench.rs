@@ -8,7 +8,7 @@ fn spec(board: &str, wide: bool) -> Spec3 {
     let r = if wide { w } else { t };
     Spec3 { ranges: [r[0].into(), r[1].into(), r[2].into()], board: board.into(), pot: 30.0, stack: 100.0, bet_sizes: if board.len() == 10 { "33%, 75%".into() } else { "66%".into() },
         raise_sizes: "60%".into(), max_raises: if board.len() == 10 { 3 } else { 2 }, allin_spr: 1.0, accuracy_pct: 0.0, max_iter: 0, leaks: vec![],
-        flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards: 1, river_cards: if board.len() == 8 { 0 } else { 1 } }
+        flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards: 1, river_cards: if board.len() == 8 { 0 } else { 1 }, stacks: None, rake_rate: 0.0, rake_cap: 0.0, raise_mults: String::new(), max_seconds: 0.0, ..Default::default() }
 }
 fn main() {
     let only = std::env::args().nth(1).unwrap_or_default();

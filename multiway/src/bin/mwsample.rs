@@ -8,7 +8,7 @@ fn main() {
         let board = parse_board(b).unwrap();
         let ranges = [parse_range(&deck, rs[0]).unwrap(), parse_range(&deck, rs[1]).unwrap(), parse_range(&deck, rs[2]).unwrap()];
         let mk = |tc: usize, rc: usize| Game::new(Config { board: board.clone(), pot: 60.0, stack: 100.0, ranges: ranges.clone(), flop_bet_sizes: vec![], turn_bet_sizes: vec![], bet_sizes: vec![], raise_sizes: vec![],
-            flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: tc, river_cards: rc }, true).unwrap();
+            flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: tc, river_cards: rc, extra: Default::default() }, true).unwrap();
         let g = mk(0, 0); let r = &g.cfg.ranges;
         let full: Vec<Vec<f32>> = (0..3).map(|h| g.walk(0, h, [&r[0], &r[1], &r[2]], Mode::Average)).collect();
         let mut line = format!("{b}:");

@@ -51,6 +51,18 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
             let ev = args["ev"].as_bool().unwrap_or(true);
             Ok(serde_json::to_value(mstate.read().unwrap().view(which == "locked", &hist, ev)?).unwrap())
         }
+        "mw_resolve" => {
+            let which = args["which"].as_str().unwrap_or("base").to_string();
+            let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default();
+            let card = args["card"].as_u64().unwrap_or(99) as u8;
+            mstate.write().unwrap().sub = None;
+            let out = { let st = mstate.read().unwrap(); mw::resolve_turn(&st, which == "locked", &hist, card, &mprog) };
+            match out {
+                Ok(sub) => { let s = sub.summary.clone(); mstate.write().unwrap().sub = Some(sub); mprog.phase.store(4, Ordering::Relaxed); Ok(serde_json::to_value(s).unwrap()) }
+                Err(e) => { mprog.phase.store(5, Ordering::Relaxed); Ok(serde_json::to_value(mw::Summary3 { error: Some(e), ..Default::default() }).unwrap()) }
+            }
+        }
+        "pushfold_solve" => Ok(serde_json::to_value(pushfold::solve(args["stack"].as_f64().unwrap_or(0.0), args["sb"].as_f64().unwrap_or(0.5), args["ante"].as_f64().unwrap_or(0.0))?).unwrap()),
         "cpu_threads" => Ok(json!(2)),
         "memory" => Ok(json!([6u64<<30, 8u64<<30])),
         "memory_status" => Ok(json!([2u64<<30, 8u64<<30, state.try_lock().map(|s| s.held_bytes()).unwrap_or(0), mstate.try_read().map(|s| s.held_bytes()).unwrap_or(0)])),

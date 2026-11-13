@@ -14,8 +14,8 @@ import tempfile
 
 from ._binary import binary
 
-__version__ = "0.4.0"
-__all__ = ["solve", "query", "estimate", "version", "SolverError", "binary"]
+__version__ = "0.5.0"
+__all__ = ["solve", "query", "estimate", "pushfold", "version", "SolverError", "binary"]
 
 
 class SolverError(RuntimeError):
@@ -83,6 +83,13 @@ def estimate(spot):
     finally:
         if temp:
             os.unlink(path)
+
+
+def pushfold(stack_bb, small_blind=0.5, ante=0.0):
+    """Heads-up push/fold equilibrium: the small blind moves all-in or folds, the big blind
+    calls or folds. `stack_bb` is the shorter stack before the blinds are posted. Returns the
+    two ranges as text (`jam_range`, `call_range`) and per hand class (`jam`, `call`, `classes`)."""
+    return _run(["pushfold", "--stack", str(stack_bb), "--sb", str(small_blind), "--ante", str(ante)])
 
 
 def version():

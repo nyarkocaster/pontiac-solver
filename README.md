@@ -2,8 +2,8 @@
 
 A free, open-source no-limit hold'em postflop solver with node locking, built for study.
 
-- **Desktop app (Windows):** guided heads-up study with opponent habits, three-way pots from the flop, turn or river, and the original advanced solver screens.
-- **Headless (Linux, Python or command line):** JSON spot in, JSON result out, for automated analysis. See [docs/HEADLESS.md](docs/HEADLESS.md).
+- **Desktop app (Windows):** guided heads-up study with opponent habits, three-way pots from the flop, turn or river (different stacks, side pots and rake), a heads-up push/fold calculator, and the original advanced solver screens.
+- **Headless (Linux, Python or command line):** JSON spot in, JSON result out, for two or three players, plus push/fold ranges. See [docs/HEADLESS.md](docs/HEADLESS.md).
 
 ## Quick start, headless
 
@@ -23,9 +23,10 @@ print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 | Folder | What it is |
 |---|---|
 | `pontiac/` | Python package; bundles the Linux solver program in `pontiac/bin/` |
-| `cli/` | Source of that program (Rust): `solve`, `query`, `estimate` |
+| `cli/` | Source of that program (Rust): `solve`, `query`, `estimate`, `pushfold` |
 | `engine/` | Two-player solver: b-inary's postflop-solver with tonyyet's node-locking changes, patched |
 | `multiway/` | Three-player solver, original to this project. `cargo run --release --bin mwcheck` runs its checks |
+| `pushfold/` | Heads-up push/fold calculator and its preflop all-in equity table |
 | `app/` | Desktop app (Tauri + Vue) |
 | `checks/` | Test tools and the browser dev server for the app |
 | `examples/`, `tests/`, `docs/` | Sample spots with expected output, smoke tests, interface reference |
@@ -35,9 +36,9 @@ print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 
 ## Limits
 
-- Postflop only: no preflop solving.
-- The command line handles two players; three-player spots are in the desktop app.
-- Three-player spots give all players the same stack (no side pots) and have no rake.
+- Preflop is limited to heads-up push/fold; limps and small raises are not solved.
+- Three-player solves cannot be saved and queried later yet; the result lists the first street.
+- Three-player flop spots deal a sample of turn and river cards by default. The app can then solve any single turn card exactly.
 
 ## Licence and credits
 

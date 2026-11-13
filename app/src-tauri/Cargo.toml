@@ -22,6 +22,7 @@ tauri = { version = "1.5.0", features = ["dialog-open", "dialog-save", "fs-read-
 #   postflop-solver = { git = "https://github.com/tonyet/postflop-solver", branch = "nodelock", features = ["custom-alloc"] }
 postflop-solver = { path = "../../engine", features = ["custom-alloc"] }
 multiway = { path = "../../multiway" }
+pushfold = { path = "../../pushfold" }
 rayon = "1.8.0"
 sysinfo = "0.29.10"
 indexmap1 = { package = "indexmap", version = "1", features = ["std"] }

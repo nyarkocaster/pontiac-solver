@@ -45,3 +45,30 @@ pub fn mw_solve(state: tauri::State<RwLock<State3>>, prog: tauri::State<Arc<Prog
 pub fn mw_node(state: tauri::State<RwLock<State3>>, which: String, history: Vec<usize>, ev: bool) -> Result<NodeView3, String> {
     state.read().unwrap().view(which == "locked", &history, ev)
 }
+
+/// After a flop solve: solves one turn card exactly (every river card) from the ranges that reach it.
+#[tauri::command(async)]
+pub fn mw_resolve(state: tauri::State<RwLock<State3>>, prog: tauri::State<Arc<Progress3>>, which: String, history: Vec<usize>, card: u8) -> Summary3 {
+    let prog: Arc<Progress3> = prog.inner().clone();
+    // free the previous exact solve before starting the next one
+    state.write().unwrap().sub = None;
+    let out = { let st = state.read().unwrap(); resolve_turn(&st, which == "locked", &history, card, &prog) };
+    match out {
+        Ok(sub) => {
+            let summary = sub.summary.clone();
+            state.write().unwrap().sub = Some(sub);
+            prog.phase.store(4, Ordering::Relaxed);
+            summary
+        }
+        Err(e) => {
+            prog.phase.store(5, Ordering::Relaxed);
+            Summary3 { error: Some(e), ..Default::default() }
+        }
+    }
+}
+
+/// Heads-up push/fold equilibrium for one stack depth.
+#[tauri::command(async)]
+pub fn pushfold_solve(stack: f64, sb: f64, ante: f64) -> Result<pushfold::PushFold, String> {
+    pushfold::solve(stack, sb, ante)
+}

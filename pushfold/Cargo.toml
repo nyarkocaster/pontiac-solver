@@ -1,0 +1,24 @@
+[package]
+name = "pushfold"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Heads-up push/fold equilibrium calculator (part of Pontiac Solver)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+# only the table generator needs these
+multiway = { path = "../multiway", optional = true }
+rayon = { version = "1.8", optional = true }
+
+[features]
+generate = ["dep:multiway", "dep:rayon"]
+
+[[bin]]
+name = "gen_equity"
+path = "src/bin/gen_equity.rs"
+required-features = ["generate"]
+
+[profile.release]
+opt-level = 3

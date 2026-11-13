@@ -72,3 +72,57 @@ def test_errors_are_readable():
         pontiac.solve({**SPOT, "report_nodes": ["river/SB_check"]})
     with pytest.raises(pontiac.SolverError, match="ranges.BB"):
         pontiac.solve({**SPOT, "ranges": {"SB": "AA"}})
+
+
+# ---- three players ----
+
+THREE = json.loads((Path(__file__).parent.parent / "examples" / "three_way_river.json").read_text())
+
+
+def test_three_players_unequal_stacks_and_rake():
+    r = pontiac.solve(THREE)
+    assert r["acting_order"] == ["BB", "CO", "BTN"]
+    assert r["exploitability_pct"] <= THREE["target_exploitability_pct"]
+    total = sum(r["ev_bb"].values())
+    # rake comes out of the pot: 5% capped at 1.5 bb
+    assert THREE["pot_bb"] - 1.5 - 0.05 <= total < THREE["pot_bb"]
+    root = r["nodes"]["river"]
+    assert root["player"] == "BB" and abs(sum(freqs(root).values()) - 1) < 1e-3
+    assert root["stacks_bb"] == {"BB": 40.0, "CO": 100.0, "BTN": 65.0}
+    # the shortest stack can never put in more than it has
+    assert all(a["amount_bb"] <= 40.0 + 1e-6 for a in root["actions"])
+
+
+def test_three_players_node_lock_is_obeyed():
+    spot = dict(THREE, node_locks=[{"node": "river", "player": "BB", "action_freqs": {"check": 1.0}}])
+    r = pontiac.solve(spot)
+    assert r["locked_decisions"] >= 1
+    assert freqs(r["nodes"]["river"])["check"] == pytest.approx(1.0, abs=1e-4)
+
+
+def test_three_players_habit_reports_normal_play_too():
+    spot = dict(THREE, habits=[{"player": "BTN", "street": "river", "effect": "fold_more", "strength": 0.5}])
+    r = pontiac.solve(spot)
+    assert "normal" in r and r["gain_pct_by_player"]["BTN"] == 0.0
+    # the others profit from the mistake
+    assert r["ev_bb"]["BTN"] < r["normal"]["ev_bb"]["BTN"]
+
+
+# ---- push/fold ----
+
+def test_pushfold_matches_published_ranges():
+    r = pontiac.pushfold(10)
+    assert r["jam_pct"] == pytest.approx(0.58, abs=0.03)
+    assert r["call_pct"] == pytest.approx(0.37, abs=0.03)
+    jam = dict(zip(r["classes"], r["jam"]))
+    call = dict(zip(r["classes"], r["call"]))
+    assert jam["AA"] == 1 and jam["22"] == 1 and jam["72o"] == 0
+    assert call["A2o"] == 1 and call["32o"] == 0
+    assert r["ev_small_blind_bb"] == pytest.approx(-r["ev_big_blind_bb"])
+    # shorter stacks jam wider
+    assert pontiac.pushfold(5)["jam_pct"] > r["jam_pct"] > pontiac.pushfold(20)["jam_pct"]
+
+
+def test_pushfold_rejects_nonsense():
+    with pytest.raises(pontiac.SolverError):
+        pontiac.pushfold(0.5)

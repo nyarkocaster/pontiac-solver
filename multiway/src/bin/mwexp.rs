@@ -14,7 +14,7 @@ fn spec(board: &str, river_cards: usize) -> Spec3 {
         ],
         board: board.into(), pot: 30.0, stack: 100.0, bet_sizes: "66%".into(), raise_sizes: "60%".into(),
         max_raises: 2, allin_spr: 1.0, accuracy_pct: 0.25, max_iter: 160, leaks: vec![],
-        flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards: 0, river_cards,
+        flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards: 0, river_cards, stacks: None, rake_rate: 0.0, rake_cap: 0.0, raise_mults: String::new(), max_seconds: 0.0, ..Default::default()
     }
 }
 

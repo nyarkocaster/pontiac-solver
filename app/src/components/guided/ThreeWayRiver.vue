@@ -79,7 +79,7 @@
             <h2 class="step-title"><span class="step-num">3</span>Money and bet sizes</h2>
             <div class="flex flex-wrap gap-5 mt-3 items-end">
               <label class="field"><span>Pot now ($)</span><input v-model.number="pot" type="number" min="1" class="input w-28" /></label>
-              <label class="field"><span>Stack behind, each ($)</span><input v-model.number="stack" type="number" min="1" class="input w-28" /></label>
+              <label v-for="(p, i) in players" :key="i" class="field"><span class="max-w-[11rem] truncate" :title="p.name">{{ p.name || "Player " + (i + 1) }}'s stack ($)</span><input v-model.number="stacks[i]" type="number" min="1" class="input w-28" /></label>
               <label class="field">
                 <span>Bet sizes</span>
                 <select v-model="sizingId" class="input w-72">
@@ -100,9 +100,14 @@
                 by well under 1%.
               </p>
             </div>
+            <div class="flex flex-wrap gap-5 mt-4 items-end">
+              <label class="field"><span>Rake (% of the pot)</span><input v-model.number="rakePct" type="number" min="0" max="20" step="0.5" class="input w-28" /></label>
+              <label class="field"><span>Rake cap ($, 0 = none)</span><input v-model.number="rakeCap" type="number" min="0" class="input w-28" /></label>
+            </div>
             <p class="hint mt-2 max-w-[70ch]">
-              Everyone is treated as having the same stack behind, so enter the shortest of the three. Different stack
-              sizes and side pots are not supported yet.
+              Stacks are what each player has behind, on top of the pot. They can differ: a shorter stack that goes
+              all-in plays for a main pot, and the other two play on for a side pot. Leave rake at 0 for tournaments
+              and sit-and-gos; cash games usually take around 5% up to a cap.
             </p>
           </section>
 
@@ -136,15 +141,16 @@
             </div>
             <dl class="grid grid-cols-3 gap-2 mt-4 text-center">
               <div class="stat"><dt>Pot</dt><dd>${{ pot }}</dd></div>
-              <div class="stat"><dt>Stacks</dt><dd>${{ stack }}</dd></div>
-              <div class="stat"><dt>Stack-to-pot</dt><dd>{{ (stack / Math.max(pot, 1)).toFixed(1) }}</dd></div>
+              <div class="stat"><dt>Stacks</dt><dd>{{ stackText }}</dd></div>
+              <div class="stat"><dt>Stack-to-pot</dt><dd>{{ (Math.min(...stacks) / Math.max(pot, 1)).toFixed(1) }}<span v-if="!sameStacks">–{{ (Math.max(...stacks) / Math.max(pot, 1)).toFixed(1) }}</span></dd></div>
             </dl>
             <ol class="mt-4 space-y-1 text-sm">
               <li v-for="(p, i) in players" :key="i" class="flex justify-between">
                 <span><b>{{ i + 1 }}.</b> {{ p.name }}<span v-if="i === hero" class="ml-1 text-xs font-bold bg-mine-light border border-mine rounded px-1">you</span></span>
-                <span class="text-muted">{{ comboText(i) }}</span>
+                <span class="text-muted">${{ stacks[i] }} · {{ comboText(i) }}</span>
               </li>
             </ol>
+            <p v-if="rakePct > 0" class="hint mt-2">Rake {{ rakePct }}%{{ rakeCap > 0 ? ` up to $${rakeCap}` : ", no cap" }}.</p>
             <p v-if="estimate" class="hint mt-3">
               {{ estimate.start === 3 ? "Flop, turn and river" : estimate.start === 4 ? "Turn and river" : "River only" }}: about {{ estimate.nodes.toLocaleString() }} decision points, {{ Math.round(estimate.memory_mb) }} MB of memory.
               Rough solve time on this computer: <b class="text-ink">{{ timeText }}</b>.
@@ -200,7 +206,7 @@
                 <span title="Average amount of the pot this player ends up with">EV {{ node.has_ev ? money1(node.ev[i]) : "…" }}</span>
                 <span class="text-muted"> · wins {{ pct(node.equity[i]) }} at showdown</span>
               </div>
-              <div class="text-xs text-muted tabular-nums">{{ node.range_combos[i].toFixed(0) }} hands left<span v-if="node.invested[i] > 0"> · {{ money(node.invested[i]) }} in</span></div>
+              <div class="text-xs text-muted tabular-nums">{{ node.range_combos[i].toFixed(0) }} hands left<span v-if="node.invested[i] > 0"> · {{ money(node.invested[i]) }} in</span><span v-if="!node.folded[i]"> · {{ node.stacks[i] > 0.5 ? money(node.stacks[i]) + " behind" : "all-in" }}</span></div>
             </div>
           </div>
         </div>
@@ -213,6 +219,7 @@
             <button class="crumb" @click="goto(k + 1)"><template v-if="st.player >= 0"><b>{{ players[st.player].name }}</b> {{ st.label.toLowerCase() }}</template><b v-else>{{ st.label }}</b></button>
           </template>
           <button v-if="history.length" class="ml-2 text-felt underline font-bold" @click="goto(history.length - 1)">Back one step</button>
+          <span v-if="node.exact" class="ml-2 text-xs font-bold bg-felt-light border border-felt rounded px-1.5 py-0.5" title="This turn card was solved on its own with every river card, starting from the ranges the flop solve sends here">exact turn solve</span>
         </div>
 
         <div class="grid grid-cols-12 gap-5 mt-4">
@@ -241,13 +248,39 @@
             <div v-else-if="node.kind === 'chance'" class="panel">
               <h2 class="font-display font-extrabold text-lg">Deal the {{ node.street === "flop" ? "turn" : "river" }}</h2>
               <p class="hint">The {{ node.street }} betting is over. Pick the next card to see how everyone plays it.</p>
-              <div class="mt-3 grid gap-[3px]" style="grid-template-columns: repeat(13, minmax(0, 1fr))" role="group" aria-label="Choose the river card">
+              <div class="mt-3 grid gap-[3px]" style="grid-template-columns: repeat(13, minmax(0, 1fr))" role="group" :aria-label="node.street === 'flop' ? 'Choose the turn card' : 'Choose the river card'">
                 <template v-for="s in [3, 2, 1, 0]" :key="s">
-                  <button v-for="r in RANKS_DESC" :key="r * 4 + s" class="deck-btn !h-8 !text-[11px] !px-0" :class="SUIT_COLOR[SUIT_CHARS[s]]" :disabled="!dealable.has(r * 4 + s)" @click="deal(r * 4 + s)">
+                  <button
+                    v-for="r in RANKS_DESC"
+                    :key="r * 4 + s"
+                    class="deck-btn !h-8 !text-[11px] !px-0"
+                    :class="[SUIT_COLOR[SUIT_CHARS[s]], canExact && !dealable.has(r * 4 + s) && !onBoard.has(r * 4 + s) ? 'deck-extra' : '', exactCard === r * 4 + s ? 'deck-done' : '']"
+                    :disabled="resolving || onBoard.has(r * 4 + s) || (!dealable.has(r * 4 + s) && !canExact)"
+                    :title="cardTitle(r * 4 + s)"
+                    @click="deal(r * 4 + s)"
+                  >
                     {{ RANK_CHARS[r] }}{{ SUIT_SYMBOL[SUIT_CHARS[s]] }}
                   </button>
                 </template>
               </div>
+              <div v-if="canExact" class="mt-3 text-sm">
+                <label class="flex items-start gap-2 font-bold">
+                  <input v-model="exactMode" type="checkbox" class="mt-0.5 rounded text-felt focus:ring-felt" :disabled="resolving" />
+                  <span>Solve the card I pick exactly <span class="font-normal text-muted">(every river card, starting from the ranges that reach this point; usually a minute or more)</span></span>
+                </label>
+                <p v-if="node.cards.length < node.cards_possible" class="hint mt-1.5">
+                  Cards with a dashed edge were not in the flop solve's sample. Picking one always solves it exactly.
+                </p>
+              </div>
+              <div v-if="resolving" class="mt-3">
+                <div class="flex justify-between text-sm font-bold">
+                  <span>Solving this turn card exactly…</span>
+                  <button class="text-felt underline" @click="api.mwCancel()">Stop early</button>
+                </div>
+                <div class="h-2 bg-paper rounded mt-1.5 overflow-hidden"><div class="h-full bg-felt transition-all" :style="{ width: progressPct + '%' }"></div></div>
+                <p class="hint mt-1.5">Step {{ progress[1] }} of up to {{ progress[2] }}, {{ elapsedText }} so far. Best single-player improvement left: {{ progress[3] >= 100 ? "..." : progress[3].toFixed(2) + "% of the pot" }}</p>
+              </div>
+              <p v-if="resolveError" class="mt-2 text-sm font-bold text-[#B42318]">{{ resolveError }}</p>
             </div>
             <div v-else class="panel">
               <h2 class="font-display font-extrabold text-lg">{{ node.result === "fold" ? `${players[node.winner].name} wins the pot` : "Showdown" }}</h2>
@@ -278,8 +311,9 @@
               <h3 class="font-bold">Ranges going to the {{ node.street === "flop" ? "turn" : "river" }}</h3>
               <p class="mt-1">The solver has already removed the hands that folded or took a different line. Each player's remaining hand count is shown above.</p>
               <p v-if="node.cards.length < node.cards_possible" class="mt-2">
-                This solve covered {{ node.cards.length }} of the {{ node.cards_possible }} cards that could come. The greyed-out cards were not
-                solved; pick the same rank in another suit, which plays almost the same unless it changes a flush.
+                This solve covered {{ node.cards.length }} of the {{ node.cards_possible }} cards that could come.
+                <template v-if="canExact">Any other card can be solved on the spot.</template>
+                <template v-else>The greyed-out cards were not solved; pick the same rank in another suit, which plays almost the same unless it changes a flush.</template>
               </p>
             </div>
             <div class="panel text-sm">
@@ -288,6 +322,9 @@
                 Best gain any single player could get by changing their own strategy:
                 <b>{{ worstGain.toFixed(2) }}% of the pot</b> ({{ worstGain <= 0.15 ? "very close" : worstGain <= 0.5 ? "close enough to study" : "rough, solve longer" }}).
                 Solved in {{ (which === "base" ? summary.base_secs : summary.locked_secs).toFixed(0) }}s.
+              </p>
+              <p v-if="node.exact && exactSummary" class="mt-1.5">
+                This turn card was then solved exactly: <b>{{ Math.max(0, ...(exactSummary.locked ? exactSummary.locked_gain_pct : exactSummary.base_gain_pct)).toFixed(2) }}% of the pot</b> left, in {{ (exactSummary.base_secs + exactSummary.locked_secs).toFixed(0) }}s.
               </p>
               <p class="hint mt-1.5">
                 With three players there can be more than one sound solution, and two opponents' choices can help or hurt
@@ -368,7 +405,11 @@ const players = reactive<Seat3[]>([{ name: "", preset: "", range: "" }, { name: 
 const hero = ref(1);
 const board = ref<number[]>([]);
 const pot = ref(46);
-const stack = ref(285);
+const stacks = reactive<number[]>([285, 285, 285]);
+const rakePct = ref(0);
+const rakeCap = ref(0);
+const sameStacks = computed(() => stacks[0] === stacks[1] && stacks[1] === stacks[2]);
+const stackText = computed(() => (sameStacks.value ? `$${stacks[0]}` : `$${Math.min(...stacks)}–${Math.max(...stacks)}`));
 const sizingId = ref("std");
 const DETAILS = [
   { id: "fast", label: "Balanced sample: one card of each rank (fastest)", turn: 1, river: 1 },
@@ -396,7 +437,7 @@ function pickScenario(id: string) {
   const s = SCENARIOS3.find((x) => x.id === id)!;
   scenarioId.value = id;
   s.seats.forEach(([name, preset], i) => { players[i].name = name; players[i].preset = preset; players[i].range = RANGES[preset].range; });
-  hero.value = s.hero; pot.value = s.pot; stack.value = s.stack;
+  hero.value = s.hero; pot.value = s.pot; stacks.splice(0, 3, s.stack, s.stack, s.stack);
   if (habitSeat.value === s.hero) habitSeat.value = -1;
 }
 function setPreset(i: number, k: string) { players[i].preset = k; if (k) players[i].range = RANGES[k].range; }
@@ -435,7 +476,7 @@ const spec = computed<api.Spec3>(() => {
   const s = SIZINGS3.find((x) => x.id === sizingId.value)!;
   return {
     ranges: [players[0].range, players[1].range, players[2].range], board: board.value.map(cardStr).join(""),
-    pot: pot.value, stack: stack.value, flop_bet_sizes: s.flop, flop_max_raises: s.turnMax, turn_bet_sizes: s.turn, turn_max_raises: s.turnMax,
+    pot: pot.value, stack: Math.max(...stacks), stacks: [stacks[0], stacks[1], stacks[2]], rake_rate: Math.max(0, rakePct.value || 0) / 100, rake_cap: Math.max(0, rakeCap.value || 0), flop_bet_sizes: s.flop, flop_max_raises: s.turnMax, turn_bet_sizes: s.turn, turn_max_raises: s.turnMax,
     bet_sizes: s.bet, raise_sizes: s.raise, max_raises: s.max, allin_spr: 1.0, threads: 0,
     turn_cards: detail.value.turn, river_cards: board.value.length === 5 ? 0 : detail.value.river,
     accuracy_pct: [0.5, 0.3, 0.1][board.value.length - 3] ?? 0.1, max_iter: [400, 300, 600][board.value.length - 3] ?? 600, leaks: leaks.value,
@@ -443,7 +484,7 @@ const spec = computed<api.Spec3>(() => {
 });
 const problem = computed(() => {
   if (board.value.length < 3) return `Choose ${3 - board.value.length} more board card${board.value.length === 2 ? "" : "s"} (3 for a flop, 4 for a turn, 5 for a river).`;
-  if (!(pot.value > 0) || !(stack.value > 0)) return "Enter a pot and stack above zero.";
+  if (!(pot.value > 0) || stacks.some((x) => !(x > 0))) return "Enter a pot and three stacks above zero.";
   if (players.some((p) => !p.name.trim())) return "Give every player a name.";
   return estimateError.value;
 });
@@ -503,7 +544,7 @@ async function solve() {
     startLen.value = board.value.length;
     heroSolved.value = hero.value; habitSolved.value = Math.max(habitSeat.value, 0);
     which.value = s.locked ? "locked" : "base";
-    history.value = []; line.value = []; selected.value = null;
+    history.value = []; line.value = []; selected.value = null; exactAt.value = null; exactSummary.value = null; resolveError.value = "";
     await load();
     step.value = "results";
   } catch (e) { error.value = String((e as Error).message ?? e); }
@@ -518,29 +559,70 @@ const node = ref<api.NodeView3 | null>(null);
 const other = ref<api.NodeView3 | null>(null);
 const selected = ref<number | null>(null);
 let loadToken = 0;
+let loading = false; // clicks are ignored until the screen shows the point they would act on
 async function load() {
   const token = ++loadToken; const w = which.value; const h = [...history.value];
   // strategies first (fast), then the EVs, which need a walk of everything below this point
-  node.value = await api.mwNode(w, h, false);
-  other.value = summary.value?.locked ? await api.mwNode(w === "base" ? "locked" : "base", h, false) : null;
+  loading = true;
+  try { node.value = await api.mwNode(w, h, false); } finally { loading = false; }
+  other.value = summary.value?.locked ? await api.mwNode(w === "base" ? "locked" : "base", h, false).catch(() => null) : null;
   api.mwNode(w, h, true).then((full) => { if (token === loadToken) node.value = full; }).catch(() => undefined);
 }
 async function play(i: number) {
-  if (!node.value || node.value.kind !== "player") return;
+  if (!node.value || node.value.kind !== "player" || loading) return;
   line.value.push({ player: node.value.player, label: actionText(node.value.actions[i]) });
   history.value.push(i);
   await load();
 }
 const dealable = computed(() => new Set((node.value?.cards ?? []).map((c) => c[1])));
+const onBoard = computed(() => new Set((node.value?.board ?? []).map((c) => RANK_CHARS.indexOf(c[0]) * 4 + SUIT_CHARS.indexOf(c[1]))));
+// exact turn solving: offered where the flop betting ends
+const canExact = computed(() => node.value?.kind === "chance" && node.value.street === "flop" && !node.value.exact);
+const exactMode = ref(false);
+const resolving = ref(false);
+const resolveError = ref("");
+const exactSummary = ref<api.Summary3 | null>(null);
+const exactAt = ref<{ which: string; prefix: number[] } | null>(null);
+const exactCard = computed(() => {
+  const e = exactAt.value; const h = history.value;
+  return e && e.which === which.value && e.prefix.length === h.length + 1 && h.every((x, i) => x === e.prefix[i]) ? e.prefix[h.length] : -1;
+});
+const cardTitle = (card: number) => {
+  if (!canExact.value || onBoard.value.has(card)) return "";
+  if (exactCard.value === card) return "Already solved exactly";
+  return dealable.value.has(card) ? "In the flop solve's sample" : "Not in the sample: picking it solves it exactly";
+};
 async function deal(card: number) {
-  if (!node.value || node.value.kind !== "chance") return;
+  const v = node.value;
+  if (!v || v.kind !== "chance" || resolving.value || loading) return;
+  resolveError.value = "";
+  if (canExact.value && exactCard.value !== card && (exactMode.value || !dealable.value.has(card))) {
+    resolving.value = true; progress.value = [1, 0, 300, 100];
+    const began = Date.now(); elapsed.value = 0;
+    const timer = window.setInterval(async () => { elapsed.value = Math.round((Date.now() - began) / 1000); try { progress.value = await api.mwProgress(); } catch { /* ignore */ } }, 400);
+    try {
+      const s = await api.mwResolve(which.value, [...history.value], card);
+      if (s.error) { resolveError.value = s.error; exactAt.value = null; return; }
+      exactSummary.value = s; exactAt.value = { which: which.value, prefix: [...history.value, card] };
+    } catch (e) { resolveError.value = String((e as Error).message ?? e); return; }
+    finally { window.clearInterval(timer); resolving.value = false; refreshMemory(); }
+  }
   const c = cardStr(card);
-  line.value.push({ player: -1, label: `${node.value.street === "flop" ? "Turn" : "River"} ${c[0] === "T" ? "10" : c[0]}${SUIT_SYMBOL[c[1]]}` });
+  line.value.push({ player: -1, label: `${v.street === "flop" ? "Turn" : "River"} ${c[0] === "T" ? "10" : c[0]}${SUIT_SYMBOL[c[1]]}` });
   history.value.push(card);
   await load();
 }
 async function goto(n: number) { history.value = history.value.slice(0, n); line.value = line.value.slice(0, n); await load(); }
-async function setWhich(w: "base" | "locked") { which.value = w; await load(); }
+async function setWhich(w: "base" | "locked") {
+  which.value = w;
+  try { await load(); }
+  catch {
+    // the other solution has no exact solve for this turn card: step back to where the flop betting ends
+    const n = exactAt.value ? exactAt.value.prefix.length - 1 : 0;
+    history.value = history.value.slice(0, n); line.value = line.value.slice(0, n);
+    await load();
+  }
+}
 
 const colors = computed(() => actionColors(node.value?.actions ?? []));
 const money = (x: number) => `${x < -0.5 ? "-" : ""}$${Math.abs(Math.round(x))}`;
@@ -602,6 +684,8 @@ onMounted(() => {
 .hint { @apply text-sm text-muted; }
 .deck-btn { @apply h-9 rounded-md border border-rule bg-white text-sm font-bold font-display hover:border-felt disabled:opacity-25 disabled:hover:border-rule; }
 .deck-on { @apply !bg-ink !text-white border-ink; }
+.deck-extra { @apply border-dashed border-muted bg-paper; }
+.deck-done { @apply !border-felt ring-1 ring-felt bg-felt-light; }
 .stat { @apply rounded-lg bg-paper py-2; }
 .stat dt { @apply text-xs text-muted; }
 .stat dd { @apply font-display font-extrabold text-lg tabular-nums; }

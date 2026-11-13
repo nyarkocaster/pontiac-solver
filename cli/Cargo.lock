@@ -125,6 +125,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "multiway"
+version = "0.2.0"
+dependencies = [
+ "rayon",
+ "serde",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -138,10 +146,12 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "pontiac-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bincode_derive",
+ "multiway",
  "postflop-solver",
+ "pushfold",
  "rayon",
  "serde",
  "serde_json",
@@ -165,6 +175,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pushfold"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

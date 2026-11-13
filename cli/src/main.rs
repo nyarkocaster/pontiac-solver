@@ -3,6 +3,7 @@
 #[allow(dead_code)]
 #[path = "../../app/src-tauri/src/study_core.rs"]
 mod study_core;
+mod three;
 
 use postflop_solver::*;
 use serde_json::{json, Map, Value};
@@ -11,12 +12,12 @@ use study_core::{collect_locks, Leak};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Chips per big blind inside the engine (it works in whole chips).
-const CHIPS: f64 = 100.0;
+pub const CHIPS: f64 = 100.0;
 const RANKS: &str = "23456789TJQKA";
 const SUITS: &str = "cdhs";
-const SEATS: [&str; 9] = ["SB", "BB", "UTG", "UTG1", "UTG2", "LJ", "HJ", "CO", "BTN"];
+pub const SEATS: [&str; 9] = ["SB", "BB", "UTG", "UTG1", "UTG2", "LJ", "HJ", "CO", "BTN"];
 
-fn version_string() -> String { format!("pontiac {VERSION} (two-player engine: postflop-solver nodelock fork)") }
+pub fn version_string() -> String { format!("pontiac {VERSION} (two-player engine: postflop-solver nodelock fork; three-player engine: pontiac multiway; push/fold calculator)") }
 
 fn card_name(c: u8) -> String { format!("{}{}", RANKS.as_bytes()[(c / 4) as usize] as char, SUITS.as_bytes()[(c % 4) as usize] as char) }
 fn hand_name(h: (u8, u8)) -> String { let (lo, hi) = if h.0 < h.1 { (h.0, h.1) } else { (h.1, h.0) }; format!("{}{}", card_name(hi), card_name(lo)) }
@@ -32,7 +33,7 @@ fn parse_card(s: &str) -> Option<u8> {
     let r = RANKS.find(b[0].to_ascii_uppercase())?; let su = SUITS.find(b[1].to_ascii_lowercase())?;
     Some((r * 4 + su) as u8)
 }
-fn round(x: f64, d: i32) -> f64 { if !x.is_finite() { return f64::NAN; } let m = 10f64.powi(d); (x * m).round() / m }
+pub fn round(x: f64, d: i32) -> f64 { if !x.is_finite() { return f64::NAN; } let m = 10f64.powi(d); (x * m).round() / m }
 
 // ------------------------------------------------------------------ spot file
 
@@ -70,8 +71,7 @@ fn street_sizes(tree: &Value, street: &str) -> Result<BetSizeOptions, String> {
 fn parse_spot(raw: &Value) -> Result<Spot, String> {
     let players: Vec<String> = raw.get("players").and_then(|p| p.as_array()).ok_or("\"players\" must be a list of two names")?
         .iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
-    if players.len() == 3 { return Err("three-player spots are solved in the Pontiac Solver app (3-Way Pots tab); the command line handles two players for now".into()); }
-    if players.len() != 2 || players[0] == players[1] { return Err("\"players\" must be two different names, e.g. [\"SB\", \"BB\"]".into()); }
+    if players.len() != 2 || players[0] == players[1] { return Err("\"players\" must be two or three different names, e.g. [\"SB\", \"BB\"]".into()); }
     // who acts first after the flop
     let oop = if let Some(o) = raw.get("oop").and_then(|x| x.as_str()) {
         players.iter().position(|p| p == o).ok_or("\"oop\" must be one of the players")?
@@ -507,9 +507,20 @@ fn nodes_report(spot: &Spot, game: &mut PostFlopGame) -> Result<Value, String> {
     Ok(Value::Object(out))
 }
 
+/// The player names when the spot has three players.
+fn three_players(raw: &Value) -> Option<Vec<String>> {
+    let p: Vec<String> = raw.get("players")?.as_array()?.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
+    if p.len() == 3 && p[0] != p[1] && p[1] != p[2] && p[0] != p[2] { Some(p) } else { None }
+}
+
 fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Result<Value, String> {
     let text = std::fs::read_to_string(spot_path).map_err(|e| format!("cannot read {spot_path}: {e}"))?;
     let raw: Value = serde_json::from_str(&text).map_err(|e| format!("{spot_path} is not valid JSON: {e}"))?;
+    if let Some(three) = three_players(&raw) {
+        let v = three::solve(&raw, &three, save_path)?;
+        if let Some(p) = out_path { std::fs::write(p, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| format!("cannot write {p}: {e}"))?; }
+        return Ok(v);
+    }
     let spot = parse_spot(&raw)?;
     let threads = if spot.threads > 0 { spot.threads } else { std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2) };
     let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().map_err(|e| e.to_string())?;
@@ -612,7 +623,7 @@ fn query(save: &str, node: &str, only: Option<&str>, detail: &str) -> Result<Val
 }
 
 fn usage() -> String {
-    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac]\n  pontiac query <solved.pontiac> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]\n  pontiac estimate <spot.json>\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
+    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac]\n  pontiac query <solved.pontiac> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]\n  pontiac estimate <spot.json>\n  pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
 }
 
 fn main() {
@@ -630,10 +641,26 @@ fn main() {
             json!({"ok": true, "written": flag("-o").or(flag("--out")), "exploitability_pct": v["exploitability_pct"], "runtime_seconds": v["total_seconds"], "saved_to": v.get("saved_to")}) } else { v }),
         Some("query") if args.len() >= 2 => query(&args[1], flag("--node").unwrap_or(""), flag("--hand").or(flag("--combo")), flag("--detail").unwrap_or("class")),
         Some("estimate") if args.len() >= 2 => std::fs::read_to_string(&args[1]).map_err(|e| e.to_string())
-            .and_then(|t| serde_json::from_str::<Value>(&t).map_err(|e| e.to_string())).and_then(|raw| parse_spot(&raw))
-            .and_then(|spot| { let g = build(&spot)?; let (m, mc) = g.memory_usage();
+            .and_then(|t| serde_json::from_str::<Value>(&t).map_err(|e| e.to_string())).and_then(|raw| {
+                if let Some(three) = three_players(&raw) { return three::estimate3(&raw, &three); }
+                let spot = parse_spot(&raw)?; let g = build(&spot)?; let (m, mc) = g.memory_usage();
                 let two = ["habits", "node_locks"].iter().any(|k| spot.raw.get(*k).and_then(|x| x.as_array()).map_or(false, |a| !a.is_empty()));
                 Ok(json!({"memory_mb": round(m as f64 / 1048576.0, 1), "memory_mb_compressed": round(mc as f64 / 1048576.0, 1), "solves_at_most": if two { 2 } else { 1 }, "out_of_position": spot.names[0], "in_position": spot.names[1]})) }),
+        Some("pushfold") => {
+            let num = |name: &str, d: f64| -> Result<f64, String> { match flag(name) { Some(x) => x.parse::<f64>().map_err(|_| format!("{name} needs a number")), None => Ok(d) } };
+            (|| -> Result<Value, String> {
+                let stack = match flag("--stack") { Some(_) => num("--stack", 0.0)?, None => args.get(1).and_then(|x| x.parse::<f64>().ok()).ok_or("give the stack in big blinds, e.g. pontiac pushfold --stack 10")? };
+                let r = pushfold::solve(stack, num("--sb", 0.5)?, num("--ante", 0.0)?)?;
+                let list = |v: &Vec<f64>| -> String { r.classes.iter().zip(v).filter(|(_, &f)| f > 0.0).map(|(c, &f)| if f >= 1.0 { c.clone() } else { format!("{c}:{f}") }).collect::<Vec<_>>().join(",") };
+                let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
+                let m = v.as_object_mut().unwrap();
+                m.insert("ok".into(), json!(true)); m.insert("version".into(), json!(version_string()));
+                m.insert("jam_range".into(), json!(list(&r.jam))); m.insert("call_range".into(), json!(list(&r.call)));
+                m.insert("units".into(), json!("stack, blinds, antes, EVs and edges in big blinds; stack is the shorter stack before posting; frequencies 0-1; the 169 values follow `classes`"));
+                m.insert("note".into(), json!("small blind may only move all-in or fold; limps and smaller raises are not part of this calculation"));
+                Ok(v)
+            })()
+        }
         _ => { eprintln!("{}", usage()); std::process::exit(2); }
     };
     match res {

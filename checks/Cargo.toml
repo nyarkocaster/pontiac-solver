@@ -9,6 +9,7 @@ serde = { version = "1", features = ["derive"] }
 rayon = "1"
 postflop-solver = { path = "../engine" }
 multiway = { path = "../multiway" }
+pushfold = { path = "../pushfold" }
 [profile.release]
 debug = false
 

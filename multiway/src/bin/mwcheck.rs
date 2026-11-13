@@ -30,7 +30,7 @@ fn selftest() -> bool {
         let board = parse_board(boards[trial]).unwrap();
         let mut ranges: [Vec<f32>; 3] = [vec![0.0; NH], vec![0.0; NH], vec![0.0; NH]];
         for p in 0..3 { for i in 0..NH { if rng.next() < 0.11 { ranges[p][i] = (0.05 + rng.next()) as f32; } } }
-        let cfg = Config { board, pot: 30.0, stack: 100.0, ranges, flop_bet_sizes: vec![], turn_bet_sizes: vec![0.5], bet_sizes: vec![0.5], raise_sizes: vec![], flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: 0, river_cards: 0 };
+        let cfg = Config { board, pot: 30.0, stack: 100.0, ranges, flop_bet_sizes: vec![], turn_bet_sizes: vec![0.5], bet_sizes: vec![0.5], raise_sizes: vec![], flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: 0, river_cards: 0, extra: Default::default() };
         let g = Game::new(cfg, false).unwrap();
         let r = &g.cfg.ranges;
         let (pot, inv) = (90.0f64, 20.0f64);
@@ -77,7 +77,7 @@ fn spec(leaks: Vec<Leak3>) -> Spec3 {
             "AA-22,AKs-A2s,K9s+,Q9s+,J9s+,T8s+,98s,87s,76s,65s,AKo-ATo,KJo+,QJo".into(),
         ],
         board: "Kh9s6d4c2s".into(), pot: 30.0, stack: 100.0, bet_sizes: "33%, 75%".into(), raise_sizes: "60%".into(),
-        max_raises: 3, allin_spr: 1.0, accuracy_pct: 0.1, max_iter: 400, leaks, flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards: 0, river_cards: 0,
+        max_raises: 3, allin_spr: 1.0, accuracy_pct: 0.1, max_iter: 400, leaks, flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards: 0, river_cards: 0, stacks: None, rake_rate: 0.0, rake_cap: 0.0, raise_mults: String::new(), max_seconds: 0.0, ..Default::default()
     }
 }
 
@@ -93,6 +93,8 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut ok = selftest();
     if args.get(1).map(|s| s.as_str()) == Some("quick") { std::process::exit(if ok { 0 } else { 1 }); }
+    if args.get(1).map(|s| s.as_str()) == Some("extras") { ok &= extras_checks(); std::process::exit(if ok { 0 } else { 1 }); }
+    if args.get(1).map(|s| s.as_str()) == Some("stacks") { ok &= stack_checks(); std::process::exit(if ok { 0 } else { 1 }); }
     if args.get(1).map(|s| s.as_str()) == Some("flop") { ok &= flop_checks(); std::process::exit(if ok { 0 } else { 1 }); }
     let prog = Progress3::default();
     println!("\nNormal solve (no habits):");
@@ -122,6 +124,8 @@ fn main() {
     println!("  bluffs drop against the caller, and the caller's EV falls -> {}", if pass { "PASS" } else { "FAIL" }); ok &= pass;
     ok &= turn_checks();
     ok &= flop_checks();
+    ok &= stack_checks();
+    ok &= extras_checks();
     std::process::exit(if ok { 0 } else { 1 });
 }
 
@@ -134,7 +138,7 @@ fn turn_checks() -> bool {
     let board = parse_board("Qs8h7h2d").unwrap();
     let mut ranges: [Vec<f32>; 3] = [vec![0.0; NH], vec![0.0; NH], vec![0.0; NH]];
     for p in 0..3 { for i in 0..NH { if rng.next() < 0.035 { ranges[p][i] = (0.05 + rng.next()) as f32; } } }
-    let cfg = Config { board: board.clone(), pot: 60.0, stack: 100.0, ranges, flop_bet_sizes: vec![], turn_bet_sizes: vec![], bet_sizes: vec![], raise_sizes: vec![], flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: 0, river_cards: 0 };
+    let cfg = Config { board: board.clone(), pot: 60.0, stack: 100.0, ranges, flop_bet_sizes: vec![], turn_bet_sizes: vec![], bet_sizes: vec![], raise_sizes: vec![], flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: 0, river_cards: 0, extra: Default::default() };
     let g = Game::new(cfg, true).unwrap();
     let r = &g.cfg.ranges;
     let mut worst = 0f64;
@@ -198,7 +202,7 @@ fn flop_checks() -> bool {
     let mut ranges: [Vec<f32>; 3] = [vec![0.0; NH], vec![0.0; NH], vec![0.0; NH]];
     for p in 0..3 { for i in 0..NH { if rng.next() < 0.012 { ranges[p][i] = (0.05 + rng.next()) as f32; } } }
     let mk = |tc: usize, rc: usize| Config { board: board.clone(), pot: 60.0, stack: 100.0, ranges: ranges.clone(), flop_bet_sizes: vec![], turn_bet_sizes: vec![], bet_sizes: vec![], raise_sizes: vec![],
-        flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: tc, river_cards: rc };
+        flop_max_raises: 1, turn_max_raises: 1, max_raises: 1, allin_spr: 0.0, turn_cards: tc, river_cards: rc, extra: Default::default() };
     let g = Game::new(mk(0, 0), true).unwrap();
     let r = &g.cfg.ranges;
     let mut worst = 0f64; let worst_s;
@@ -247,4 +251,163 @@ fn flop_checks() -> bool {
     let pass2 = worst_s < 0.015;
     println!("Flop: sampled turn and river cards ({} of {} runouts) vs every card, average difference in hand values: {:.2}% -> {}", gx.streets.len(), gf.streets.len(), 100.0 * worst_s, if pass2 { "PASS" } else { "FAIL" });
     pass && pass2
+}
+
+/// Unequal stacks: every showdown in an all-in-heavy river tree must pay out exactly as a
+/// straightforward chip-by-chip side-pot count does; then full solves with unequal stacks,
+/// rake, and a player who folded before the spot.
+fn stack_checks() -> bool {
+    let mut ok = true;
+    let mut rng = Rng(0x2545F4914F6CDD1D);
+    let deck = Deck::new();
+    let board = parse_board("Ts9s4d4c2h").unwrap();
+    let mut ranges: [Vec<f32>; 3] = [vec![0.0; NH], vec![0.0; NH], vec![0.0; NH]];
+    for p in 0..3 { for i in 0..NH { if rng.next() < 0.05 { ranges[p][i] = (0.05 + rng.next()) as f32; } } }
+    let stacks = [25.0, 70.0, 140.0];
+    let cfg = Config { board: board.clone(), pot: 30.0, stack: 0.0, ranges, flop_bet_sizes: vec![], turn_bet_sizes: vec![], bet_sizes: vec![0.5], raise_sizes: vec![1.0],
+        flop_max_raises: 1, turn_max_raises: 1, max_raises: 3, allin_spr: 10.0, turn_cards: 0, river_cards: 0,
+        extra: Extra { stacks: Some(stacks), ..Default::default() } };
+    let g = Game::new(cfg, false).unwrap();
+    let r = &g.cfg.ranges;
+    let st = &g.streets[0];
+    let (mut worst, mut n_sd, mut n_side) = (0f64, 0usize, 0usize);
+    for id in 0..g.nodes.len() {
+        let node = &g.nodes[id];
+        if node.kind != Kind::Showdown { continue; }
+        n_sd += 1;
+        let (inv, folded) = (node.invested, node.folded);
+        if node.pots.len() > 1 { n_side += 1; }
+        // chip-by-chip award for one deal of three hands: returns each player's winnings
+        let award = |s: [u32; 3]| -> [f64; 3] {
+            let mut win = [0f64; 3];
+            let mut give = |amount: f64, min_in: f64, win: &mut [f64; 3]| {
+                let mut elig: Vec<usize> = (0..3).filter(|&q| !folded[q] && inv[q] >= min_in - 1e-9).collect();
+                if elig.is_empty() { let top = (0..3).filter(|&q| !folded[q]).map(|q| inv[q]).fold(0.0, f64::max); elig = (0..3).filter(|&q| !folded[q] && inv[q] >= top - 1e-9).collect(); }
+                let best = elig.iter().map(|&q| s[q]).max().unwrap();
+                let w: Vec<usize> = elig.into_iter().filter(|&q| s[q] == best).collect();
+                for &q in &w { win[q] += amount / w.len() as f64; }
+            };
+            give(30.0, 0.0, &mut win);
+            let mut lv: Vec<f64> = inv.to_vec(); lv.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let mut prev = 0.0;
+            for &l in &lv { if l > prev + 1e-9 { let amount: f64 = (0..3).map(|q| inv[q].min(l) - inv[q].min(prev)).sum(); give(amount, l, &mut win); prev = l; } }
+            win
+        };
+        for hero in 0..3 {
+            let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
+            let fast = g.walk(id, hero, [&r[0], &r[1], &r[2]], Mode::Average);
+            let z = g.reach_sum(hero, &r[o1], &r[o2]);
+            for (k, &h) in g.hands[hero].iter().enumerate().take(12) {
+                let hc = deck.cards[h as usize];
+                if st.strength[h as usize] == 0 { continue; }
+                let mut v = 0f64;
+                for &h1 in &g.hands[o1] {
+                    let c1 = deck.cards[h1 as usize]; if !disjoint(hc, c1) || st.strength[h1 as usize] == 0 { continue; }
+                    for &h2 in &g.hands[o2] {
+                        let c2 = deck.cards[h2 as usize]; if !disjoint(hc, c2) || !disjoint(c1, c2) || st.strength[h2 as usize] == 0 { continue; }
+                        let mut s = [0u32; 3]; s[hero] = st.strength[h as usize]; s[o1] = st.strength[h1 as usize]; s[o2] = st.strength[h2 as usize];
+                        let w = award(s);
+                        v += r[o1][h1 as usize] as f64 * r[o2][h2 as usize] as f64 * (w[hero] - inv[hero]);
+                    }
+                }
+                worst = worst.max((v - fast[k] as f64).abs() / (z[k].abs().max(1.0) * 100.0));
+            }
+        }
+    }
+    let pass = worst < 1e-5 && n_side >= 5;
+    println!("\nSide pots: {} showdowns ({} with side pots) vs a chip-by-chip count: worst relative error {:.2e} -> {}", n_sd, n_side, worst, if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+
+    let prog = Progress3::default();
+    let mut sp = spec(vec![]);
+    sp.stacks = Some([40.0, 100.0, 250.0]); sp.accuracy_pct = 0.15; sp.max_iter = 400;
+    let s = solve3(&sp, &prog).unwrap().summary.unwrap();
+    let pass = (s.base_ev.iter().sum::<f64>() - 30.0).abs() < 0.01 && s.base_gain_pct.iter().all(|&g| g <= 0.16);
+    println!("Unequal stacks 40/100/250: {} iterations, EV {:.2}/{:.2}/{:.2}, could gain {:.3}%/{:.3}%/{:.3}% -> {}", s.base_iters, s.base_ev[0], s.base_ev[1], s.base_ev[2],
+        s.base_gain_pct[0], s.base_gain_pct[1], s.base_gain_pct[2], if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+    sp.rake_rate = 0.05; sp.rake_cap = 3.0;
+    let s2 = solve3(&sp, &prog).unwrap().summary.unwrap();
+    let total: f64 = s2.base_ev.iter().sum();
+    let pass = total < 30.0 - 1.4 && total > 30.0 - 3.0 - 1e-6;
+    println!("Same with 5% rake capped at 3: EVs add up to {:.2} of the 30 pot (rake taken {:.2}) -> {}", total, 30.0 - total, if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+
+    // a player who folded before the spot: the other two play it out, the pot is still shared out in full
+    let sp2 = spec(vec![]);
+    let mut g = build_game(&sp2, false).unwrap();
+    let mut cfg = g.cfg.clone(); cfg.extra.folded = [false, true, false];
+    g = Game::new(cfg, true).unwrap();
+    for t in 1..=150 { g.iterate(t); }
+    let e = g.evaluate();
+    let pass = (e[0].0 + e[2].0 - 30.0).abs() < 0.01 && e[1].0 == 0.0 && (e[0].1 - e[0].0) / 30.0 < 0.003 && (e[2].1 - e[2].0) / 30.0 < 0.003;
+    println!("Seat 2 already folded: EV {:.2}/{:.2}/{:.2}, the two left could gain {:.3}%/{:.3}% -> {}", e[0].0, e[1].0, e[2].0, 100.0 * (e[0].1 - e[0].0) / 30.0, 100.0 * (e[2].1 - e[2].0) / 30.0, if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+    ok
+}
+
+/// Node paths, node locks, and exact turn re-solves after a flop solve.
+fn extras_checks() -> bool {
+    let mut ok = true;
+    let prog = Progress3::default();
+    let names = ["BB".to_string(), "MP".to_string(), "BTN".to_string()];
+    let node = "river/BB_check/MP_check";
+    let lock = |hands: Option<&str>, freqs: &[(&str, f64)]| NodeLock3 { node: node.into(), player: Some("BTN".into()), hands: hands.map(|h| h.to_string()),
+        action_freqs: freqs.iter().map(|(k, v)| (k.to_string(), *v)).collect() };
+    // a lock on some hands that lists every action: one solve, other hands stay free
+    let mut sp = spec(vec![]); sp.names = Some(names.clone());
+    sp.node_locks = vec![lock(Some("AA,KK"), &[("check", 1.0), ("aggressive", 0.0)])];
+    let st = solve3(&sp, &prog).unwrap();
+    let g = st.base.as_ref().unwrap();
+    let (hist, _) = resolve_path(g, &names, node, 0.0).unwrap();
+    let v = st.view(false, &hist, false).unwrap();
+    let cell = |v: &NodeView3, a: u8, b: u8| v.grid[grid_index((a * 4, b * 4 + 1))].freqs[0];
+    let pass = st.locked.is_none() && v.player == 2 && v.locked && cell(&v, 12, 12) > 0.999 && cell(&v, 11, 11) > 0.999 && v.action_freqs[0] < 0.95
+        && v.action_names[0] == "check" && v.action_names.iter().any(|n| n.starts_with("bet0."));
+    println!("\nLock on AA,KK (always check) at {node}: AA checks {:.0}%, range checks {:.0}%, actions {:?} -> {}", 100.0 * cell(&v, 12, 12), 100.0 * v.action_freqs[0], v.action_names, if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+    // a lock that leaves actions unlisted: a normal solve runs first
+    sp.node_locks = vec![lock(None, &[("aggressive", 0.0)])];
+    let st = solve3(&sp, &prog).unwrap();
+    let (n, l) = (st.view(false, &hist, false).unwrap(), st.view(true, &hist, false).unwrap());
+    let s = st.summary.as_ref().unwrap();
+    let pass = st.locked.is_some() && n.action_freqs[0] < 0.95 && l.action_freqs[0] > 0.999 && s.locked_nodes == 1 && (s.locked_ev.iter().sum::<f64>() - 30.0).abs() < 0.01;
+    println!("Lock 'never bets' with the rest left to the solver: normal checks {:.0}%, locked checks {:.0}% -> {}", 100.0 * n.action_freqs[0], 100.0 * l.action_freqs[0], if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+    let bad = resolve_path(g, &names, "river/MP_check", 0.0).is_err() && resolve_path(g, &names, "river/BB_bet9", 0.0).is_err();
+    println!("Wrong player or impossible size in a path is rejected -> {}", if bad { "PASS" } else { "FAIL" });
+    ok &= bad;
+
+    // flop solve on narrow ranges, then exact turn solves for a card outside the sample
+    let mut sp = spec(vec![]);
+    sp.ranges = ["99-66,A9s-A7s,KTs+,QTs+,JTs,T9s,98s,KQo".into(), "TT-77,AJs-ATs,KQs,QJs,JTs,AQo".into(), "AA-TT,AKs-ATs,KQs,KJs,QJs,AKo,AQo".into()];
+    sp.board = "Kh9s6d".into(); sp.bet_sizes = "66%".into(); sp.max_raises = 2; sp.turn_cards = 1; sp.river_cards = 1; sp.accuracy_pct = 0.5; sp.max_iter = 60; sp.names = Some(names.clone());
+    let mut st = solve3(&sp, &prog).unwrap();
+    let g = st.base.as_ref().unwrap();
+    let (h3, id3) = resolve_path(g, &names, "flop/BB_check/MP_check/BTN_check", 0.0).unwrap();
+    let sampled = g.nodes[id3].cards.clone();
+    let card = (0..52u8).find(|c| !sampled.contains(c) && !g.cfg.board.contains(c)).unwrap();
+    let sub = resolve_turn(&st, false, &h3, card, &prog).unwrap();
+    let ss = sub.summary.clone();
+    let mut pre = sub.prefix.clone();
+    st.sub = Some(sub);
+    let v = st.view(false, &pre, true).unwrap();
+    let pass = v.exact && v.board.len() == 4 && v.kind == "player" && (v.ev.iter().sum::<f64>() - v.pot).abs() < 0.05 && ss.base_gain_pct.iter().all(|&x| x <= 0.31)
+        && st.base.as_ref().unwrap().nodes[id3].cards.len() < 49 && st.view(false, &h3, false).unwrap().kind == "chance";
+    println!("Exact turn solve after check-check-check, turn {} (not in the flop sample of {}): {} iterations, {:.1}s, could gain {:.2}%/{:.2}%/{:.2}% -> {}", card_str(card), sampled.len(),
+        ss.base_iters, ss.base_secs, ss.base_gain_pct[0], ss.base_gain_pct[1], ss.base_gain_pct[2], if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+    pre.push(0);
+    let pass = st.view(false, &pre, false).map(|v| v.exact && v.player == 1).unwrap_or(false);
+    println!("Browsing on inside the exact solve -> {}", if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+    // a line where one player folds on the flop: the turn is solved heads-up with the dead money in
+    let g = st.base.as_ref().unwrap();
+    let (hf, idf) = resolve_path(g, &names, "flop/BB_check/MP_check/BTN_bet/BB_fold/MP_call", 0.0).unwrap();
+    let sub = resolve_turn(&st, false, &hf, card, &prog).unwrap();
+    let e = sub.summary.base_ev; let pot = g.cfg.pot + g.nodes[idf].invested.iter().sum::<f64>();
+    let pass = e[0] == 0.0 && (e[1] + e[2] - pot).abs() < 0.02 && sub.summary.base_gain_pct[1] <= 0.31 && sub.summary.base_gain_pct[2] <= 0.31 && sub.base.cfg.extra.folded == [true, false, false];
+    println!("Exact turn solve after a flop fold (heads-up, pot {:.0}): EV {:.2}/{:.2}/{:.2}, could gain {:.2}%/{:.2}% -> {}", pot, e[0], e[1], e[2], sub.summary.base_gain_pct[1], sub.summary.base_gain_pct[2], if pass { "PASS" } else { "FAIL" });
+    ok &= pass;
+    ok
 }

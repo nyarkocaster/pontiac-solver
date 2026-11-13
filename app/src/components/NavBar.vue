@@ -12,7 +12,7 @@
 
       <div class="flex ml-auto h-full items-center z-10">
         <a
-          href="https://github.com/b-inary/desktop-postflop"
+          href="https://github.com/nyarkocaster/pontiac-solver"
           class="flex px-4 h-full items-center font-semibold hover:bg-slate-700"
           target="_blank"
         >
@@ -51,6 +51,17 @@
         </button>
         <button
           :class="
+            'flex relative w-36 items-center justify-center font-semibold ' +
+            'transition-colors hover:bg-slate-700 hover:text-blue-200 ' +
+            (store.navView === 'pushfold' ? 'bg-slate-700 text-blue-200' : '')
+          "
+          @click="store.navView = 'pushfold'"
+        >
+          <BoltIcon class="w-6 h-6" />
+          <span class="pl-3">Push / Fold</span>
+        </button>
+        <button
+          :class="
             'flex relative w-32 items-center justify-center font-semibold ' +
             'transition-colors hover:bg-slate-700 hover:text-blue-200 ' +
             (store.navView === 'solver' ? 'bg-slate-700 text-blue-200' : '')
@@ -78,7 +89,7 @@
 
 <script setup lang="ts">
 import { useStore } from "../store";
-import { ComputerDesktopIcon, ChartBarIcon, AcademicCapIcon, UserGroupIcon } from "@heroicons/vue/24/solid";
+import { ComputerDesktopIcon, ChartBarIcon, AcademicCapIcon, UserGroupIcon, BoltIcon } from "@heroicons/vue/24/solid";
 
 const store = useStore();
 </script>

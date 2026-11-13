@@ -10,6 +10,10 @@
       <ThreeWayRiver />
     </div>
 
+    <div v-show="store.navView === 'pushfold'" style="height: calc(100% - 2.5rem)">
+      <PushFold />
+    </div>
+
     <div
       v-show="store.navView === 'solver'"
       class="flex w-full mx-auto max-w-screen-xl"
@@ -80,6 +84,7 @@ import AboutPage from "./AboutPage.vue";
 import ResultViewer from "./ResultViewer.vue";
 import GuidedStudy from "./guided/GuidedStudy.vue";
 import ThreeWayRiver from "./guided/ThreeWayRiver.vue";
+import PushFold from "./guided/PushFold.vue";
 
 const store = useStore();
 const header = computed(() => store.headers[store.sideView].join(" > "));

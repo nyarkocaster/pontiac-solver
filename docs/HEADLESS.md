@@ -36,6 +36,7 @@ pontiac.version()
 pontiac solve spot.json [-o result.json] [--save solved.pontiac]
 pontiac query solved.pontiac --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]
 pontiac estimate spot.json
+pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]
 pontiac version
 ```
 
@@ -177,7 +178,7 @@ Tendencies applied across the whole tree, as in the app:
 
 ## 4. Scope
 
-- **Preflop: no.** The solver starts on the flop, turn or river. Supply preflop ranges, and compute push/fold separately.
+- **Preflop: push/fold only.** The solver starts on the flop, turn or river, so supply preflop ranges. Heads-up push/fold ranges for any stack depth come from `pontiac.pushfold` (section 6). Limps and small raises preflop are not solved.
 - **Depth: yes.** A full flop-through-river tree at 15 to 30 bb is supported heads-up, with every turn and river card solved exactly.
 - **Performance**, measured on a 2-core cloud container (8 GB RAM), the example spot `examples/hu_sng_flop_20bb.json`: 18 bb behind, 4 bb pot, wide ranges (SB opens about 80% of hands), raises at 2.5x, all-in available.
 
@@ -187,10 +188,53 @@ Tendencies applied across the whole tree, as in the app:
   | One per street | 0.8 GB (16-bit storage; 1.6 GB without) | 1.5 minutes, 80 iterations |
 
   Three sizes per street was not measured; expect more than double the two-size figures. A lock that needs a normal solve first doubles the time. Turn and river spots take seconds. Use `pontiac.estimate` to check memory before solving.
-- **Three players:** solved in the desktop app's "3-Way Pots" tab, not yet from the command line.
+- **Three players: yes**, with the same `solve` call (section 5). No `save`/`query` for three players yet: the result itself lists the first street's nodes.
 
-## 5. Extras
+## 5. Three players
 
-- **Samples:** `examples/river_quick.json` (solves in milliseconds) with its expected output in `examples/expected/`, and `examples/hu_sng_flop_20bb.json`.
+Give three names in `players` and the same `solve` / `estimate` calls use the three-player engine. Example: `examples/three_way_river.json`.
+
+```json
+{
+  "players": ["BB", "CO", "BTN"],
+  "stacks_bb": {"BB": 40, "CO": 100, "BTN": 65},
+  "pot_bb": 15,
+  "board": "Kh9s6d4c2s",
+  "ranges": {"BB": "...", "CO": "...", "BTN": "..."},
+  "bet_tree": {"river": {"bet": [0.33, 0.75], "raise": [2.5]}, "max_raises": 3, "allin_spr": 1.0},
+  "rake": {"rate": 0.05, "cap_bb": 1.5},
+  "target_exploitability_pct": 0.2,
+  "max_seconds": 120
+}
+```
+
+What differs from two players:
+
+- **Acting order** follows the seat names (SB, BB, UTG ... CO, BTN). For other names, add `"order": ["first", "second", "third"]`. The result repeats it as `acting_order`.
+- **Stacks:** `stacks_bb` per player, or one `effective_stack_bb` for everyone. Unequal stacks create side pots: a short stack that is all-in plays for the main pot only.
+- **Rake:** `{"rate": 0.05, "cap_bb": 1.5}`; taken from pots that see a call. Leave it out for tournaments.
+- **Bet tree:** per street `bet` (shares of the pot) and `raise` (a number is a multiple of the bet being raised; a text like `"60%"` is a share of the pot). `max_raises` (default 3) caps raises per street; a bet becomes all-in when what is left behind is at most `allin_spr` times the pot (default 1.0).
+- **Later cards:** flop and turn spots can deal a balanced sample of later cards to save time and memory: `"later_cards": "sample"` (default on the flop), `"larger"`, `"all_turns"`, or `"exact"` (default on the turn; every card).
+- **Accuracy:** `exploitability_pct` is the most any one player could gain by changing only their own strategy, as a percent of the starting pot; `gain_pct_by_player` lists all three. With three players there can be more than one sound solution, so treat exact frequencies as a guide.
+- **Node locks and habits** work as in section 3; paths name the player at every step (`river/BB_check/CO_bet0.33/BTN_fold`).
+- **Result:** `ev_bb` (three values, adding up to the pot less rake), and `nodes` for the first street, each with `actions`, `by_class`, `by_combo`, `stacks_bb` and who is still `in_hand`.
+
+Measured on the same 2-core container: the river example solves in about 1 second; the same spot started on the turn with one bet size and every river card takes about 35 seconds and 60 MB. Flop spots take minutes to hours depending on bet sizes and the card sample; check `pontiac.estimate` first (`seconds_per_iteration` times roughly 100 to 250 iterations).
+
+## 6. Heads-up push/fold
+
+```python
+r = pontiac.pushfold(10)                  # 10 bb effective, blinds 0.5/1, no ante
+r = pontiac.pushfold(8.5, small_blind=0.5, ante=0.125)
+r["jam_pct"], r["call_pct"]               # 0.581, 0.375 at 10 bb
+r["jam_range"], r["call_range"]           # range text, mixed hands as "Q8o:0.036"
+dict(zip(r["classes"], r["jam"]))["K5o"]  # frequency for one hand class
+```
+
+The small blind moves all-in or folds; the big blind calls or folds. `stack_bb` is the shorter stack before the blinds are posted. The answer is the equilibrium (checked against published charts: 58% jam / 37% call at 10 bb), found in well under a second. `jam_edge_bb` and `call_edge_bb` say how much each hand gains over folding, so values near zero are close decisions. `ev_small_blind_bb` is the small blind's average result per hand. Heads-up sit-and-gos pay the winner only, so chip values need no prize adjustment.
+
+## 7. Extras
+
+- **Samples:** `examples/river_quick.json` (solves in milliseconds) with its expected output in `examples/expected/`, `examples/hu_sng_flop_20bb.json`, and `examples/three_way_river.json`.
 - **Version string:** in every result, every saved solve and every query answer.
 - **Reproducibility:** the solver uses no random numbers. The same spot file, program version and thread count give the same result; the smoke tests check this. Different thread counts can differ in the last decimals.

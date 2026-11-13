@@ -47,9 +47,17 @@ pub struct Node {
     /// chips each player has put in since the start of the tree
     pub invested: [f64; 3],
     pub folded: [bool; 3],
+    /// the largest amount in at the start of this street (the bet a raise multiplies starts from here)
+    pub base: f64,
+    /// terminal nodes: the pots to award as (chips after rake, who contests it). A pot with one
+    /// contestant is simply returned to them (an uncalled bet, or a walk).
+    pub pots: Vec<(f64, [bool; 3])>,
     pub data: UnsafeCell<NodeData>,
-    /// fixed strategy (actions x hands[player]); the solver never changes it
+    /// fixed strategy (actions x hands[player]). A hand whose entries are all zero or negative
+    /// is not locked and keeps being solved.
     pub locked: Option<Vec<f32>>,
+    /// true when every hand at this node is locked
+    pub full_lock: bool,
 }
 
 #[derive(Clone)]
@@ -72,6 +80,21 @@ pub struct Config {
     pub river_cards: usize,
     /// all-in is offered when the remaining stack is at most this multiple of the pot
     pub allin_spr: f64,
+    pub extra: Extra,
+}
+
+/// Optional settings; `Default` gives equal stacks, no rake, nobody folded.
+#[derive(Clone, Default)]
+pub struct Extra {
+    /// stack behind per player; `None` gives everyone `Config::stack`
+    pub stacks: Option<[f64; 3]>,
+    /// players who folded before the tree starts (their chips are already in `Config::pot`)
+    pub folded: [bool; 3],
+    /// share of the pot taken as rake, and the most that can be taken (0 cap = no cap)
+    pub rake_rate: f64,
+    pub rake_cap: f64,
+    /// raise sizes as multiples of the bet being raised (2.5 = raise to 2.5 times the bet)
+    pub raise_mults: Vec<f64>,
 }
 
 /// Showdown ordering for one final (five-card) board.
@@ -96,6 +119,8 @@ pub struct Game {
     pub street_of: HashMap<(u8, u8), usize>,
     /// the cards dealt after a given board prefix (key: turn card dealt in the tree, 255 = none yet)
     pub samples: HashMap<u8, Vec<(u8, f32)>>,
+    /// stack behind per player at the start of the tree
+    pub stacks: [f64; 3],
     pub valid: Vec<u16>,          // hands not blocked by the starting board
     pub card_hands: Vec<Vec<u16>>, // per card: valid hands containing it
     pub hands: [Vec<u16>; 3],     // each player's hands with non-zero weight
@@ -115,7 +140,7 @@ unsafe impl Sync for Node {}
 pub enum Mode { Train(u32), Average, BestResponse }
 
 #[derive(Clone)]
-struct St { inv: [f64; 3], folded: [bool; 3], acted: [bool; 3], raises: usize, last_inc: f64 }
+struct St { inv: [f64; 3], folded: [bool; 3], acted: [bool; 3], raises: usize, last_inc: f64, base: f64 }
 
 fn make_street(deck: &Deck, board: &[u8], card: u8, hands: &[Vec<u16>; 3]) -> Street {
     let mut strength = vec![0u32; NH];
@@ -303,7 +328,10 @@ impl Game {
             }
             if hands[p].is_empty() { return Err(format!("player {} has an empty range", p + 1)); }
         }
-        let mut g = Game { deck, cfg, nodes: vec![], streets: vec![], street_of: HashMap::new(), samples: HashMap::new(), valid, card_hands, hands, hpos, allocated: allocate, br_ignores_locks: false,
+        let stacks = cfg.extra.stacks.unwrap_or([cfg.stack; 3]);
+        if stacks.iter().any(|&x| x < 0.0) { return Err("a stack cannot be negative".into()); }
+        if cfg.extra.folded.iter().filter(|&&f| !f).count() < 2 { return Err("at least two players must still be in the hand".into()); }
+        let mut g = Game { deck, cfg, stacks, nodes: vec![], streets: vec![], street_of: HashMap::new(), samples: HashMap::new(), valid, card_hands, hands, hpos, allocated: allocate, br_ignores_locks: false,
             id: NEXT_GAME_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) };
         // deal structure: which turn and river cards exist in this tree
         let b0 = g.cfg.board.clone();
@@ -316,7 +344,7 @@ impl Game {
                 g.samples.insert(254, turns);
             }
         }
-        let st = St { inv: [0.0; 3], folded: [false; 3], acted: [false; 3], raises: 0, last_inc: 0.0 };
+        let st = St { inv: [0.0; 3], folded: g.cfg.extra.folded, acted: [false; 3], raises: 0, last_inc: 0.0, base: 0.0 };
         let street = if b0.len() == 5 { 0 } else { NO_STREET };
         g.build(st, 0, &Ctx { board: b0, dealt: [255, 255], street });
         Ok(g)
@@ -340,21 +368,68 @@ impl Game {
     pub fn board_len(&self, node: &Node) -> usize { self.cfg.board.len() + node.dealt.iter().filter(|&&c| c != 255).count() }
 
     fn push(&mut self, kind: Kind, player: usize, st: &St, cx: &Ctx) -> usize {
+        let pots = match kind { Kind::FoldEnd | Kind::Showdown => self.pots(st), _ => vec![] };
         self.nodes.push(Node { kind, player, actions: vec![], children: vec![], cards: vec![], weights: vec![], remaining: 0.0, dealt: cx.dealt, street: cx.street,
-            invested: st.inv, folded: st.folded, data: UnsafeCell::new(NodeData::default()), locked: None });
+            invested: st.inv, folded: st.folded, base: st.base, pots, data: UnsafeCell::new(NodeData::default()), locked: None, full_lock: false });
         self.nodes.len() - 1
+    }
+
+    /// Splits the chips into a main pot and side pots. Each level of commitment among the players
+    /// still in forms a pot contested by those who put in at least that much; folded players'
+    /// chips stay in as dead money. Rake comes out of the contested pots only.
+    fn pots(&self, st: &St) -> Vec<(f64, [bool; 3])> {
+        let mut levels: Vec<f64> = (0..3).filter(|&q| !st.folded[q]).map(|q| st.inv[q]).collect();
+        levels.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        levels.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+        let mut out: Vec<(f64, [bool; 3])> = vec![];
+        let mut prev = 0.0;
+        for (i, &lv) in levels.iter().enumerate() {
+            let mut amount: f64 = (0..3).map(|q| st.inv[q].min(lv) - st.inv[q].min(prev)).sum();
+            if i == 0 { amount += self.cfg.pot; }
+            let mut mask = [false; 3];
+            for q in 0..3 { mask[q] = !st.folded[q] && st.inv[q] >= lv - 1e-9; }
+            out.push((amount, mask));
+            prev = lv;
+        }
+        // anything a folded player put in above the top level goes with the top pot
+        let over: f64 = (0..3).map(|q| st.inv[q] - st.inv[q].min(prev)).sum();
+        if let Some(last) = out.last_mut() { last.0 += over; }
+        let contested: f64 = out.iter().filter(|p| p.1.iter().filter(|&&m| m).count() >= 2).map(|p| p.0).sum();
+        // when everyone else folded, the pot the winner takes is still raked on what was called
+        let single = out.len() == 1 && out[0].1.iter().filter(|&&m| m).count() == 1;
+        let rate = self.cfg.extra.rake_rate;
+        if rate > 0.0 {
+            let cap = if self.cfg.extra.rake_cap > 0.0 { self.cfg.extra.rake_cap } else { f64::MAX };
+            if single {
+                let w = (0..3).find(|&q| out[0].1[q]).unwrap();
+                let second = (0..3).filter(|&q| q != w).map(|q| st.inv[q]).fold(0.0, f64::max);
+                let called = out[0].0 - (st.inv[w] - second).max(0.0);
+                out[0].0 -= (rate * called).min(cap);
+            } else if contested > 0.0 {
+                let keep = 1.0 - (rate * contested).min(cap) / contested;
+                for p in out.iter_mut() { if p.1.iter().filter(|&&m| m).count() >= 2 { p.0 *= keep; } }
+            }
+        }
+        out
     }
 
     /// Builds the node reached in state `st` with `first` the first candidate to act.
     fn build(&mut self, st: St, first: usize, cx: &Ctx) -> usize {
         let active = (0..3).filter(|&q| !st.folded[q]).count();
         if active == 1 { return self.push(Kind::FoldEnd, (0..3).find(|&q| !st.folded[q]).unwrap(), &st, cx); }
-        let maxinv = st.inv.iter().cloned().fold(0.0, f64::max);
-        let stack = self.cfg.stack;
+        let stacks = self.stacks;
+        let maxinv = (0..3).filter(|&q| !st.folded[q]).map(|q| st.inv[q]).fold(0.0, f64::max);
+        // players who still have chips behind
+        let has_chips = |q: usize| !st.folded[q] && st.inv[q] < stacks[q] - 1e-9;
+        let n_chips = (0..3).filter(|&q| has_chips(q)).count();
         let mut actor = None;
         for k in 0..3 {
             let q = (first + k) % 3;
-            if !st.folded[q] && (!st.acted[q] || st.inv[q] < maxinv - 1e-9) && st.inv[q] < stack - 1e-9 { actor = Some(q); break; }
+            if !has_chips(q) { continue; }
+            let owes = st.inv[q] < maxinv - 1e-9;
+            // the only player with chips left has nothing to decide unless facing a bet
+            if !owes && (st.acted[q] || n_chips < 2) { continue; }
+            actor = Some(q); break;
         }
         let blen = cx.board.len();
         let p = match actor {
@@ -366,7 +441,7 @@ impl Game {
                 let deal = self.samples[&key].clone();
                 let mut children = vec![];
                 for &(c, _) in &deal {
-                    let ns = St { inv: st.inv, folded: st.folded, acted: [false; 3], raises: 0, last_inc: 0.0 };
+                    let ns = St { inv: st.inv, folded: st.folded, acted: [false; 3], raises: 0, last_inc: 0.0, base: maxinv };
                     let mut b = cx.board.clone(); b.push(c);
                     let ncx = if blen == 3 { Ctx { board: b, dealt: [c, 255], street: NO_STREET } }
                         else { Ctx { board: b, dealt: [cx.dealt[0], c], street: self.street_of[&(cx.dealt[0], c)] } };
@@ -381,31 +456,33 @@ impl Game {
         };
         let id = self.push(Kind::Decision, p, &st, cx);
         let pot_now = self.cfg.pot + st.inv.iter().sum::<f64>();
-        let to_call = maxinv - st.inv[p];
+        let owed = maxinv - st.inv[p];
+        // the most this player can usefully put in: their stack, or the biggest stack that could call
+        let cover = (0..3).filter(|&q| q != p && !st.folded[q]).map(|q| stacks[q]).fold(0.0, f64::max);
+        let top = stacks[p].min(cover);
         let mut acts: Vec<Action> = vec![];
         let (cap, sizes) = match blen { 3 => (self.cfg.flop_max_raises, self.cfg.flop_bet_sizes.clone()), 4 => (self.cfg.turn_max_raises, self.cfg.turn_bet_sizes.clone()), _ => (self.cfg.max_raises, self.cfg.bet_sizes.clone()) };
-        let can_raise = st.raises < cap && maxinv < stack - 1e-9;
-        if to_call > 1e-9 {
+        let can_raise = st.raises < cap && maxinv < top - 1e-9;
+        let mut targets: Vec<f64> = vec![];
+        if owed > 1e-9 {
             acts.push(Action::Fold); acts.push(Action::Call);
             if can_raise {
-                let mut allin = false;
-                for &f in &self.cfg.raise_sizes.clone() {
-                    let mut t = maxinv + f * (pot_now + to_call);
-                    t = t.max(maxinv + st.last_inc).round();
-                    if t >= stack * 0.85 { allin = true; } else if !acts.contains(&Action::Raise(t)) { acts.push(Action::Raise(t)); }
-                }
-                if allin || (stack - maxinv) <= self.cfg.allin_spr * pot_now { acts.push(Action::AllIn(stack)); }
+                for &f in &self.cfg.raise_sizes { targets.push(maxinv + f * (pot_now + owed)); }
+                for &m in &self.cfg.extra.raise_mults { targets.push(st.base + m * (maxinv - st.base)); }
             }
         } else {
             acts.push(Action::Check);
-            if can_raise {
-                let mut allin = false;
-                for &f in &sizes {
-                    let t = (maxinv + (f * pot_now).max(1.0)).round();
-                    if t >= stack * 0.85 { allin = true; } else if !acts.contains(&Action::Bet(t)) { acts.push(Action::Bet(t)); }
-                }
-                if allin || (stack - maxinv) <= self.cfg.allin_spr * pot_now { acts.push(Action::AllIn(stack)); }
+            if can_raise { for &f in &sizes { targets.push(maxinv + (f * pot_now).max(1.0)); } }
+        }
+        if can_raise {
+            let mut allin = false;
+            for t in targets {
+                let t = t.max(maxinv + st.last_inc).round();
+                if t >= top * 0.85 { allin = true; continue; }
+                let a = if owed > 1e-9 { Action::Raise(t) } else { Action::Bet(t) };
+                if !acts.contains(&a) { acts.push(a); }
             }
+            if allin || (top - maxinv) <= self.cfg.allin_spr * pot_now { acts.push(Action::AllIn(top)); }
         }
         let mut children = vec![];
         for a in &acts {
@@ -414,7 +491,8 @@ impl Game {
             match a {
                 Action::Fold => s.folded[p] = true,
                 Action::Check => {}
-                Action::Call => s.inv[p] = maxinv,
+                // a call can be for less than the bet when the caller is short
+                Action::Call => s.inv[p] = maxinv.min(stacks[p]),
                 Action::Bet(t) | Action::Raise(t) | Action::AllIn(t) => { s.last_inc = t - maxinv; s.inv[p] = *t; s.raises += 1; }
             }
             children.push(self.build(s, (p + 1) % 3, cx));
@@ -425,6 +503,14 @@ impl Game {
         node.actions = acts; node.children = children;
         if alloc { *node.data.get_mut() = NodeData { regrets: vec![0.0; n], strat_sum: vec![0.0; n] }; }
         id
+    }
+
+    /// Fixes the strategy at a decision. Hands whose entries are all zero or negative stay free.
+    pub fn set_lock(&mut self, id: usize, strat: Vec<f32>) {
+        let node = &mut self.nodes[id];
+        let nh = self.hands[node.player].len(); let na = node.actions.len();
+        node.full_lock = (0..nh).all(|h| (0..na).any(|a| strat[a * nh + h] > 0.0));
+        node.locked = Some(strat);
     }
 
     /// Bytes of solver memory the tree needs (whether or not it has been reserved).
@@ -600,7 +686,7 @@ impl Game {
 
     fn strategy(&self, id: usize, avg: bool) -> Vec<f32> {
         let node = &self.nodes[id]; let na = node.actions.len(); let nh = self.hands[node.player].len();
-        if let Some(l) = &node.locked { return l.clone(); }
+        if node.full_lock { return node.locked.clone().unwrap(); }
         let data = unsafe { &*node.data.get() };
         let src = if avg { &data.strat_sum } else { &data.regrets };
         let mut s = vec![0f32; na * nh];
@@ -608,6 +694,13 @@ impl Game {
             let mut tot = 0f32;
             for a in 0..na { let v = src[a * nh + h].max(0.0); s[a * nh + h] = v; tot += v; }
             if tot > 0.0 { for a in 0..na { s[a * nh + h] /= tot; } } else { for a in 0..na { s[a * nh + h] = 1.0 / na as f32; } }
+        }
+        // locked hands play their fixed strategy; the rest stay as solved
+        if let Some(l) = &node.locked {
+            for h in 0..nh {
+                let tot: f32 = (0..na).map(|a| l[a * nh + h].max(0.0)).sum();
+                if tot > 0.0 { for a in 0..na { s[a * nh + h] = l[a * nh + h].max(0.0) / tot; } }
+            }
         }
         s
     }
@@ -687,19 +780,30 @@ impl Game {
     pub fn walk(&self, id: usize, hero: usize, r: [&[f32]; 3], mode: Mode) -> Vec<f32> {
         let node = &self.nodes[id];
         let inv = node.invested; let folded = node.folded;
-        let pot = self.cfg.pot + inv.iter().sum::<f64>();
+        let _pot = self.cfg.pot + inv.iter().sum::<f64>();
         let nhh = self.hands[hero].len();
         match node.kind {
             Kind::FoldEnd => {
-                let util = if node.player == hero { pot - inv[hero] } else { -inv[hero] };
+                let util = if node.player == hero { node.pots[0].0 - inv[hero] } else { -inv[hero] };
                 return self.scaled_reach(hero, r, util);
             }
             Kind::Showdown => {
                 if folded[hero] { return self.scaled_reach(hero, r, -inv[hero]); }
-                let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
-                return if !folded[o1] && !folded[o2] { self.showdown(node.street, hero, o1, r[o1], r[o2], true, pot, inv[hero]) }
-                    else if !folded[o1] { self.showdown(node.street, hero, o1, r[o1], r[o2], false, pot, inv[hero]) }
-                    else { self.showdown(node.street, hero, o2, r[o2], r[o1], false, pot, inv[hero]) };
+                // chips that come straight back (a pot only hero contests) reduce what is at risk
+                let back: f64 = node.pots.iter().filter(|p| p.1[hero] && p.1.iter().filter(|&&m| m).count() == 1).map(|p| p.0).sum();
+                let mut cost = inv[hero] - back;
+                let mut val: Option<Vec<f32>> = None;
+                for (amount, mask) in &node.pots {
+                    let n = mask.iter().filter(|&&m| m).count();
+                    if !mask[hero] || n < 2 { continue; }
+                    let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
+                    let v = if n == 3 { self.showdown(node.street, hero, o1, r[o1], r[o2], true, *amount, cost) }
+                        else if mask[o1] { self.showdown(node.street, hero, o1, r[o1], r[o2], false, *amount, cost) }
+                        else { self.showdown(node.street, hero, o2, r[o2], r[o1], false, *amount, cost) };
+                    cost = 0.0;
+                    val = Some(match val { None => v, Some(mut acc) => { for i in 0..acc.len() { acc[i] += v[i]; } acc } });
+                }
+                return val.unwrap_or_else(|| self.scaled_reach(hero, r, -cost));
             }
             Kind::Chance => {
                 if folded[hero] { return self.scaled_reach(hero, r, -inv[hero]); }
@@ -753,10 +857,17 @@ impl Game {
         }
         let mut val = vec![0f32; nhh];
         match mode {
-            Mode::BestResponse if node.locked.is_none() || self.br_ignores_locks => { for i in 0..nhh { let mut m = f32::MIN; for a in 0..na { m = m.max(vals[a][i]); } val[i] = m; } }
+            Mode::BestResponse if !node.full_lock || self.br_ignores_locks => {
+                for i in 0..nhh {
+                    // a locked hand cannot deviate; a free hand takes its best action
+                    let fixed = !self.br_ignores_locks && node.locked.as_ref().map_or(false, |l| (0..na).any(|a| l[a * nhh + i] > 0.0));
+                    if fixed { for a in 0..na { val[i] += sigma[a * nhh + i] * vals[a][i]; } }
+                    else { let mut m = f32::MIN; for a in 0..na { m = m.max(vals[a][i]); } val[i] = m; }
+                }
+            }
             _ => { for a in 0..na { for i in 0..nhh { val[i] += sigma[a * nhh + i] * vals[a][i]; } } }
         }
-        if let (Mode::Train(t), true) = (mode, node.locked.is_none()) {
+        if let (Mode::Train(t), true) = (mode, !node.full_lock) {
             let tf = t as f32;
             let (pos, neg, sd) = (tf.powf(1.5) / (tf.powf(1.5) + 1.0), 0.5f32, (tf / (tf + 1.0)).powi(2));
             // SAFETY: a node is visited by one thread at a time (river subtrees are disjoint).
@@ -808,7 +919,7 @@ impl Game {
 
     pub fn iterate(&self, t: u32) {
         let rg = &self.cfg.ranges;
-        for hero in 0..3 { self.walk(0, hero, [&rg[0], &rg[1], &rg[2]], Mode::Train(t)); }
+        for hero in 0..3 { if !self.cfg.extra.folded[hero] { self.walk(0, hero, [&rg[0], &rg[1], &rg[2]], Mode::Train(t)); } }
     }
 
     /// Returns (EV, best-response EV) per player, in chips, under the average strategies.
@@ -816,6 +927,7 @@ impl Game {
         let rg = &self.cfg.ranges;
         let mut out = [(0.0, 0.0); 3];
         for hero in 0..3 {
+            if self.cfg.extra.folded[hero] { continue; }
             let z = self.reach_sum(hero, &rg[(hero + 1) % 3], &rg[(hero + 2) % 3]);
             let ev = self.walk(0, hero, [&rg[0], &rg[1], &rg[2]], Mode::Average);
             let br = self.walk(0, hero, [&rg[0], &rg[1], &rg[2]], Mode::BestResponse);

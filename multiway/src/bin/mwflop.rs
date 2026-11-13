@@ -9,7 +9,7 @@ fn spec(narrow: bool, turn_cards: usize, river_cards: usize, max_iter: u32) -> S
     Spec3 {
         ranges: [r[0].into(), r[1].into(), r[2].into()], board: "Kh9s6d".into(), pot: 30.0, stack: 100.0,
         bet_sizes: "66%".into(), raise_sizes: "60%".into(), max_raises: 2, allin_spr: 1.0, accuracy_pct: 0.5, max_iter, leaks: vec![],
-        flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards, river_cards,
+        flop_bet_sizes: String::new(), flop_max_raises: 0, turn_bet_sizes: String::new(), turn_max_raises: 0, threads: 0, turn_cards, river_cards, stacks: None, rake_rate: 0.0, rake_cap: 0.0, raise_mults: String::new(), max_seconds: 0.0, ..Default::default()
     }
 }
 
