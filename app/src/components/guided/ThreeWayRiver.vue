@@ -571,8 +571,32 @@ const progressPct = computed(() => {
   const byIter = progress.value[2] ? progress.value[1] / progress.value[2] : 0;
   return Math.round(100 * Math.max(byAccuracy, byIter));
 });
-/** Takes a spot from the spot builder and solves it. */
-async function loadCustom(p: { format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[]; rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string }) {
+type Custom3 = { format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[]; rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string };
+/** Size and time of a spot from the spot builder, without touching what is on this screen. */
+async function previewCustom(p: Custom3): Promise<{ text: string; problem: string }> {
+  const sz = SIZINGS3.find((x) => x.id === p.sizingId) ?? SIZINGS3[0];
+  const k = p.format === "tourney" ? 100 : 1;
+  const opts = p.board.length === 3 ? DETAILS : [{ id: "exact", turn: 0, river: 0 }, { id: "fast", turn: 0, river: 1 }];
+  const d = opts.find((x) => x.id === p.laterId) ?? opts[0];
+  const sp: api.Spec3 = {
+    ...spec.value, ranges: [p.ranges[0], p.ranges[1], p.ranges[2]], board: p.board.map(cardStr).join(""),
+    pot: p.pot * k, stack: Math.max(...p.stacks) * k, stacks: [p.stacks[0] * k, p.stacks[1] * k, p.stacks[2] * k], rake_rate: Math.max(0, p.rakePct || 0) / 100, rake_cap: Math.max(0, p.rakeCap || 0) * k,
+    flop_bet_sizes: sz.flop, flop_max_raises: sz.turnMax, turn_bet_sizes: sz.turn, turn_max_raises: sz.turnMax, bet_sizes: sz.bet, raise_sizes: sz.raise, max_raises: sz.max,
+    turn_cards: d.turn, river_cards: p.board.length === 5 ? 0 : d.river, leaks: [],
+    accuracy_pct: [0.5, 0.3, 0.1][p.board.length - 3] ?? 0.1, max_iter: [400, 300, 600][p.board.length - 3] ?? 600,
+  };
+  try {
+    const e = await api.mwEstimate(sp);
+    await refreshMemory();
+    const secs = e.secs_per_iter * (e.start === 3 ? 250 : e.start === 4 ? 130 : 200) * 1.2 * (p.habitSeat >= 0 ? 1.6 : 1);
+    const free = memory.availMb ? memory.availMb + memory.heldThreeMb : 0;
+    const problem = free && e.memory_mb >= 0.8 * free ? `This needs about ${gb(e.memory_mb)} of memory and about ${gb(free)} of your ${gb(memory.totalMb)} is free right now. Choose simpler bet sizes or a smaller card sample, or close other programs.` : "";
+    const size = e.memory_mb >= 1024 ? gb(e.memory_mb) : `${Math.max(1, Math.round(e.memory_mb))} MB`;
+    return { text: `${e.nodes.toLocaleString()} decision points, about ${size} of memory. Rough solve time on this computer: ${duration(secs)}.`, problem };
+  } catch (e) { return { text: "", problem: String((e as Error).message ?? e) }; }
+}
+/** Takes a spot from the spot builder and solves it. Resolves when the solve is over. */
+async function loadCustom(p: Custom3): Promise<{ ok: boolean; error: string }> {
   fromBuilder.value = true; format.value = p.format;
   p.names.forEach((n, i) => { players[i].name = n; players[i].preset = ""; players[i].range = p.ranges[i]; });
   hero.value = p.hero; pot.value = p.pot; stacks.splice(0, 3, p.stacks[0], p.stacks[1], p.stacks[2]);
@@ -584,10 +608,12 @@ async function loadCustom(p: { format: "cash" | "tourney"; names: string[]; rang
   if (detailOptions.value.some((x) => x.id === p.laterId)) detailId.value = p.laterId;
   step.value = "setup"; error.value = "";
   await nextTick();
+  try { estimate.value = await api.mwEstimate(spec.value); } catch { /* the solve reports it */ }
+  if (memoryProblem.value) return { ok: false, error: memoryProblem.value };
   await solve();
-  if (error.value || memoryProblem.value) emit("new");
+  return { ok: (step.value as string) === "results" && !error.value, error: error.value };
 }
-defineExpose({ loadCustom });
+defineExpose({ loadCustom, previewCustom });
 async function solve() {
   await refreshMemory();
   if (memoryProblem.value) return;

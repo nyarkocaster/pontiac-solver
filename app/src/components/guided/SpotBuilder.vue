@@ -3,7 +3,7 @@
     <div class="max-w-[1560px] mx-auto px-6 py-5">
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 class="font-display font-extrabold text-[1.9rem] leading-tight tracking-tight">{{ expert ? "Build a spot: every control" : "Study a spot" }}</h1>
+          <h1 class="font-display font-extrabold text-[1.9rem] leading-tight tracking-tight">Study a spot</h1>
           <p class="text-muted mt-0.5 max-w-[80ch]">
             Describe the table and what each player did before the flop. The solver that fits is picked for you: two players, three players, or the closest it can get.
           </p>
@@ -144,7 +144,7 @@
                   </div>
                 </div>
                 <RangeSlider v-model="edits[p.seat]" :label="p.name" />
-                <div v-if="expert" class="mt-1.5">
+                <div class="mt-1.5">
                   <select class="input w-full !py-1 text-xs" :aria-label="`Load a saved range for ${p.name}`" @change="loadPreset(p.seat, $event)">
                     <option value="">Load a built-in range…</option>
                     <option v-for="(r, k) in RANGES" :key="k" :value="k">{{ r.label }}</option>
@@ -194,7 +194,7 @@
                 Solves the hand twice: balanced play first, then your best counter when that opponent plays their type's habits on every street. Pick a player type other than “Solid regular” in step 2 to choose the habit.
               </p>
             </div>
-            <template v-if="expert">
+            <template v-if="true">
               <div v-if="route.kind === 'two' || spot.players.length === 2" class="flex flex-wrap items-end gap-4 mt-4">
                 <label class="field"><span>Raiser's flop bets</span><input v-model="sizes.pfrFlop" class="input w-32" /></label>
                 <label class="field"><span>Caller's flop bets</span><input v-model="sizes.callerFlop" class="input w-32" /></label>
@@ -206,14 +206,14 @@
               </div>
               <div v-else-if="spot.players.length === 3" class="flex flex-wrap items-end gap-4 mt-4">
                 <label class="field"><span>Bet sizes</span>
-                  <select v-model="sizing3" class="input w-80">
+                  <select v-model="sizing3" class="input w-80" @change="touched3 = true">
                     <option value="std">Standard: one size early, river 33% or 75%</option>
-                    <option value="simple">Simple: one size, 66% (fastest)</option>
+                    <option value="simple">Simple: one size, 66% (fastest; best for flops)</option>
                     <option value="big">Detailed: two sizes early, three river sizes</option>
                   </select>
                 </label>
                 <label class="field"><span>Later cards</span>
-                  <select v-model="later3" class="input w-80">
+                  <select v-model="later3" class="input w-80" @change="touched3 = true">
                     <option value="fast">Balanced sample (fastest)</option>
                     <option value="better">Larger sample</option>
                     <option value="exact">Every card (exact; flops need a lot of memory)</option>
@@ -225,7 +225,6 @@
                 </template>
               </div>
             </template>
-            <p v-else class="hint mt-3">Bet sizes, accuracy, rake and card sampling use sensible defaults. The <b>Advanced</b> tab shows this same screen with all of them open.</p>
           </section>
         </div>
 
@@ -252,8 +251,18 @@
           <p v-if="spot.players.length" class="hint mt-1">Listed in the order they act after the flop.</p>
           <div class="mt-3 text-sm font-bold">{{ engineText }}</div>
           <p v-if="stackNote" class="hint mt-1">{{ stackNote }}</p>
-          <button class="btn-solve mt-4" :disabled="!!problem" @click="go">Solve this spot</button>
-          <p v-if="problem" class="mt-2 text-sm font-bold text-[#B42318]">{{ problem }}</p>
+          <p v-if="!problem && estimate.text && !solving" class="hint mt-2">{{ estimate.text }}</p>
+          <div v-if="solving" class="mt-4" role="status">
+            <div class="flex justify-between text-sm font-bold">
+              <span>{{ phaseText }}</span>
+              <button class="text-felt underline" @click="stopEarly">Stop early</button>
+            </div>
+            <div class="h-2 bg-paper rounded mt-1.5 overflow-hidden"><div class="h-full bg-felt transition-all" :style="{ width: progressPct + '%' }"></div></div>
+            <p class="hint mt-1.5">Step {{ progress[1] }} of up to {{ progress[2] }}, {{ elapsedText }} so far. {{ progress[3] >= 100 ? "Measuring accuracy…" : `Within ${progress[3].toFixed(2)}% of the pot so far.` }}</p>
+            <p class="hint mt-1">The result opens by itself when this finishes. You can keep reading this page meanwhile; changes made now apply to the next solve.</p>
+          </div>
+          <button v-else class="btn-solve mt-4" :disabled="!!problem || !!estimate.problem" @click="go">Solve this spot</button>
+          <p v-if="problem || estimate.problem || runError" class="mt-2 text-sm font-bold text-[#B42318]">{{ problem || estimate.problem || runError }}</p>
         </aside>
       </div>
     </div>
@@ -265,15 +274,22 @@ import { computed, reactive, ref, watch } from "vue";
 import RangeSlider from "./RangeSlider.vue";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
 import { parseRange, rangePercent } from "../../guided/rangeTools";
+import { studyCancel, studyProgress } from "../../guided/api";
+import { mwCancel, mwProgress } from "../../guided/api3";
 import { PLAYER_TYPES, SEAT_NAME, TABLE_SIZES, buildPreflop, fmtAmt, routeFor, seatsFor, spotFor, type Act, type SeatInput, type TableSetup, type TypeId } from "../../guided/preflop";
 
-const props = defineProps<{ expert?: boolean }>();
+type Outcome = { ok: boolean; error: string };
+type Preview = { text: string; problem: string };
+const props = defineProps<{
+  run2: (p: Solve2) => Promise<Outcome>; run3: (p: Solve3) => Promise<Outcome>;
+  preview2: (p: Solve2) => Promise<Preview>; preview3: (p: Solve3) => Promise<Preview>;
+}>();
 export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown> }
 export interface Solve3 {
   format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[];
   rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string;
 }
-const emit = defineEmits<{ (e: "solve2", p: Solve2): void; (e: "solve3", p: Solve3): void }>();
+const emit = defineEmits<{ (e: "done", kind: "guided" | "threeway"): void }>();
 
 const BLINDS = [
   { id: "1/2", label: "$1 / $2", sb: 1, bb: 2 }, { id: "1/3", label: "$1 / $3", sb: 1, bb: 3 }, { id: "2/5", label: "$2 / $5", sb: 2, bb: 5 }, { id: "5/10", label: "$5 / $10", sb: 5, bb: 10 },
@@ -392,7 +408,10 @@ const exploitSeat = ref("");
 watch(() => opponentsInSpot.value.map((p) => p.seat).join(","), () => { if (!opponentsInSpot.value.some((p) => p.seat === exploitSeat.value)) exploitSeat.value = ""; });
 const sizes = reactive({ pfrFlop: "33%, 66%", callerFlop: "33%", turn: "75%", river: "75%", raise: "3x" });
 const accuracyPct = ref(0.5);
-const sizing3 = ref("std"); const later3 = ref("fast");
+const sizing3 = ref("simple"); const later3 = ref("fast");
+// flops default to the light tree and a card sample; later streets to fuller sizes and every card. A manual choice sticks.
+const touched3 = ref(false);
+watch(() => board.value.length, (n) => { if (touched3.value) return; sizing3.value = n <= 3 ? "simple" : "std"; later3.value = n <= 3 ? "fast" : "exact"; }, { immediate: true });
 const rakePct = ref(0); const rakeCap = ref(0);
 
 const sprText = computed(() => {
@@ -419,7 +438,7 @@ const problem = computed(() => {
   return "";
 });
 
-function go() {
+function payload(): { two?: Solve2; three?: Solve3 } {
   const ps = spot.value.players; const tourney = table.game === "tourney";
   const hab = ps.find((p) => p.seat === exploitSeat.value);
   const profile = hab ? PLAYER_TYPES.find((t) => t.id === hab.type)?.profile ?? "austin" : null;
@@ -427,7 +446,7 @@ function go() {
   if (ps.length === 2) {
     const k = tourney ? 10 : 1; // tournament amounts go to the two-player screen in tenths of a big blind
     const [oop, ip] = ps;
-    emit("solve2", {
+    return { two: {
       res: {
         heroIsOop: oop.hero, oopRange: edits[oop.seat], ipRange: edits[ip.seat], pot: Math.max(1, Math.round(pre.value.pot * k)),
         stack: Math.max(1, Math.round(Math.min(oop.behind, ip.behind) * k)), pfrIsOop: oop.raisedLast,
@@ -435,15 +454,51 @@ function go() {
       },
       format: tourney ? "hu" : "live", board: [...board.value], profile,
       overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value },
-    });
-  } else {
-    emit("solve3", {
-      format: table.game, names: ps.map((p) => p.name), ranges: ps.map((p) => edits[p.seat]), hero: ps.findIndex((p) => p.hero), pot: pre.value.pot, stacks: ps.map((p) => p.behind),
-      board: [...board.value], rakePct: tourney ? 0 : rakePct.value, rakeCap: tourney ? 0 : rakeCap.value, habitSeat: hab ? ps.indexOf(hab) : -1, profile,
-      // without the expert controls, flops use the single-size tree and a card sample; later streets solve every card
-      sizingId: props.expert ? sizing3.value : board.value.length === 3 ? "simple" : "std", laterId: props.expert ? later3.value : board.value.length === 3 ? "fast" : "exact",
-    });
+    } };
   }
+  return { three: {
+    format: table.game, names: ps.map((p) => p.name), ranges: ps.map((p) => edits[p.seat]), hero: ps.findIndex((p) => p.hero), pot: pre.value.pot, stacks: ps.map((p) => p.behind),
+    board: [...board.value], rakePct: tourney ? 0 : rakePct.value, rakeCap: tourney ? 0 : rakeCap.value, habitSeat: hab ? ps.indexOf(hab) : -1, profile, sizingId: sizing3.value, laterId: later3.value,
+  } };
+}
+
+// size and time of the spot as it stands, refreshed a moment after the last change
+const estimate = reactive<Preview>({ text: "", problem: "" });
+let estTimer: number | undefined; let estToken = 0;
+watch(() => (problem.value ? "" : JSON.stringify(payload())), (key) => {
+  window.clearTimeout(estTimer); const token = ++estToken;
+  if (!key) { estimate.text = ""; estimate.problem = ""; return; }
+  estTimer = window.setTimeout(async () => {
+    const p = payload();
+    const r = p.two ? await props.preview2(p.two) : await props.preview3(p.three!);
+    if (token === estToken) { estimate.text = r.text; estimate.problem = r.problem; }
+  }, 500);
+}, { immediate: true });
+
+// solving stays on this page; the result opens when it is ready
+const solving = ref<"" | "two" | "three">("");
+const runError = ref("");
+const progress = ref<[number, number, number, number]>([0, 0, 1, 100]);
+const elapsed = ref(0);
+const withHabit = ref(false);
+const progressPct = computed(() => Math.min(100, Math.round((progress.value[1] / Math.max(1, progress.value[2])) * 100)));
+const elapsedText = computed(() => (elapsed.value < 60 ? `${elapsed.value}s` : `${Math.floor(elapsed.value / 60)}m ${elapsed.value % 60}s`));
+const phaseText = computed(() => (!withHabit.value ? "Solving…" : progress.value[0] >= 2 ? "Step 2 of 2: your best counter to the habit" : "Step 1 of 2: balanced play"));
+const stopEarly = () => (solving.value === "two" ? studyCancel() : mwCancel());
+async function go() {
+  if (solving.value || problem.value) return;
+  const p = payload(); const kind = p.two ? "two" : "three";
+  solving.value = kind; runError.value = ""; progress.value = [0, 0, 1, 100]; withHabit.value = !!(p.two?.profile || (p.three && p.three.habitSeat >= 0));
+  const began = Date.now(); elapsed.value = 0;
+  const timer = window.setInterval(async () => {
+    elapsed.value = Math.round((Date.now() - began) / 1000);
+    try { const g = kind === "two" ? await studyProgress() : await mwProgress(); progress.value = [g[0], g[1], g[2] || 1, g[3] > 1e5 || g[1] === 0 ? 100 : g[3]]; } catch { /* keep the last reading */ }
+  }, 400);
+  try {
+    const r = p.two ? await props.run2(p.two) : await props.run3(p.three!);
+    if (r.ok) emit("done", kind === "two" ? "guided" : "threeway"); else runError.value = r.error || "The solve was stopped before it produced a result.";
+  } catch (e) { runError.value = String((e as Error).message ?? e); }
+  finally { window.clearInterval(timer); solving.value = ""; }
 }
 </script>
 

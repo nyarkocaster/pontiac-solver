@@ -28,18 +28,11 @@
         class="flex absolute w-full h-full left-0 top-0 gap-3 justify-center"
       >
         <button
-          :class="'flex relative w-40 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'builder' && !store.expert ? 'bg-slate-700 text-blue-200' : '')"
-          @click="store.expert = false; store.navView = 'builder'"
+          :class="'flex relative w-40 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'builder' ? 'bg-slate-700 text-blue-200' : '')"
+          @click="store.navView = 'builder'"
         >
           <AcademicCapIcon class="w-6 h-6" />
           <span class="pl-3">Study a spot</span>
-        </button>
-        <button
-          :class="'flex relative w-36 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'builder' && store.expert ? 'bg-slate-700 text-blue-200' : '')"
-          @click="store.expert = true; store.navView = 'builder'"
-        >
-          <ComputerDesktopIcon class="w-6 h-6" />
-          <span class="pl-3">Advanced</span>
         </button>
         <button
           v-if="store.lastResult"

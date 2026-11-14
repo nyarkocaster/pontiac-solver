@@ -591,15 +591,30 @@ const built = computed(() => custom.value?.res ?? scenario.value.build(seat.valu
 const emit = defineEmits<{ (e: "new"): void }>();
 const newSpot = () => { step.value = "setup"; };
 watch(step, (v) => { if (v === "setup" && custom.value) emit("new"); });
-async function loadCustom(p: { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown> }) {
+type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown> };
+/** Memory a spot from the spot builder needs, without touching what is on this screen. */
+async function previewCustom(p: Custom2): Promise<{ text: string; problem: string }> {
+  const sp = { ...specCore.value, oop_range: p.res.oopRange, ip_range: p.res.ipRange, board: p.board.map((c) => RANK_CHARS[c >> 2] + SUIT_CHARS[c & 3]).join(""), pot: p.res.pot, stack: p.res.stack, leaks: [], ...p.overrides } as api.StudySpec;
+  try {
+    const [mb] = await api.studyMemory(sp);
+    const need = p.profile ? mb * 2 : mb;
+    const size = (x: number) => (x >= 1024 ? (x / 1024).toFixed(1) + " GB" : x.toFixed(0) + " MB");
+    const free = freeMb.value;
+    const problem = free && mb > free * 0.85 ? `This needs about ${size(mb)} of memory but only ${size(free)} is free right now. Use fewer bet sizes, or close other programs.` : "";
+    return { text: `Every turn and river card. About ${size(need)} of memory${free ? `, ${size(free)} free` : ""}. Usually seconds to a few minutes${p.profile ? ", twice over for the habit" : ""}.`, problem };
+  } catch (e) { return { text: "", problem: String((e as Error).message ?? e) }; }
+}
+/** Takes a spot from the spot builder and solves it. Resolves when the solve is over. */
+async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
   custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
   if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
   await nextTick();
   oopRangeEdit.value = p.res.oopRange; ipRangeEdit.value = p.res.ipRange;
   await nextTick();
   await startSolve();
+  return { ok: step.value === "results", error: error.value };
 }
-defineExpose({ loadCustom });
+defineExpose({ loadCustom, previewCustom });
 const oopRangeEdit = ref(""), ipRangeEdit = ref("");
 const resetRanges = () => { oopRangeEdit.value = built.value.oopRange; ipRangeEdit.value = built.value.ipRange; };
 watch(() => [built.value.oopRange, built.value.ipRange], resetRanges, { immediate: true });

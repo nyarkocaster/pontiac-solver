@@ -3,7 +3,7 @@
     <NavBar />
 
     <div v-show="store.navView === 'builder'" style="height: calc(100% - 2.5rem)">
-      <SpotBuilder :expert="store.expert" @solve2="solveTwo" @solve3="solveThree" />
+      <SpotBuilder :run2="run2" :run3="run3" :preview2="preview2" :preview3="preview3" @done="showResult" />
     </div>
 
     <div v-show="store.navView === 'guided'" style="height: calc(100% - 2.5rem)">
@@ -93,8 +93,12 @@ import SpotBuilder, { type Solve2, type Solve3 } from "./guided/SpotBuilder.vue"
 
 const guided = ref<InstanceType<typeof GuidedStudy> | null>(null);
 const threeway = ref<InstanceType<typeof ThreeWayRiver> | null>(null);
-const solveTwo = (p: Solve2) => { store.navView = "guided"; store.lastResult = "guided"; guided.value?.loadCustom(p); };
-const solveThree = (p: Solve3) => { store.navView = "threeway"; store.lastResult = "threeway"; threeway.value?.loadCustom(p); };
+const fail = { ok: false, error: "The solver screen is not ready yet. Try again." };
+const run2 = async (p: Solve2) => (await guided.value?.loadCustom(p)) ?? fail;
+const run3 = async (p: Solve3) => (await threeway.value?.loadCustom(p)) ?? fail;
+const preview2 = async (p: Solve2) => (await guided.value?.previewCustom(p)) ?? { text: "", problem: "" };
+const preview3 = async (p: Solve3) => (await threeway.value?.previewCustom(p)) ?? { text: "", problem: "" };
+const showResult = (kind: "guided" | "threeway") => { store.lastResult = kind; store.navView = kind; };
 
 const store = useStore();
 const header = computed(() => store.headers[store.sideView].join(" > "));
