@@ -7,7 +7,6 @@ pub mod tables;
 pub mod icm;
 pub mod three;
 
-static EQUITY: &[u8] = include_bytes!("../data/preflop_equity_169.bin");
 pub const RANKS: &str = "AKQJT98765432";
 
 /// Name of a starting-hand class by chart cell (row = higher rank, AA top-left, suited above the diagonal).
@@ -18,11 +17,8 @@ pub fn class_name(i: usize) -> String {
 }
 fn combos(i: usize) -> f64 { let (r, c) = (i / 13, i % 13); if r == c { 6.0 } else if c > r { 4.0 } else { 12.0 } }
 
-/// All-in equity of class `a` against class `b` (win plus half of ties).
-pub fn equity(a: usize, b: usize) -> f64 {
-    let k = (a * 169 + b) * 4;
-    f32::from_le_bytes([EQUITY[k], EQUITY[k + 1], EQUITY[k + 2], EQUITY[k + 3]]) as f64
-}
+/// All-in equity of class `a` against class `b` (win plus half of ties), exact over every board.
+pub fn equity(a: usize, b: usize) -> f64 { let (w, t) = three::duel_odds(a, b); w + t / 2.0 }
 
 /// How many hands of class `b` an opponent can hold when we hold one particular hand of class `a`.
 fn compat() -> Vec<f64> {

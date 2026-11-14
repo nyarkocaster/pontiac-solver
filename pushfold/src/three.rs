@@ -2,11 +2,20 @@
 //! Each player has one decision: move all-in (or call all-in) or fold.
 use crate::icm::icm;
 use crate::tables::*;
-use crate::{class_name, equity};
+use crate::class_name;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
-static THREE: &[u8] = include_bytes!("../data/three_way_169.bin");
+// Exact results for every pair and trio of hand classes over every board (built by gen_exact).
+static THREE: &[u8] = include_bytes!("../data/three_way_exact_169.bin");
+static TWO: &[u8] = include_bytes!("../data/two_way_exact_169.bin");
+
+/// Chance that class `a` beats class `b` all-in, and the chance they tie.
+pub fn duel_odds(a: usize, b: usize) -> (f64, f64) {
+    let k = (a * NC + b) * 8;
+    let f = |o: usize| f32::from_le_bytes([TWO[k + o], TWO[k + o + 1], TWO[k + o + 2], TWO[k + o + 3]]) as f64;
+    (f(0), f(4))
+}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Spot3 {
@@ -56,12 +65,13 @@ pub struct PushFold3 {
 struct Game {
     w: Vec<f32>,            // ways to deal (i, j, k)
     ug: [Vec<f32>; 3],      // three-way all-in value per player
-    e2: Vec<f32>,           // heads-up equity
+    e2: Vec<[f32; 2]>,      // heads-up: [first wins, tie]
     ua: [f64; 3], ub: [f64; 3], ud: [f64; 3],
-    uc: [[f64; 3]; 2], ue: [[f64; 3]; 2], uf: [[f64; 3]; 2], // [first-named player wins, second wins]
+    uc: [[f64; 3]; 3], ue: [[f64; 3]; 3], uf: [[f64; 3]; 3], // [first-named player wins, second wins, tie]
 }
 
-fn finals_3way(r: [f64; 3], dead: f64, order: [usize; 3]) -> [f64; 3] {
+/// Final stacks after a three-way all-in. `rank[p]` is each seat's finish (0 = best; equal = tie).
+fn finals_3way(r: [f64; 3], dead: f64, rank: [u8; 3]) -> [f64; 3] {
     let mut sorted = r; sorted.sort_by(|a, b| b.partial_cmp(a).unwrap());
     let cap = sorted[1];
     let c = [r[0].min(cap), r[1].min(cap), r[2].min(cap)];
@@ -72,8 +82,10 @@ fn finals_3way(r: [f64; 3], dead: f64, order: [usize; 3]) -> [f64; 3] {
         let inpot: Vec<usize> = (0..3).filter(|&p| c[p] >= lv - 1e-12).collect();
         let mut pot = (lv - prev) * inpot.len() as f64;
         if first { pot += dead; first = false; }
-        let winner = *order.iter().find(|p| inpot.contains(p)).unwrap();
-        f[winner] += pot; prev = lv;
+        let best = inpot.iter().map(|&p| rank[p]).min().unwrap();
+        let winners: Vec<usize> = inpot.iter().cloned().filter(|&p| rank[p] == best).collect();
+        for &wn in &winners { f[wn] += pot / winners.len() as f64; }
+        prev = lv;
     }
     f
 }
@@ -99,20 +111,24 @@ impl Spot3 {
         let dead = 3.0 * self.ante + self.bb_ante;
         let r = [s[0] - self.ante, s[1] - self.ante, s[2] - self.ante - self.bb_ante];
         let sb = self.small_blind;
-        let duel = |a: usize, b: usize, extra: [f64; 3], pot: f64| -> [[f64; 3]; 2] {
+        let duel = |a: usize, b: usize, extra: [f64; 3], pot: f64| -> [[f64; 3]; 3] {
             let m = r[a].min(r[b]);
-            let mut out = [[0.0; 3]; 2];
+            let mut out = [[0.0; 3]; 3];
             for (n, (win, lose)) in [(a, b), (b, a)].into_iter().enumerate() {
                 let mut f = [r[0] - extra[0], r[1] - extra[1], r[2] - extra[2]];
                 f[win] += m + pot; f[lose] -= m;
                 out[n] = value(f);
             }
+            // a tie: each keeps their own chips and they share what was already in the middle
+            let mut f = [r[0] - extra[0], r[1] - extra[1], r[2] - extra[2]];
+            f[a] += pot / 2.0; f[b] += pot / 2.0;
+            out[2] = value(f);
             out
         };
         let base = tri_base();
         let counts = |t: usize| u16::from_le_bytes([THREE[t * 2], THREE[t * 2 + 1]]) as f32;
-        let probs = |t: usize, o: usize| THREE[NTRI * 2 + t * 6 + o] as f32 / 255.0;
-        let ord_val: Vec<[f64; 3]> = ORDERS.iter().map(|o| value(finals_3way(r, dead, *o))).collect();
+        let probs = |t: usize, o: usize| THREE[NTRI * 2 + t * 13 + o] as f32 / 255.0;
+        let pat_val: Vec<[f64; 3]> = PATTERNS.iter().map(|p| value(finals_3way(r, dead, *p))).collect();
         let n3 = NC * NC * NC;
         let mut w = vec![0f32; n3];
         let mut ug = [vec![0f32; n3], vec![0f32; n3], vec![0f32; n3]];
@@ -124,17 +140,18 @@ impl Spot3 {
             w[at] = counts(t);
             if w[at] == 0.0 { continue; }
             let mut v = [0f64; 3];
-            for (o, ord) in ORDERS.iter().enumerate() {
+            for (o, pat) in PATTERNS.iter().enumerate() {
                 let p = probs(t, o) as f64; if p == 0.0 { continue; }
-                // ORDERS is in sorted positions; turn it into seats
-                let seats = [seat[ord[0]].1, seat[ord[1]].1, seat[ord[2]].1];
-                let oi = ORDERS.iter().position(|x| *x == seats).unwrap();
-                for q in 0..3 { v[q] += p * ord_val[oi][q]; }
+                // the table is by sorted position; turn the finishing ranks into seats
+                let mut by_seat = [0u8; 3];
+                for pos in 0..3 { by_seat[seat[pos].1] = pat[pos]; }
+                let oi = pattern_index(by_seat);
+                for q in 0..3 { v[q] += p * pat_val[oi][q]; }
             }
             for q in 0..3 { ug[q][at] = v[q] as f32; }
         } } }
         Ok(Game {
-            w, ug, e2: (0..NC * NC).map(|x| equity(x / NC, x % NC) as f32).collect(),
+            w, ug, e2: (0..NC * NC).map(|x| { let (wn, t) = duel_odds(x / NC, x % NC); [wn as f32, t as f32] }).collect(),
             ua: value([r[0], r[1] - sb, r[2] + dead + sb]),
             ub: value([r[0], r[1] + dead + 1.0, r[2] - 1.0]),
             ud: value([r[0] + dead + sb + 1.0, r[1] - sb, r[2] - 1.0]),
@@ -152,7 +169,7 @@ type Strat = [Vec<f64>; 6];
 type Vals = [Vec<[f64; 2]>; 6];
 
 fn values(g: &Game, s: &Strat) -> (Vals, [f64; 3], f64) {
-    let mix = |e: f32, u: &[[f64; 3]; 2], p: usize| e as f64 * u[0][p] + (1.0 - e as f64) * u[1][p];
+    let mix = |e: [f32; 2], u: &[[f64; 3]; 3], p: usize| e[0] as f64 * u[0][p] + e[1] as f64 * u[2][p] + (1.0 - e[0] as f64 - e[1] as f64) * u[1][p];
     let parts: Vec<(Vec<[f64; 2]>, Vec<[f64; 2]>, Vec<[f64; 2]>, Vec<[f64; 2]>, Vec<[f64; 2]>, Vec<[f64; 2]>, [f64; 3], f64)> = (0..NC).into_par_iter().map(|i| {
         let z = || vec![[0f64; 2]; NC];
         let (mut btn, mut sbc, mut sbj, mut b1, mut b2, mut b3) = ([0f64; 2], z(), z(), z(), z(), z());

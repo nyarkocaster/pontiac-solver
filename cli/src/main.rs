@@ -670,7 +670,7 @@ fn main() {
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
             let m = v.as_object_mut().unwrap();
             m.insert("ok".into(), json!(true)); m.insert("version".into(), json!(version_string()));
-            m.insert("note".into(), json!("each player may only move all-in (or call all-in) or fold. Stacks in big blinds before antes and blinds. Per decision: pct of all hands, freq and edge by hand class (see classes); edge is what committing gains over folding each time the spot comes up. Three-way all-in results come from a sampled table, so individual close hands can be off by a little."));
+            m.insert("note".into(), json!("each player may only move all-in (or call all-in) or fold. Stacks in big blinds before antes and blinds. Per decision: pct of all hands, freq and edge by hand class (see classes); edge is what committing gains over folding each time the spot comes up."));
             Ok(v)
         })(),
         Some("pushfold") => {

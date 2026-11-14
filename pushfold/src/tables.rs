@@ -21,3 +21,12 @@ pub fn class_of(x: u8, y: u8) -> usize {
     let (r_hi, r_lo) = (12 - hi, 12 - lo);
     if hi == lo { r_hi * 13 + r_hi } else if x % 4 == y % 4 { r_hi * 13 + r_lo } else { r_lo * 13 + r_hi }
 }
+
+/// The thirteen ways three hands can finish, as ranks per position (0 = best; equal ranks tie).
+pub const PATTERNS: [[u8; 3]; 13] = [
+    [0, 1, 2], [0, 2, 1], [1, 0, 2], [2, 0, 1], [1, 2, 0], [2, 1, 0], // no ties
+    [0, 0, 1], [0, 1, 0], [1, 0, 0],                                  // two tie for best
+    [0, 1, 1], [1, 0, 1], [1, 1, 0],                                  // two tie behind the best
+    [0, 0, 0],
+];
+pub fn pattern_index(r: [u8; 3]) -> usize { PATTERNS.iter().position(|p| *p == r).expect("valid finishing pattern") }

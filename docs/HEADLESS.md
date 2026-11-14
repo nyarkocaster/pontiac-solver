@@ -231,12 +231,12 @@ Measured on the same 2-core container: the river example solves in about 1 secon
 ```python
 r = pontiac.pushfold(10)                  # 10 bb effective, blinds 0.5/1, no ante
 r = pontiac.pushfold(8.5, small_blind=0.5, ante=0.125)
-r["jam_pct"], r["call_pct"]               # 0.581, 0.375 at 10 bb
+r["jam_pct"], r["call_pct"]               # 0.583, 0.374 at 10 bb
 r["jam_range"], r["call_range"]           # range text, mixed hands as "Q8o:0.036"
 dict(zip(r["classes"], r["jam"]))["K5o"]  # frequency for one hand class
 ```
 
-The small blind moves all-in or folds; the big blind calls or folds. `stack_bb` is the shorter stack before the blinds are posted. The answer is the equilibrium (checked against published charts: 58% jam / 37% call at 10 bb), found in well under a second. `jam_edge_bb` and `call_edge_bb` say how much each hand gains over folding, so values near zero are close decisions. `ev_small_blind_bb` is the small blind's average result per hand. Heads-up sit-and-gos pay the winner only, so chip values need no prize adjustment.
+The small blind moves all-in or folds; the big blind calls or folds. `stack_bb` is the shorter stack before the blinds are posted. The answer is the equilibrium (58.3% jam / 37.4% call at 10 bb, in line with published charts), found in well under a second. `jam_edge_bb` and `call_edge_bb` say how much each hand gains over folding, so values near zero are close decisions. `ev_small_blind_bb` is the small blind's average result per hand. Heads-up sit-and-gos pay the winner only, so chip values need no prize adjustment.
 
 ### Three-handed, and prize money (ICM)
 
@@ -253,7 +253,8 @@ Command line: `pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 
 - Stacks are in big blinds before antes and blinds. Each decision has `pct`, `range` (text), and `freq` / `edge` per hand class; `edge` is what committing gains over folding each time the spot comes up.
 - `value` is each player's average result: big blinds per hand for chips, expected prize for prize money (`value_before` is the stack's prize value before the hand). `max_gain` is the most any one player could gain by changing only their own ranges.
 - Prize values use the Independent Chip Model (Malmuth-Harville). A call counts as all-in for the caller's whole stack.
-- Three-way all-in results come from a sampled table (24,000 boards), so a hand right on the edge of a range can land on the wrong side. Takes about 10 seconds on 2 cores at the default 200 iterations.
+- All-in results are exact: every board counted for every pair and trio of hand classes, ties as split pots (tables built by `pushfold/src/bin/gen_exact.rs`, checked count for count against direct enumeration by `check_exact.rs`). The trio table stores each result to the nearest 1/255. Card removal from the folded player is ignored in two-way all-ins. Takes about 10 seconds on 2 cores at the default 200 iterations.
+- Checked against published HoldemResources figures for 3-handed 10 bb stacks with 50/30/20 prizes (button 27%, small blind call 7.1%, overcall 1.8%): this gives 27.4%, 7.2%, 1.6%.
 - **Not included:** prize-money payoffs in the postflop solver. Postflop solves play for chips.
 
 ## 7. Extras

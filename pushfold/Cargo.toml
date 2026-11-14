@@ -16,13 +16,13 @@ multiway = { path = "../multiway", optional = true }
 generate = ["dep:multiway"]
 
 [[bin]]
-name = "gen_equity"
-path = "src/bin/gen_equity.rs"
+name = "gen_exact"
+path = "src/bin/gen_exact.rs"
 required-features = ["generate"]
 
 [[bin]]
-name = "gen_three"
-path = "src/bin/gen_three.rs"
+name = "check_exact"
+path = "src/bin/check_exact.rs"
 required-features = ["generate"]
 
 [profile.release]

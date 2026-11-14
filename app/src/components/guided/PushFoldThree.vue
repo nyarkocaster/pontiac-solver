@@ -99,7 +99,7 @@
         <ul class="mt-2 space-y-1.5">
           <li class="flex gap-2"><span class="text-felt font-bold">•</span><span>No player can gain more than {{ gainText }} by changing only their own ranges, so this is as close to balanced play as the model gets.</span></li>
           <li v-if="res.playing_for !== 'chips'" class="flex gap-2"><span class="text-felt font-bold">•</span><span>Prize values use the Independent Chip Model: your chance of each finishing place follows from chip counts alone. It ignores skill, position and rising blinds, and it tends to make very short stacks a little too tight.</span></li>
-          <li class="flex gap-2"><span class="text-felt font-bold">•</span><span>Results of three-way all-ins come from a sampled table, so a hand sitting right on the edge of a range can be on the wrong side of it.</span></li>
+          <li class="flex gap-2"><span class="text-felt font-bold">•</span><span>All-in results are exact: every board was counted for every pair and trio of hands, with split pots handled as split pots.</span></li>
           <li class="flex gap-2"><span class="text-felt font-bold">•</span><span>A call is treated as all-in for the caller's whole stack. Limps and small raises are not part of this calculation.</span></li>
         </ul>
       </div>
