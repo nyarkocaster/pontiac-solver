@@ -4,6 +4,20 @@
 // and connected hands up and big cards with weak offsuit kickers down, the way opening ranges are built.
 export const STRENGTH: string[] = ["AA", "KK", "QQ", "JJ", "AKs", "TT", "AQs", "99", "AKo", "AJs", "88", "AQo", "ATs", "KQs", "77", "AJo", "KJs", "66", "A9s", "ATo", "QJs", "A8s", "55", "KQo", "KTs", "QTs", "A9o", "A7s", "JTs", "44", "A6s", "A5s", "KJo", "A4s", "A8o", "A3s", "K9s", "33", "A2s", "Q9s", "J9s", "KTo", "T9s", "QJo", "K8s", "22", "K7s", "A7o", "QTo", "K6s", "98s", "Q8s", "T8s", "J8s", "JTo", "K5s", "K9o", "87s", "A6o", "K4s", "A5o", "Q7s", "97s", "K3s", "Q6s", "76s", "Q9o", "Q5s", "K8o", "K2s", "T7s", "A4o", "J7s", "65s", "86s", "Q4s", "A3o", "J9o", "Q3s", "T9o", "J6s", "75s", "96s", "Q8o", "Q2s", "J5s", "A2o", "T6s", "J4s", "K7o", "J8o", "J3s", "98o", "K6o", "T5s", "T8o", "J2s", "85s", "95s", "54s", "T4s", "K5o", "64s", "T3s", "Q7o", "74s", "T7o", "87o", "T2s", "97o", "53s", "84s", "Q6o", "K4o", "94s", "93s", "63s", "43s", "J7o", "76o", "K3o", "73s", "Q5o", "T6o", "92s", "86o", "96o", "83s", "52s", "82s", "65o", "K2o", "Q4o", "62s", "75o", "J6o", "42s", "T5o", "72s", "32s", "85o", "Q3o", "54o", "95o", "J5o", "T4o", "64o", "T3o", "Q2o", "74o", "J4o", "53o", "T2o", "84o", "94o", "J3o", "93o", "63o", "43o", "73o", "92o", "83o", "J2o", "52o", "82o", "62o", "42o", "72o", "32o"];
 
+// Hands that normally re-raise before the flop instead of calling. A calling range gets these last.
+export const RERAISE = ["AA", "KK", "QQ", "AKs", "AKo"];
+// The order hands join a calling range: pairs that can flop a set, suited big cards and suited
+// connectors first; offsuit hands later; the re-raising hands only at the very end.
+const CALL_FIRST = [
+  "JJ", "TT", "99", "AQs", "88", "AJs", "KQs", "77", "ATs", "KJs", "QJs", "66", "JTs", "55", "KTs", "QTs", "AQo", "44", "T9s", "33", "22",
+  "98s", "A5s", "87s", "A9s", "76s", "J9s", "65s", "A4s", "K9s", "Q9s", "T8s", "AJo", "KQo", "54s", "A8s", "97s", "A3s", "A2s", "A7s", "A6s",
+  "86s", "75s", "64s", "KJo", "QJo", "ATo", "JTo",
+];
+export const CALLING: string[] = [...CALL_FIRST, ...STRENGTH.filter((h) => !CALL_FIRST.includes(h) && !RERAISE.includes(h)), ...RERAISE.slice().reverse()];
+export type RangeKind = "open" | "call";
+/** A range with no aces or kings in it at full weight is treated as a calling range. */
+export const guessKind = (p: ParsedRange): RangeKind => ((p.weights.get("AA") ?? 0) >= 0.5 || (p.weights.get("KK") ?? 0) >= 0.5 ? "open" : "call");
+
 const RANKS = "AKQJT98765432";
 const rank = new Map(STRENGTH.map((h, i) => [h, i]));
 export const comboCount = (h: string) => (h.length === 2 ? 6 : h[2] === "s" ? 4 : 12);
@@ -84,24 +98,26 @@ export function formatRange(p: ParsedRange): string {
 }
 
 /**
- * Moves a range to about `target` percent of all hands. Going up adds the strongest hands that are
- * not yet fully in; going down removes the weakest hands that are in. Hands the base range already
+ * Moves a range to about `target` percent of all hands. Going up adds the next hands in the order
+ * that are not yet fully in; going down removes the last hands in the order that are in. The order
+ * is hand strength for an opening range, and the calling order (re-raising hands last) for a call. Hands the base range already
  * has stay as they are (including part weights) unless they are the ones removed.
  */
-export function resize(base: ParsedRange, target: number): ParsedRange {
+export function resize(base: ParsedRange, target: number, kind: RangeKind = "open"): ParsedRange {
+  const ORDER = kind === "call" ? CALLING : STRENGTH;
   const weights = new Map(base.weights);
   let pct = rangePercent({ weights, extras: base.extras });
   const step = (h: string, from: number, to: number) => { weights.set(h, to); pct += ((to - from) * comboCount(h) / TOTAL) * 100; };
   if (target > pct) {
-    for (const h of STRENGTH) {
+    for (const h of ORDER) {
       const w = weights.get(h) ?? 0; if (w >= 1) continue;
       const gain = ((1 - w) * comboCount(h) / TOTAL) * 100;
       if (pct + gain / 2 > target) break;
       step(h, w, 1);
     }
   } else {
-    for (let i = STRENGTH.length - 1; i >= 0; i--) {
-      const h = STRENGTH[i]; const w = weights.get(h) ?? 0; if (w <= 0) continue;
+    for (let i = ORDER.length - 1; i >= 0; i--) {
+      const h = ORDER[i]; const w = weights.get(h) ?? 0; if (w <= 0) continue;
       const loss = (w * comboCount(h) / TOTAL) * 100;
       if (pct - loss / 2 < target) break;
       step(h, w, 0);
