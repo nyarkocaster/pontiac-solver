@@ -1,6 +1,6 @@
 <template>
   <div class="h-full overflow-y-auto bg-paper text-ink font-body">
-    <div class="max-w-[1180px] mx-auto px-6 py-6">
+    <div class="mx-auto px-6 py-6" :class="step === 'results' ? 'max-w-[1680px]' : 'max-w-[1180px]'">
       <!-- ================= SETUP ================= -->
       <div v-if="step === 'setup'" class="grid grid-cols-12 gap-8">
         <div class="col-span-7">
@@ -205,7 +205,7 @@
       <!-- ================= RESULTS ================= -->
       <div v-if="step === 'results' && node && summary">
         <div class="flex items-center justify-between gap-4">
-          <button class="btn-quiet" @click="step = 'setup'">New spot</button>
+          <button class="btn-quiet" @click="newSpot">New spot</button>
           <div v-if="summary.locked" class="seg" role="group" aria-label="Which solution to show">
             <button :class="which === 'base' ? 'seg-on' : ''" @click="setWhich('base')">Normal strategy</button>
             <button :class="which === 'locked' ? 'seg-on' : ''" @click="setWhich('locked')">Vs {{ players[habitSolved].name }}'s habit</button>
@@ -243,7 +243,7 @@
         </ActionBar>
 
         <div class="grid grid-cols-12 gap-5 mt-4">
-          <div class="col-span-5 space-y-4">
+          <div class="col-span-5 min-[1500px]:col-span-7 space-y-4 min-[1500px]:space-y-0 min-[1500px]:columns-2 min-[1500px]:gap-4 [&>*]:break-inside-avoid min-[1500px]:[&>*]:mb-4">
             <div v-if="node.kind === 'player'" class="panel">
               <h2 class="font-display font-extrabold text-lg">
                 {{ players[node.player].name }} to act
@@ -357,7 +357,7 @@
             </div>
           </div>
 
-          <div v-if="node.kind === 'player'" class="col-span-7">
+          <div v-if="node.kind === 'player'" class="col-span-7 min-[1500px]:col-span-5">
             <div class="panel">
               <div class="flex items-baseline justify-between">
                 <h3 class="font-bold">{{ players[node.player].name }}'s hands</h3>
@@ -380,7 +380,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import * as api from "../../guided/api3";
 import { studyRangeGrid } from "../../guided/api";
 import { memory, refreshMemory, releaseSolve, startMemoryWatch, gb } from "../../guided/memory";
@@ -409,6 +409,9 @@ const SIZINGS3 = [
 const RANKS_DESC = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
 
 const step = ref<"setup" | "results">("setup");
+const emit = defineEmits<{ (e: "new"): void }>();
+const fromBuilder = ref(false);
+const newSpot = () => { step.value = "setup"; if (fromBuilder.value) emit("new"); };
 const scenarioId = ref("open_two");
 const players = reactive<Seat3[]>([{ name: "", preset: "", range: "" }, { name: "", preset: "", range: "" }, { name: "", preset: "", range: "" }]);
 const hero = ref(1);
@@ -568,6 +571,23 @@ const progressPct = computed(() => {
   const byIter = progress.value[2] ? progress.value[1] / progress.value[2] : 0;
   return Math.round(100 * Math.max(byAccuracy, byIter));
 });
+/** Takes a spot from the spot builder and solves it. */
+async function loadCustom(p: { format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[]; rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string }) {
+  fromBuilder.value = true; format.value = p.format;
+  p.names.forEach((n, i) => { players[i].name = n; players[i].preset = ""; players[i].range = p.ranges[i]; });
+  hero.value = p.hero; pot.value = p.pot; stacks.splice(0, 3, p.stacks[0], p.stacks[1], p.stacks[2]);
+  board.value = [...p.board]; rakePct.value = p.rakePct; rakeCap.value = p.rakeCap;
+  habitSeat.value = p.habitSeat;
+  if (p.profile && PROFILES.some((x) => x.id === p.profile)) profileId.value = p.profile;
+  await nextTick();
+  sizingId.value = p.sizingId;
+  if (detailOptions.value.some((x) => x.id === p.laterId)) detailId.value = p.laterId;
+  step.value = "setup"; error.value = "";
+  await nextTick();
+  await solve();
+  if (error.value || memoryProblem.value) emit("new");
+}
+defineExpose({ loadCustom });
 async function solve() {
   await refreshMemory();
   if (memoryProblem.value) return;

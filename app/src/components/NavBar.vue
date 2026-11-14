@@ -28,59 +28,40 @@
         class="flex absolute w-full h-full left-0 top-0 gap-3 justify-center"
       >
         <button
-          :class="
-            'flex relative w-36 items-center justify-center font-semibold ' +
-            'transition-colors hover:bg-slate-700 hover:text-blue-200 ' +
-            (store.navView === 'guided' ? 'bg-slate-700 text-blue-200' : '')
-          "
-          @click="store.navView = 'guided'"
+          :class="'flex relative w-40 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'builder' && !store.expert ? 'bg-slate-700 text-blue-200' : '')"
+          @click="store.expert = false; store.navView = 'builder'"
         >
           <AcademicCapIcon class="w-6 h-6" />
-          <span class="pl-3">Guided Study</span>
+          <span class="pl-3">Study a spot</span>
         </button>
         <button
-          :class="
-            'flex relative w-44 items-center justify-center font-semibold ' +
-            'transition-colors hover:bg-slate-700 hover:text-blue-200 ' +
-            (store.navView === 'threeway' ? 'bg-slate-700 text-blue-200' : '')
-          "
-          @click="store.navView = 'threeway'"
+          :class="'flex relative w-36 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'builder' && store.expert ? 'bg-slate-700 text-blue-200' : '')"
+          @click="store.expert = true; store.navView = 'builder'"
         >
-          <UserGroupIcon class="w-6 h-6" />
-          <span class="pl-3">3-Way Pots</span>
+          <ComputerDesktopIcon class="w-6 h-6" />
+          <span class="pl-3">Advanced</span>
         </button>
         <button
-          :class="
-            'flex relative w-36 items-center justify-center font-semibold ' +
-            'transition-colors hover:bg-slate-700 hover:text-blue-200 ' +
-            (store.navView === 'pushfold' ? 'bg-slate-700 text-blue-200' : '')
-          "
+          v-if="store.lastResult"
+          :class="'flex relative w-36 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'guided' || store.navView === 'threeway' ? 'bg-slate-700 text-blue-200' : '')"
+          @click="store.navView = store.lastResult"
+        >
+          <ChartBarIcon class="w-6 h-6" />
+          <span class="pl-3">Result</span>
+        </button>
+        <button
+          :class="'flex relative w-36 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'pushfold' ? 'bg-slate-700 text-blue-200' : '')"
           @click="store.navView = 'pushfold'"
         >
           <BoltIcon class="w-6 h-6" />
           <span class="pl-3">Push / Fold</span>
         </button>
         <button
-          :class="
-            'flex relative w-32 items-center justify-center font-semibold ' +
-            'transition-colors hover:bg-slate-700 hover:text-blue-200 ' +
-            (store.navView === 'solver' ? 'bg-slate-700 text-blue-200' : '')
-          "
+          :class="'flex relative w-40 items-center justify-center font-semibold transition-colors hover:bg-slate-700 hover:text-blue-200 ' + (store.navView === 'solver' || store.navView === 'results' ? 'bg-slate-700 text-blue-200' : '')"
           @click="store.navView = 'solver'"
         >
-          <ComputerDesktopIcon class="w-6 h-6" />
-          <span class="pl-3">Advanced</span>
-        </button>
-        <button
-          :class="
-            'flex relative w-48 items-center justify-center font-semibold ' +
-            'transition-colors hover:bg-slate-700 hover:text-blue-200 ' +
-            (store.navView === 'results' ? 'bg-slate-700 text-blue-200' : '')
-          "
-          @click="store.navView = 'results'"
-        >
-          <ChartBarIcon class="w-6 h-6" />
-          <span class="pl-3">Advanced results</span>
+          <UserGroupIcon class="w-6 h-6" />
+          <span class="pl-3">Classic solver</span>
         </button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { sanitizeBetString } from "./utils";
 
-export type NavView = "guided" | "threeway" | "pushfold" | "solver" | "results";
+export type NavView = "builder" | "guided" | "threeway" | "pushfold" | "solver" | "results";
 
 export type SideView =
   | "oop-range"
@@ -205,7 +205,11 @@ export const useLockStore = defineStore("locks", {
 
 export const useStore = defineStore("app", {
   state: () => ({
-    navView: "guided" as NavView,
+    navView: "builder" as NavView,
+    /** the spot builder shows every control */
+    expert: false,
+    /** which screen holds the result of the last solve started from the builder */
+    lastResult: "" as "" | "guided" | "threeway",
     /** Set by the node-lock editor to ask RunSolver to re-init + re-solve with locks. */
     nodelockResolveRequested: false,
     sideView: "oop-range" as SideView,

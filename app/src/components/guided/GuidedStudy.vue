@@ -1,9 +1,9 @@
 <template>
   <div class="h-full overflow-y-auto bg-paper text-ink font-body">
-    <div class="max-w-[1180px] mx-auto px-6 py-6">
+    <div class="mx-auto px-6 py-6" :class="step === 'results' ? 'max-w-[1680px]' : 'max-w-[1180px]'">
       <!-- top row (results) -->
       <div v-if="step === 'results'" class="flex items-center justify-between gap-4">
-        <button class="btn-quiet" @click="step = 'setup'">New spot</button>
+        <button class="btn-quiet" @click="newSpot">New spot</button>
         <button class="btn-quiet" @click="notebookOpen = true">
           Notebook<span v-if="notebook.length" class="ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full bg-felt text-white text-xs px-1.5">{{ notebook.length }}</span>
         </button>
@@ -319,9 +319,9 @@
         <!-- line -->
         <ActionBar class="mt-4" start="Flop" :steps="steps" :now="nowText" :pot="node ? fmt(node.pot) : ''" @goto="goTo" />
 
-        <div class="mt-4 grid grid-cols-12 gap-6">
+        <div class="mt-4 grid grid-cols-12 gap-5">
           <!-- decision -->
-          <div class="col-span-7">
+          <div class="col-span-7 min-[1500px]:col-span-5">
             <div class="bg-white rounded-xl border border-rule p-5">
               <template v-if="node.kind === 'player'">
                 <div class="flex items-baseline justify-between gap-3">
@@ -398,7 +398,7 @@
           </div>
 
           <!-- side panels -->
-          <div class="col-span-5 space-y-4">
+          <div class="col-span-5 min-[1500px]:col-span-7 space-y-4 min-[1500px]:space-y-0 min-[1500px]:columns-2 min-[1500px]:gap-4 [&>*]:break-inside-avoid min-[1500px]:[&>*]:mb-4">
             <section class="panel border-mine">
               <h3 class="font-bold">Your hand</h3>
               <div class="flex items-center gap-2 mt-2">
@@ -524,7 +524,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import HandGrid from "./HandGrid.vue";
 import RangeSlider from "./RangeSlider.vue";
 import ActionBar, { type Step } from "./ActionBar.vue";
@@ -533,7 +533,7 @@ import PlayingCard from "./PlayingCard.vue";
 import RangePreview from "./RangePreview.vue";
 import {
   SCENARIOS, OPPONENTS, SIZINGS, ACCURACY, LEAKS, STRENGTHS, PROFILES, TEXTURES, SEAT_LABEL,
-  RANK_CHARS, SUIT_CHARS, SUIT_SYMBOL, SUIT_COLOR, randomFlop,
+  RANK_CHARS, SUIT_CHARS, SUIT_SYMBOL, SUIT_COLOR, randomFlop, type ScenarioResult,
 } from "../../guided/data";
 import * as api from "../../guided/api";
 import { memory, releaseSolve, startMemoryWatch, gb } from "../../guided/memory";
@@ -571,6 +571,7 @@ const CONFIDENCE = [
 const confidence = ref(0.75);
 
 const scenario = computed(() => SCENARIOS.find((s) => s.id === scenarioId.value)!);
+const fmtKind = computed<"live" | "hu">(() => custom.value?.format ?? scenario.value.format);
 const pickScenario = (id: string) => {
   scenarioId.value = id;
   const s = scenario.value;
@@ -580,10 +581,25 @@ const pickScenario = (id: string) => {
 };
 const seatLabel = (s: string) => SEAT_LABEL[s] ?? (s === "BB" ? "Big blind" : s);
 const fmt = (chips: number) =>
-  scenario.value.format === "hu" ? `${(chips / 10).toFixed(1)}bb` : `$${Number.isInteger(chips) ? chips : chips.toFixed(1)}`;
+  fmtKind.value === "hu" ? `${(chips / 10).toFixed(1)}bb` : `$${Number.isInteger(chips) ? chips : chips.toFixed(1)}`;
 const secs = (s: number) => (s < 90 ? `${Math.round(s)}s` : `${Math.round(s / 60)} min`);
 
-const built = computed(() => scenario.value.build(seat.value, opponent.value, openSize.value, stackIn.value));
+// a spot handed over by the spot builder replaces the built-in scenarios
+const custom = ref<{ res: ScenarioResult; format: "live" | "hu" } | null>(null);
+const override = ref<Record<string, unknown>>({});
+const built = computed(() => custom.value?.res ?? scenario.value.build(seat.value, opponent.value, openSize.value, stackIn.value));
+const emit = defineEmits<{ (e: "new"): void }>();
+const newSpot = () => { step.value = "setup"; };
+watch(step, (v) => { if (v === "setup" && custom.value) emit("new"); });
+async function loadCustom(p: { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown> }) {
+  custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
+  if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
+  await nextTick();
+  oopRangeEdit.value = p.res.oopRange; ipRangeEdit.value = p.res.ipRange;
+  await nextTick();
+  await startSolve();
+}
+defineExpose({ loadCustom });
 const oopRangeEdit = ref(""), ipRangeEdit = ref("");
 const resetRanges = () => { oopRangeEdit.value = built.value.oopRange; ipRangeEdit.value = built.value.ipRange; };
 watch(() => [built.value.oopRange, built.value.ipRange], resetRanges, { immediate: true });
@@ -591,7 +607,7 @@ const oppHelp = computed(() => OPPONENTS.find((o) => o.id === opponent.value)?.h
 const heroIdx = computed(() => (built.value.heroIsOop ? 0 : 1));
 const villIdx = computed(() => 1 - heroIdx.value);
 const villainName = computed(() => (villIdx.value === 0 ? built.value.oopName : built.value.ipName));
-const sizingList = computed(() => SIZINGS[scenario.value.format]);
+const sizingList = computed(() => SIZINGS[fmtKind.value]);
 const sizing = computed(() => sizingList.value.find((s) => s.id === sizingId.value) ?? sizingList.value[0]);
 const accuracy = computed(() => ACCURACY.find((a) => a.id === accuracyId.value)!);
 
@@ -652,6 +668,7 @@ const specCore = computed<api.StudySpec>(() => {
     turn_bet: s.turn, river_bet: s.river, raise: s.raise, allin_threshold: 1.5,
     accuracy_pct: accuracy.value.pct, max_iter: accuracy.value.iters, leaks: leakList.value, threads: threads.value,
     low_memory: false, freeze_rest: freezeRest.value, confidence: confidence.value,
+    ...(custom.value ? override.value : {}),
   };
 });
 const spec = computed<api.StudySpec>(() => ({ ...specCore.value, low_memory: lowMemory.value }));

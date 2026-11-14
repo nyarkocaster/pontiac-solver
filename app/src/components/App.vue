@@ -2,12 +2,16 @@
   <div class="min-w-[1080px]" :style="{ height: clientHeight + 'px' }">
     <NavBar />
 
+    <div v-show="store.navView === 'builder'" style="height: calc(100% - 2.5rem)">
+      <SpotBuilder :expert="store.expert" @solve2="solveTwo" @solve3="solveThree" />
+    </div>
+
     <div v-show="store.navView === 'guided'" style="height: calc(100% - 2.5rem)">
-      <GuidedStudy />
+      <GuidedStudy ref="guided" @new="store.navView = 'builder'" />
     </div>
 
     <div v-show="store.navView === 'threeway'" style="height: calc(100% - 2.5rem)">
-      <ThreeWayRiver />
+      <ThreeWayRiver ref="threeway" @new="store.navView = 'builder'" />
     </div>
 
     <div v-show="store.navView === 'pushfold'" style="height: calc(100% - 2.5rem)">
@@ -85,6 +89,12 @@ import ResultViewer from "./ResultViewer.vue";
 import GuidedStudy from "./guided/GuidedStudy.vue";
 import ThreeWayRiver from "./guided/ThreeWayRiver.vue";
 import PushFold from "./guided/PushFold.vue";
+import SpotBuilder, { type Solve2, type Solve3 } from "./guided/SpotBuilder.vue";
+
+const guided = ref<InstanceType<typeof GuidedStudy> | null>(null);
+const threeway = ref<InstanceType<typeof ThreeWayRiver> | null>(null);
+const solveTwo = (p: Solve2) => { store.navView = "guided"; store.lastResult = "guided"; guided.value?.loadCustom(p); };
+const solveThree = (p: Solve3) => { store.navView = "threeway"; store.lastResult = "threeway"; threeway.value?.loadCustom(p); };
 
 const store = useStore();
 const header = computed(() => store.headers[store.sideView].join(" > "));
