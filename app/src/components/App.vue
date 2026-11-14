@@ -3,7 +3,7 @@
     <NavBar />
 
     <div v-show="store.navView === 'builder'" style="height: calc(100% - 2.5rem)">
-      <SpotBuilder :run2="run2" :run3="run3" :preview2="preview2" :preview3="preview3" @done="showResult" />
+      <SpotBuilder :run2="run2" :run3="run3" :preview2="preview2" :preview3="preview3" :quick-flop="quickFlop" @done="showResult" />
     </div>
 
     <div v-show="store.navView === 'guided'" style="height: calc(100% - 2.5rem)">
@@ -98,6 +98,7 @@ const run2 = async (p: Solve2) => (await guided.value?.loadCustom(p)) ?? fail;
 const run3 = async (p: Solve3) => (await threeway.value?.loadCustom(p)) ?? fail;
 const preview2 = async (p: Solve2) => (await guided.value?.previewCustom(p)) ?? { text: "", problem: "" };
 const preview3 = async (p: Solve3) => (await threeway.value?.previewCustom(p)) ?? { text: "", problem: "" };
+const quickFlop = async (p: Solve2, flop: number[]) => { if (store.lastResult === "guided") store.lastResult = ""; if (!guided.value) throw new Error(fail.error); return guided.value.quickFlop(p, flop); };
 const showResult = (kind: "guided" | "threeway") => { store.lastResult = kind; store.navView = kind; };
 
 const store = useStore();

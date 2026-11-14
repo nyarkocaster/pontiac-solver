@@ -234,6 +234,8 @@ pub struct NodeView {
     pub cards: Vec<(String, usize)>, // chance node: dealable cards (label, id)
     pub locked: bool,
     pub range_combos: [f64; 2],
+    /// per player: (chance to win, weight) for every hand still in range, for equity graphs
+    pub curves: Vec<Vec<[f32; 2]>>,
     /// acting player's exact hands still in range
     pub combos: Vec<Combo>,
 }
@@ -670,6 +672,7 @@ pub fn node_view(game: &mut PostFlopGame, history: &[usize]) -> Result<NodeView,
         let ev = game.expected_values(p);
         v.equity[p] = weighted_average_f(&eq, &w);
         v.ev[p] = weighted_average_f(&ev, &w);
+        v.curves.push(eq.iter().zip(&w).filter(|(_, &x)| x > 0.0).map(|(&e, &x)| [e, x]).collect());
     }
     if game.is_chance_node() {
         v.kind = "chance".into();

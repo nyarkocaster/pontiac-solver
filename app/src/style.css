@@ -83,3 +83,33 @@ input.input-error {
     transform: rotate(360deg);
   }
 }
+
+/* ---- Pontiac theme: charcoal, deep burgundy and brushed metal ---- */
+:root {
+  --ink: 27 20 23; --muted: 104 94 99; --paper: 244 242 243; --surface: 255 255 255; --surface2: 255 255 255; --rule: 224 217 220; --chrome: 120 124 133;
+  --felt: 123 30 46; --felt-dark: 94 21 34; --felt-hi: 150 44 62; --felt-light: 247 234 237; --mine: 242 183 5; --mine-light: 255 246 214;
+  --danger: 180 35 24; --suit-h: 200 16 46; --suit-d: 31 95 191; --suit-c: 30 122 60;
+}
+.dark {
+  --ink: 238 233 235; --muted: 168 159 165; --paper: 17 15 18; --surface: 29 26 30; --surface2: 39 35 41; --rule: 58 52 61; --chrome: 201 204 211;
+  --felt: 158 38 60; --felt-dark: 118 26 44; --felt-hi: 190 58 82; --felt-light: 52 26 34; --mine: 242 183 5; --mine-light: 61 50 14;
+  --danger: 255 138 128; --suit-h: 255 107 122; --suit-d: 110 168 255; --suit-c: 95 201 128;
+  color-scheme: dark;
+}
+html, body { background: rgb(var(--paper)); }
+.suit-h { color: rgb(var(--suit-h)); } .suit-d { color: rgb(var(--suit-d)); } .suit-c { color: rgb(var(--suit-c)); }
+/* dark panels get a faint sheen and a bright top edge, like polished trim */
+.dark .bg-paper .panel, .dark .bg-paper section.bg-surface, .dark .bg-paper aside .bg-surface { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0) 40%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 8px 24px rgb(0 0 0 / 0.28); }
+.dark .bg-paper input, .dark .bg-paper select, .dark .bg-paper textarea { background-color: rgb(var(--surface2)); color: rgb(var(--ink)); border-color: rgb(var(--rule)); }
+.dark .bg-paper input::placeholder, .dark .bg-paper textarea::placeholder { color: rgb(var(--muted)); }
+.dark .bg-paper .bg-ink, .dark .bg-paper .\!bg-ink { color: rgb(var(--paper)) !important; }
+.dark .bg-paper .ring-white { --tw-ring-color: rgb(var(--surface)); }
+/* accent surfaces: burgundy with a soft highlight, like paint under a clear coat */
+.bg-paper .bg-felt:not(.h-full), .bg-paper button.bg-felt { background-image: linear-gradient(180deg, rgb(var(--felt-hi)), rgb(var(--felt)) 55%, rgb(var(--felt-dark))); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16); }
+/* brushed-metal top bar */
+.metal-bar { background: linear-gradient(180deg, #2c282d 0%, #1a171b 55%, #121013 100%); border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, transparent, #8f939c 18%, #f2f3f5 50%, #8f939c 82%, transparent) 1; }
+.chrome-text { background: linear-gradient(180deg, #ffffff 0%, #d7dae0 45%, #8e929b 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.dark .bg-paper h1.font-display { background: linear-gradient(180deg, #ffffff 10%, #c3c6cd 95%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bg-paper ::selection { background: rgb(var(--felt) / 0.35); }
+.bg-paper * { scrollbar-color: rgb(var(--rule)) transparent; }
+.bg-paper .step-num.step-num { background: linear-gradient(180deg, rgb(var(--felt-hi)), rgb(var(--felt-dark))); color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25); }

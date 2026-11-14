@@ -145,6 +145,8 @@ pub struct NodeView3 {
     pub locked: bool,
     /// false when EVs were skipped to answer quickly
     pub has_ev: bool,
+    /// per player: (chance to win, weight) for every hand still in range, for equity graphs
+    pub curves: Vec<Vec<[f32; 2]>>,
     /// chance only: how many cards could really come (more than `cards` when the solve used a sample)
     pub cards_possible: usize,
 }
@@ -664,7 +666,7 @@ pub fn node_view(game: &Game, history: &[usize], with_ev: bool) -> Result<NodeVi
         id = game.nodes[id].children[a];
     }
     let (kind, inv, folded, player, dealt, blen) = { let n = &game.nodes[id]; (n.kind, n.invested, n.folded, n.player, n.dealt, game.board_len(n)) };
-    let mut v = NodeView3 { pot: game.cfg.pot + inv.iter().sum::<f64>(), invested: inv, folded, stack: game.cfg.stack, board, has_ev: with_ev, line_frequency: line_freq,
+    let mut v = NodeView3 { curves: vec![vec![]; 3], pot: game.cfg.pot + inv.iter().sum::<f64>(), invested: inv, folded, stack: game.cfg.stack, board, has_ev: with_ev, line_frequency: line_freq,
         stacks: [(game.stacks[0] - inv[0]).max(0.0), (game.stacks[1] - inv[1]).max(0.0), (game.stacks[2] - inv[2]).max(0.0)],
         street: match blen { 3 => "flop".into(), 4 => "turn".into(), _ => "river".into() }, ..Default::default() };
     let mut per_hand: Vec<(Vec<f64>, Vec<f32>, Vec<f32>)> = vec![]; // (weight, ev, equity) per player
@@ -673,6 +675,7 @@ pub fn node_view(game: &Game, history: &[usize], with_ev: bool) -> Result<NodeVi
         let z = game.reach_sum(p, &r[(p + 1) % 3], &r[(p + 2) % 3]);
         let cfv = if with_ev { game.walk(id, p, [&r[0], &r[1], &r[2]], Mode::Average) } else { vec![0.0; game.hands[p].len()] };
         let eq = game.equity(dealt, p, [&r[0], &r[1], &r[2]], folded);
+        v.curves[p] = game.hands[p].iter().enumerate().filter_map(|(k, &h)| { let wt = r[p][h as usize] as f64 * z[k] as f64; if wt > 1e-9 { Some([eq[k] as f32, wt as f32]) } else { None } }).collect();
         let nh = game.hands[p].len();
         let mut w = vec![0f64; nh]; let mut evh = vec![0f32; nh];
         let (mut zs, mut es, mut qs) = (0f64, 0f64, 0f64);

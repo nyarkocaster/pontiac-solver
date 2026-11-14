@@ -1,6 +1,13 @@
 <template>
   <nav class="action-bar" aria-label="Hand so far">
     <div class="flex items-stretch gap-1.5 overflow-x-auto pb-1">
+      <div v-if="board && board.length" class="board" :aria-label="'Board: ' + board.join(' ')">
+        <span class="tile-top">Board</span>
+        <span class="flex gap-1">
+          <span v-for="c in board" :key="c" class="bcard" :class="SUIT_COLOR[c[1]]">{{ c[0] === "T" ? "10" : c[0] }}<span class="text-[0.8em]">{{ SUIT_SYMBOL[c[1]] }}</span></span>
+          <span v-for="k in Math.max(0, 5 - board.length)" :key="'e' + k" class="bcard bcard-empty" aria-hidden="true"></span>
+        </span>
+      </div>
       <button class="tile" :class="steps.length === 0 ? 'tile-here' : ''" title="Back to the start" @click="$emit('goto', 0)">
         <span class="tile-top">Start</span>
         <span class="tile-main">{{ start }}</span>
@@ -31,13 +38,16 @@
 <script setup lang="ts">
 import { SUIT_COLOR, SUIT_SYMBOL } from "../../guided/data";
 export interface Step { who: string; text: string; card?: string; color?: string }
-defineProps<{ start: string; steps: Step[]; now: string; pot?: string }>();
+defineProps<{ start: string; steps: Step[]; now: string; pot?: string; board?: string[] }>();
 defineEmits<{ (e: "goto", n: number): void }>();
 </script>
 
 <style scoped>
 .action-bar { @apply sticky top-0 z-30 -mx-2 px-2 pt-2 pb-1 bg-paper/95 backdrop-blur border-b border-rule; }
-.tile { @apply flex flex-col justify-center text-left min-w-[5.5rem] px-3 py-1.5 rounded-lg bg-white border border-rule hover:border-felt transition-colors whitespace-nowrap; }
+.board { @apply sticky left-0 z-10 flex flex-col justify-center gap-0.5 pl-1 pr-3 mr-1 bg-paper border-r border-rule; }
+.bcard { @apply inline-flex items-center justify-center w-9 h-11 rounded-md bg-surface border border-rule font-display font-extrabold text-base leading-none shadow-sm; }
+.bcard-empty { @apply bg-transparent border-dashed shadow-none; }
+.tile { @apply flex flex-col justify-center text-left min-w-[5.5rem] px-3 py-1.5 rounded-lg bg-surface border border-rule hover:border-felt transition-colors whitespace-nowrap; }
 .tile-card { @apply min-w-[3.75rem] items-center text-center; }
 .tile-now { @apply border-felt bg-felt-light hover:border-felt cursor-default; }
 .tile-here { @apply border-ink; }

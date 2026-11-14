@@ -20,8 +20,8 @@
         </div>
         <div
           class="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-display"
-          :class="cell.weight <= 0 ? 'text-[#B6BDC9]' : 'text-ink'"
-          :style="cell.weight > 0 ? 'text-shadow: 0 0 2px #fff, 0 0 2px #fff' : ''"
+          :class="cell.weight <= 0 ? 'text-muted opacity-60' : share(i) >= 0.5 ? 'text-[#1B1417]' : 'text-ink'"
+          :style="cell.weight > 0 && share(i) >= 0.5 ? 'text-shadow: 0 0 2px #fff, 0 0 2px #fff' : ''"
         >
           {{ label(i) }}
         </div>

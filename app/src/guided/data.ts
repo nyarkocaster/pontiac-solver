@@ -245,7 +245,7 @@ export const PROFILES: { id: string; label: string; help: string; leaks: Record<
 export const RANK_CHARS = "23456789TJQKA";
 export const SUIT_CHARS = "cdhs";
 export const SUIT_SYMBOL: Record<string, string> = { c: "♣", d: "♦", h: "♥", s: "♠" };
-export const SUIT_COLOR: Record<string, string> = { c: "text-[#1E7A3C]", d: "text-[#1F5FBF]", h: "text-[#C8102E]", s: "text-ink" };
+export const SUIT_COLOR: Record<string, string> = { c: "suit-c", d: "suit-d", h: "suit-h", s: "text-ink" };
 export const cardStr = (id: number) => RANK_CHARS[id >> 2] + SUIT_CHARS[id & 3];
 
 export const TEXTURES: { id: string; label: string; test: (c: number[]) => boolean }[] = [

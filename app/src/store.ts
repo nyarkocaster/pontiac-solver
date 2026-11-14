@@ -206,8 +206,8 @@ export const useLockStore = defineStore("locks", {
 export const useStore = defineStore("app", {
   state: () => ({
     navView: "builder" as NavView,
-    /** the spot builder shows every control */
-    expert: false,
+    /** "dark" or "light"; remembered between sessions when the browser allows it */
+    theme: ((() => { try { return localStorage.getItem("pontiac-theme") || "dark"; } catch { return "dark"; } })()) as "dark" | "light",
     /** which screen holds the result of the last solve started from the builder */
     lastResult: "" as "" | "guided" | "threeway",
     /** Set by the node-lock editor to ask RunSolver to re-init + re-solve with locks. */

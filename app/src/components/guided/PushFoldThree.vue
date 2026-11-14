@@ -36,7 +36,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-4 mt-4">
         <button class="btn-go" :disabled="busy || !!problem" @click="run">{{ busy ? "Working…" : "Find the ranges" }}</button>
-        <span v-if="problem" class="text-sm font-bold text-[#B42318]">{{ problem }}</span>
+        <span v-if="problem" class="text-sm font-bold text-danger">{{ problem }}</span>
         <span v-else-if="busy" class="text-sm text-muted">Usually 5 to 20 seconds.</span>
         <span v-else class="text-sm text-muted">Stacks in big blinds: {{ stackBb.map((x) => x.toFixed(1)).join(" / ") }}</span>
       </div>
@@ -46,7 +46,7 @@
         in the hand, for example a fourth player who already folded on the bubble.
       </p>
     </div>
-    <p v-if="error" class="mt-3 text-sm font-bold text-[#B42318]">{{ error }}</p>
+    <p v-if="error" class="mt-3 text-sm font-bold text-danger">{{ error }}</p>
 
     <template v-if="res">
       <div class="panel mt-5">
@@ -75,7 +75,7 @@
               :title="`${res.classes[i]}: ${Math.round(f * 100)}%`"
               @click="picked = picked && picked.d === di && picked.i === i ? null : { d: di, i }"
             >
-              <div class="absolute inset-0 bg-white"></div>
+              <div class="absolute inset-0 bg-surface"></div>
               <div class="absolute inset-y-0 left-0" :style="{ width: f * 100 + '%', background: COLORS[di] }"></div>
               <div class="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-display" :class="f > 0.5 ? 'text-white' : 'text-muted'">{{ res.classes[i] }}</div>
             </div>
@@ -123,7 +123,7 @@ const res = ref<PushFold3 | null>(null);
 const busy = ref(false);
 const error = ref("");
 const picked = ref<{ d: number; i: number } | null>(null);
-const COLORS = ["#0E6B5C", "#2F5FB3", "#0E6B5C", "#2F5FB3", "#2F5FB3", "#7A4FB5"];
+const COLORS = ["rgb(var(--felt))", "#2F5FB3", "rgb(var(--felt))", "#2F5FB3", "#2F5FB3", "#7A4FB5"];
 
 const nums = (t: string) => t.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean).map(Number);
 const stackBb = computed(() => stacks.map((x) => x / bb.value));
@@ -162,7 +162,7 @@ async function run() {
 .field { @apply flex flex-col text-sm gap-1 font-bold; }
 .input { @apply rounded-md border-rule text-sm font-normal focus:border-felt focus:ring-felt; }
 .hint { @apply text-sm text-muted; }
-.panel { @apply bg-white rounded-xl border border-rule p-4; }
+.panel { @apply bg-surface rounded-xl border border-rule p-4; }
 .btn-go { @apply px-5 py-2 rounded-lg bg-felt text-white font-bold hover:opacity-90 disabled:opacity-50; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { @apply outline-none ring-2 ring-felt ring-offset-1; }
 </style>

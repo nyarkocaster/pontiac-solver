@@ -1,205 +1,11 @@
 <template>
   <div class="h-full overflow-y-auto bg-paper text-ink font-body">
     <div class="mx-auto px-6 py-6" :class="step === 'results' ? 'max-w-[1680px]' : 'max-w-[1180px]'">
-      <!-- ================= SETUP ================= -->
-      <div v-if="step === 'setup'" class="grid grid-cols-12 gap-8">
-        <div class="col-span-7">
-          <h1 class="font-display font-extrabold text-[2rem] leading-tight tracking-tight">
-            Three-way pots <span class="align-middle text-xs font-body font-bold bg-mine-light border border-mine rounded px-1.5 py-0.5">experimental</span>
-          </h1>
-          <p class="text-muted mt-1 max-w-[62ch]">
-            Three players see a flop, turn or river. The solver finds a strategy for all three where nobody can do
-            better by changing their own play, then, if you choose, how to adjust when one opponent has a habit.
-          </p>
-
-          <section class="mt-7">
-            <h2 class="step-title"><span class="step-num">1</span>Who is in the hand?</h2>
-            <div class="flex flex-wrap items-center gap-2 mt-3" role="group" aria-label="Game type">
-              <button class="pill" :class="format === 'cash' ? 'pill-on' : ''" :aria-pressed="format === 'cash'" @click="setFormat('cash')">Cash game</button>
-              <button class="pill" :class="format === 'tourney' ? 'pill-on' : ''" :aria-pressed="format === 'tourney'" @click="setFormat('tourney')">Tournament</button>
-            </div>
-            <div v-if="format === 'tourney'" class="panel !p-3 mt-3">
-              <div class="flex flex-wrap items-end gap-4">
-                <label class="field"><span>Stack depth before the hand (bb)</span><input v-model.number="depth" type="number" min="3" max="300" step="any" class="input w-28" /></label>
-                <div class="flex flex-wrap gap-1.5 pb-0.5"><button v-for="n in [15, 20, 25, 30, 40]" :key="n" class="pill !py-1" :class="depth === n ? 'pill-on' : ''" @click="depth = n">{{ n }} bb</button></div>
-                <label class="field"><span>Open raise to (bb)</span><input v-model.number="openTo" type="number" min="2" max="10" step="0.1" class="input w-24" /></label>
-                <label class="field">
-                  <span>Antes</span>
-                  <select v-model="anteKind" class="input w-52">
-                    <option value="bb">Big-blind ante (1 bb)</option>
-                    <option value="each">Each player, 9 at the table (0.125 bb)</option>
-                    <option value="none">None</option>
-                  </select>
-                </label>
-              </div>
-              <p class="hint mt-2 max-w-[75ch]">
-                Amounts are in big blinds. The pot and stacks in step 3 are worked out from these: the opener raises, two
-                players call (one of them the big blind), the small blind folds. Ranges switch to tournament starting
-                points for this depth; they are reasonable defaults, not solved ranges, so adjust them with the sliders.
-                The solve plays for chips: prize-money pressure is not part of it yet (use the Push / Fold tab for that).
-              </p>
-            </div>
-            <div class="grid grid-cols-1 gap-2.5 mt-3">
-              <button v-for="s in SCENARIOS3" :key="s.id" class="choice" :class="scenarioId === s.id ? 'choice-on' : ''" :aria-pressed="scenarioId === s.id" @click="pickScenario(s.id)">
-                <div class="font-bold">{{ s.label }}</div>
-                <div class="text-sm text-muted mt-0.5">{{ s.help }}</div>
-              </button>
-            </div>
-            <div class="mt-4 space-y-3">
-              <div v-for="(p, i) in players" :key="i" class="panel !p-3">
-                <div class="flex flex-wrap items-end gap-3">
-                  <label class="field">
-                    <span>{{ ["Acts first", "Acts second", "Acts last"][i] }}</span>
-                    <input v-model="p.name" class="input w-44" maxlength="24" />
-                  </label>
-                  <label class="field">
-                    <span>Starting range</span>
-                    <select class="input w-64" :value="p.preset" @change="setPreset(i, ($event.target as HTMLSelectElement).value)">
-                      <option value="">Custom (edit below)</option>
-                      <option v-for="(r, k) in RANGES" :key="k" :value="k">{{ r.label }}</option>
-                    </select>
-                  </label>
-                  <label class="flex items-center gap-1.5 text-sm font-bold pb-2">
-                    <input type="radio" name="hero3" :checked="hero === i" class="text-felt focus:ring-felt" @change="hero = i" /> This is me
-                  </label>
-                  <span class="ml-auto text-sm text-muted pb-2">{{ comboText(i) }}</span>
-                </div>
-                <textarea v-model="p.range" rows="2" class="input font-body text-xs w-full mt-2" @input="p.preset = ''"></textarea>
-                <RangeSlider v-model="p.range" :label="p.name" />
-              </div>
-            </div>
-            <p class="hint mt-2 max-w-[70ch]">
-              Ranges are what each player could hold when your spot starts. The built-in ones are pre-flop ranges, so
-              they fit a flop spot as they are, and the solver narrows them street by street. If you start on the turn
-              or river after earlier betting, trim out the hands that would have folded and raise the pot below.
-            </p>
-          </section>
-
-          <section class="mt-8">
-            <h2 class="step-title"><span class="step-num">2</span>Pick the board: three cards for a flop, four for a turn, five for a river</h2>
-            <div class="flex flex-wrap gap-2 mt-3 items-center">
-              <button class="pill" @click="randomBoard(5)">Random river</button>
-              <button class="pill" :disabled="!board.length" @click="board = []">Clear</button>
-              <button class="pill" @click="randomBoard(4)">Random turn</button>
-              <button class="pill" @click="randomBoard(3)">Random flop</button>
-              <span class="text-sm text-muted">{{ board.length }} chosen{{ board.length === 3 ? " (flop spot)" : board.length === 4 ? " (turn spot)" : board.length === 5 ? " (river spot)" : "" }}</span>
-            </div>
-            <div class="mt-3 inline-grid gap-1" style="grid-template-columns: repeat(13, 2.25rem)" role="group" aria-label="Choose board cards">
-              <template v-for="s in [3, 2, 1, 0]" :key="s">
-                <button
-                  v-for="r in RANKS_DESC"
-                  :key="r * 4 + s"
-                  class="deck-btn"
-                  :class="[SUIT_COLOR[SUIT_CHARS[s]], board.includes(r * 4 + s) ? 'deck-on' : '']"
-                  :disabled="!board.includes(r * 4 + s) && board.length >= 5"
-                  :aria-pressed="board.includes(r * 4 + s)"
-                  @click="toggleCard(r * 4 + s)"
-                >
-                  {{ RANK_CHARS[r] }}{{ SUIT_SYMBOL[SUIT_CHARS[s]] }}
-                </button>
-              </template>
-            </div>
-          </section>
-
-          <section class="mt-8">
-            <h2 class="step-title"><span class="step-num">3</span>Money and bet sizes</h2>
-            <div class="flex flex-wrap gap-5 mt-3 items-end">
-              <label class="field"><span>Pot now ({{ unit }})</span><input v-model.number="pot" type="number" min="0" step="any" class="input w-28" /></label>
-              <label v-for="(p, i) in players" :key="i" class="field"><span class="max-w-[11rem] truncate" :title="p.name">{{ p.name || "Player " + (i + 1) }}'s stack ({{ unit }})</span><input v-model.number="stacks[i]" type="number" min="0" step="any" class="input w-28" /></label>
-              <label class="field">
-                <span>Bet sizes</span>
-                <select v-model="sizingId" class="input w-72">
-                  <option v-for="s in SIZINGS3" :key="s.id" :value="s.id">{{ s.label }}</option>
-                </select>
-              </label>
-            </div>
-            <div v-if="board.length === 3 || board.length === 4" class="mt-4">
-              <label class="field">
-                <span>Later cards to solve</span>
-                <select v-model="detailId" class="input w-[34rem] max-w-full">
-                  <option v-for="d in detailOptions" :key="d.id" :value="d.id">{{ d.label }}</option>
-                </select>
-              </label>
-              <p class="hint mt-2 max-w-[70ch]">
-                Solving every possible turn and river card is slow and memory-hungry. A balanced sample keeps every card
-                that matters for flushes and one or two cards of each rank for the rest. In tests it changed hand values
-                by well under 1%.
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-5 mt-4 items-end">
-              <label class="field"><span>Rake (% of the pot)</span><input v-model.number="rakePct" type="number" min="0" max="20" step="0.5" class="input w-28" /></label>
-              <label class="field"><span>Rake cap ({{ unit }}, 0 = none)</span><input v-model.number="rakeCap" type="number" min="0" class="input w-28" /></label>
-            </div>
-            <p class="hint mt-2 max-w-[70ch]">
-              Stacks are what each player has behind, on top of the pot. They can differ: a shorter stack that goes
-              all-in plays for a main pot, and the other two play on for a side pot. Leave rake at 0 for tournaments
-              and sit-and-gos; cash games usually take around 5% up to a cap.
-            </p>
-          </section>
-
-          <section class="mt-8">
-            <h2 class="step-title"><span class="step-num">4</span>Does an opponent have a habit? <span class="font-body font-normal text-sm text-muted">(optional)</span></h2>
-            <div class="flex flex-wrap gap-2 mt-3">
-              <button class="pill" :class="habitSeat === -1 ? 'pill-on' : ''" @click="habitSeat = -1">No habit</button>
-              <template v-for="(p, i) in players" :key="i">
-                <button v-if="i !== hero" class="pill" :class="habitSeat === i ? 'pill-on' : ''" @click="habitSeat = i">{{ p.name }}</button>
-              </template>
-            </div>
-            <div v-if="habitSeat >= 0 && habitSeat !== hero" class="grid grid-cols-2 gap-2.5 mt-3">
-              <button v-for="p in PROFILES" :key="p.id" class="choice" :class="profileId === p.id ? 'choice-on' : ''" @click="profileId = p.id">
-                <div class="font-bold">{{ p.label }}</div>
-                <div class="text-sm text-muted mt-0.5">{{ p.help }}</div>
-              </button>
-            </div>
-            <p v-if="habitSeat >= 0" class="hint mt-2 max-w-[70ch]">
-              That player keeps their normal game plus this habit. The other two players, including you, then re-solve
-              against it.
-            </p>
-          </section>
-        </div>
-
-        <!-- summary / solve -->
-        <aside class="col-span-5">
-          <div class="panel sticky top-4">
-            <h2 class="font-display font-extrabold text-lg">Your spot</h2>
-            <div class="flex gap-1.5 mt-3">
-              <PlayingCard v-for="k in 5" :key="k" :card="board[k - 1] !== undefined ? cardStr(board[k - 1]) : ''" size="md" />
-            </div>
-            <dl class="grid grid-cols-3 gap-2 mt-4 text-center">
-              <div class="stat"><dt>Pot</dt><dd>{{ amt(pot) }}</dd></div>
-              <div class="stat"><dt>Stacks</dt><dd>{{ stackText }}</dd></div>
-              <div class="stat"><dt>Stack-to-pot</dt><dd>{{ (Math.min(...stacks) / Math.max(pot, 1)).toFixed(1) }}<span v-if="!sameStacks">–{{ (Math.max(...stacks) / Math.max(pot, 1)).toFixed(1) }}</span></dd></div>
-            </dl>
-            <ol class="mt-4 space-y-1 text-sm">
-              <li v-for="(p, i) in players" :key="i" class="flex justify-between">
-                <span><b>{{ i + 1 }}.</b> {{ p.name }}<span v-if="i === hero" class="ml-1 text-xs font-bold bg-mine-light border border-mine rounded px-1">you</span></span>
-                <span class="text-muted">{{ amt(stacks[i]) }} · {{ comboText(i) }}</span>
-              </li>
-            </ol>
-            <p v-if="rakePct > 0" class="hint mt-2">Rake {{ rakePct }}%{{ rakeCap > 0 ? ` up to ${amt(rakeCap)}` : ", no cap" }}.</p>
-            <p v-if="estimate" class="hint mt-3">
-              {{ estimate.start === 3 ? "Flop, turn and river" : estimate.start === 4 ? "Turn and river" : "River only" }}: about {{ estimate.nodes.toLocaleString() }} decision points, {{ Math.round(estimate.memory_mb) }} MB of memory.
-              Rough solve time on this computer: <b class="text-ink">{{ timeText }}</b>.
-              <span v-if="estSecs > 600"> Pick simpler bet sizes to make it faster; you can also stop early and keep the result so far.</span>
-            </p>
-            <p v-if="memoryProblem" class="mt-3 text-sm font-bold text-[#B42318]">{{ memoryProblem }}</p>
-            <p v-if="memoryProblem && memory.heldGuidedMb > 200" class="mt-2 text-sm">
-              Guided Study is holding {{ gb(memory.heldGuidedMb) }} for its last solve.
-              <button class="text-felt underline font-bold" @click="releaseSolve('guided')">Clear that solve to free it</button>
-            </p>
-            <p v-if="problem" class="mt-3 text-sm font-bold text-[#B42318]">{{ problem }}</p>
-            <button class="btn-solve mt-4" :disabled="!!problem || !!memoryProblem || solving" @click="solve">Solve this spot</button>
-            <div v-if="solving" class="mt-4">
-              <div class="flex justify-between text-sm font-bold">
-                <span>{{ phaseText }}</span>
-                <button class="text-felt underline" @click="api.mwCancel()">Stop early</button>
-              </div>
-              <div class="h-2 bg-paper rounded mt-1.5 overflow-hidden"><div class="h-full bg-felt transition-all" :style="{ width: progressPct + '%' }"></div></div>
-              <p class="hint mt-1.5">Step {{ progress[1] }} of up to {{ progress[2] }}, {{ elapsedText }} so far. Best single-player improvement left: {{ progress[3] >= 100 ? "..." : progress[3].toFixed(2) + "% of the pot" }}</p>
-            </div>
-            <p v-if="error" class="mt-3 text-sm font-bold text-[#B42318]">{{ error }}</p>
-          </div>
-        </aside>
+      <!-- nothing solved yet -->
+      <div v-if="step === 'setup'" class="max-w-xl mx-auto mt-24 text-center">
+        <h1 class="font-display font-extrabold text-2xl">No result yet</h1>
+        <p class="text-muted mt-2">This page shows a solved spot: what each player does, hand by hand. Set a spot up first and it opens here when the solve finishes.</p>
+        <button class="btn-solve mt-5 !w-auto px-6" @click="emit('new')">Study a spot</button>
       </div>
 
       <!-- ================= RESULTS ================= -->
@@ -213,10 +19,6 @@
         </div>
 
         <div class="panel mt-4 flex flex-wrap items-center gap-6">
-          <div class="flex gap-1.5">
-            <PlayingCard v-for="c in node.board" :key="c" :card="c" size="md" />
-            <PlayingCard v-for="k in 5 - node.board.length" :key="'e' + k" card="" size="md" />
-          </div>
           <div>
             <div class="text-xs text-muted">Pot now</div>
             <div class="font-display font-extrabold text-2xl tabular-nums">{{ money(node.pot) }}</div>
@@ -238,7 +40,7 @@
         </div>
 
         <!-- line so far -->
-        <ActionBar class="mt-3" :start="['Flop', 'Turn', 'River'][startLen - 3]" :steps="steps" :now="nowText" :pot="money(node.pot)" @goto="goto">
+        <ActionBar class="mt-3" :start="['Flop', 'Turn', 'River'][startLen - 3]" :board="node.board" :steps="steps" :now="nowText" :pot="money(node.pot)" @goto="goto">
           <span v-if="node.exact" class="self-center ml-2 text-xs font-bold bg-felt-light border border-felt rounded px-1.5 py-0.5 whitespace-nowrap" title="This turn card was solved on its own with every river card, starting from the ranges the flop solve sends here">exact turn solve</span>
         </ActionBar>
 
@@ -283,6 +85,10 @@
                   </button>
                 </template>
               </div>
+              <template v-if="!resolving && node.cards.length > 1">
+                <h3 class="font-bold mt-4">Which cards matter</h3>
+                <CardReport class="mt-2" :cards="node.cards" :names="players.map((p) => p.name)" :hero="heroSolved" :street="node.street === 'flop' ? 'turn' : 'river'" :reset-key="which + ':' + history.join(',')" :load="loadCard" @pick="deal($event)" />
+              </template>
               <div v-if="canExact" class="mt-3 text-sm">
                 <label class="flex items-start gap-2 font-bold">
                   <input v-model="exactMode" type="checkbox" class="mt-0.5 rounded text-felt focus:ring-felt" :disabled="resolving" />
@@ -300,7 +106,7 @@
                 <div class="h-2 bg-paper rounded mt-1.5 overflow-hidden"><div class="h-full bg-felt transition-all" :style="{ width: progressPct + '%' }"></div></div>
                 <p class="hint mt-1.5">Step {{ progress[1] }} of up to {{ progress[2] }}, {{ elapsedText }} so far. Best single-player improvement left: {{ progress[3] >= 100 ? "..." : progress[3].toFixed(2) + "% of the pot" }}</p>
               </div>
-              <p v-if="resolveError" class="mt-2 text-sm font-bold text-[#B42318]">{{ resolveError }}</p>
+              <p v-if="resolveError" class="mt-2 text-sm font-bold text-danger">{{ resolveError }}</p>
             </div>
             <div v-else class="panel">
               <h2 class="font-display font-extrabold text-lg">{{ node.result === "fold" ? `${players[node.winner].name} wins the pot` : "Showdown" }}</h2>
@@ -335,6 +141,14 @@
                 <template v-if="canExact">Any other card can be solved on the spot.</template>
                 <template v-else>The greyed-out cards were not solved; pick the same rank in another suit, which plays almost the same unless it changes a flush.</template>
               </p>
+            </div>
+            <div v-if="node.curves && node.curves.some((c) => c.length)" class="panel">
+              <h3 class="font-bold">Who has the stronger range</h3>
+              <EquityGraph class="mt-2" :curves="node.curves" :names="players.map((p) => p.name)" />
+            </div>
+            <div v-if="node.kind === 'player'" class="panel">
+              <h3 class="font-bold">{{ players[node.player].name }}'s play by type of hand</h3>
+              <HandTypes class="mt-2" :combos="node.combos" :board="node.board" :actions="node.actions.map((x) => actionText(x))" :colors="colors" />
             </div>
             <div class="panel text-sm">
               <h3 class="font-bold">How good is this solution?</h3>
@@ -390,6 +204,9 @@ import HandGrid from "./HandGrid.vue";
 import RangeSlider from "./RangeSlider.vue";
 import ActionBar, { type Step } from "./ActionBar.vue";
 import SuitBreakdown from "./SuitBreakdown.vue";
+import EquityGraph from "./EquityGraph.vue";
+import HandTypes from "./HandTypes.vue";
+import CardReport, { type CardRow } from "./CardReport.vue";
 import PlayingCard from "./PlayingCard.vue";
 
 interface Seat3 { name: string; preset: string; range: string }
@@ -697,6 +514,12 @@ async function deal(card: number) {
   history.value.push(card);
   await load();
 }
+/** what the next player does, and who is ahead, if this card comes (from the solve already done) */
+async function loadCard(id: number): Promise<CardRow> {
+  const v = await api.mwNode(which.value, [...history.value, id], false);
+  const bet = v.actions.reduce((a, name, i) => a + (/^(Bet|Raise|All-in)/.test(name) ? v.action_freqs[i] : 0), 0);
+  return { actor: v.kind === "player" ? players[v.player].name : "the next player", bet, equity: v.equity.map((e, i) => (v.folded[i] ? undefined : e)) as number[] };
+}
 async function goto(n: number) { history.value = history.value.slice(0, n); line.value = line.value.slice(0, n); await load(); }
 async function setWhich(w: "base" | "locked") {
   which.value = w;
@@ -782,14 +605,14 @@ onMounted(() => {
 <style scoped>
 .step-title { @apply font-display font-extrabold text-lg flex items-center gap-2.5; }
 .step-num { @apply inline-flex items-center justify-center w-7 h-7 rounded-full bg-ink text-white text-sm font-body font-bold; }
-.choice { @apply w-full text-left bg-white border border-rule rounded-lg px-3.5 py-3 hover:border-felt transition-colors; }
+.choice { @apply w-full text-left bg-surface border border-rule rounded-lg px-3.5 py-3 hover:border-felt transition-colors; }
 .choice-on { @apply border-felt ring-1 ring-felt bg-felt-light; }
-.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-white text-sm hover:border-felt transition-colors disabled:opacity-40; }
+.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-surface text-sm hover:border-felt transition-colors disabled:opacity-40; }
 .pill-on { @apply border-felt bg-felt text-white hover:border-felt; }
 .field { @apply flex flex-col text-sm gap-1 font-bold; }
 .input { @apply rounded-md border-rule text-sm font-normal focus:border-felt focus:ring-felt; }
 .hint { @apply text-sm text-muted; }
-.deck-btn { @apply h-9 rounded-md border border-rule bg-white text-sm font-bold font-display hover:border-felt disabled:opacity-25 disabled:hover:border-rule; }
+.deck-btn { @apply h-9 rounded-md border border-rule bg-surface text-sm font-bold font-display hover:border-felt disabled:opacity-25 disabled:hover:border-rule; }
 .deck-on { @apply !bg-ink !text-white border-ink; }
 .deck-extra { @apply border-dashed border-muted bg-paper; }
 .deck-done { @apply !border-felt ring-1 ring-felt bg-felt-light; }
@@ -797,12 +620,12 @@ onMounted(() => {
 .stat dt { @apply text-xs text-muted; }
 .stat dd { @apply font-display font-extrabold text-lg tabular-nums; }
 .btn-solve { @apply w-full py-3 rounded-lg bg-felt text-white text-lg font-bold hover:bg-felt-dark disabled:opacity-40 disabled:hover:bg-felt; }
-.btn-quiet { @apply px-3 py-1.5 rounded-md border border-rule bg-white text-sm font-bold hover:border-felt disabled:opacity-40; }
-.crumb { @apply px-2.5 py-1 rounded-md bg-white border border-rule hover:border-felt; }
-.panel { @apply bg-white rounded-xl border border-rule p-4; }
+.btn-quiet { @apply px-3 py-1.5 rounded-md border border-rule bg-surface text-sm font-bold hover:border-felt disabled:opacity-40; }
+.crumb { @apply px-2.5 py-1 rounded-md bg-surface border border-rule hover:border-felt; }
+.panel { @apply bg-surface rounded-xl border border-rule p-4; }
 .action-row { @apply w-full flex items-center gap-3 rounded-lg border border-rule px-3 py-2 hover:border-felt hover:bg-felt-light/40 transition-colors; }
 .seg { @apply inline-flex rounded-lg border border-ink overflow-hidden; }
-.seg button { @apply px-3 py-1.5 text-sm font-bold bg-white; }
+.seg button { @apply px-3 py-1.5 text-sm font-bold bg-surface; }
 .seg .seg-on { @apply bg-ink text-white; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { @apply outline-none ring-2 ring-felt ring-offset-1; }
 </style>

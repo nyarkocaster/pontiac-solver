@@ -31,7 +31,7 @@ export interface NodeView3 {
   kind: "player" | "chance" | "terminal"; board: string[]; street: string; cards: [string, number][]; result: string; winner: number; player: number; pot: number;
   invested: number[]; folded: boolean[]; stack: number; actions: string[]; action_amounts: number[];
   action_freqs: number[]; grid: Cell3[]; buckets: Bucket3[]; combos: Combo3[]; ev: number[]; equity: number[];
-  range_combos: number[]; locked: boolean; has_ev: boolean; cards_possible: number; stacks: number[]; exact: boolean;
+  range_combos: number[]; locked: boolean; has_ev: boolean; cards_possible: number; stacks: number[]; exact: boolean; curves: [number, number][][];
 }
 
 export const mwSolve = (spec: Spec3) => call<Summary3>("mw_solve", { spec });

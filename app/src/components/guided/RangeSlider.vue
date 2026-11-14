@@ -2,7 +2,7 @@
   <div class="flex items-center gap-2 text-xs mt-1.5">
     <button class="rs-btn" title="Remove the weakest hands" :disabled="pct <= 0.5" @click="nudge(-1)">Tighter</button>
     <input
-      type="range" min="0" max="100" step="0.5" :value="pct" class="flex-1 accent-[#0E6B5C]"
+      type="range" min="0" max="100" step="0.5" :value="pct" class="flex-1 accent-felt"
       :aria-label="`Range width for ${label || 'this player'}, percent of all hands`"
       @input="slide(($event.target as HTMLInputElement).valueAsNumber)"
     />
@@ -43,5 +43,5 @@ function reset() { mine = base.value; emit("update:modelValue", mine); }
 
 <style scoped>
 .rs-kind { @apply rounded border-rule text-xs py-0.5 pl-1.5 pr-6 font-bold focus:border-felt focus:ring-felt; }
-.rs-btn { @apply px-2 py-0.5 rounded border border-rule bg-white font-bold hover:border-felt disabled:opacity-40; }
+.rs-btn { @apply px-2 py-0.5 rounded border border-rule bg-surface font-bold hover:border-felt disabled:opacity-40; }
 </style>

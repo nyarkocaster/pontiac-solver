@@ -124,7 +124,7 @@
             </div>
 
             <div class="grid gap-3 mt-4" :class="spot.players.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'">
-              <div v-for="p in spot.players" :key="p.seat" class="rounded-lg border border-rule p-3" :class="p.hero ? 'bg-felt-light border-felt' : 'bg-white'">
+              <div v-for="p in spot.players" :key="p.seat" class="rounded-lg border border-rule p-3" :class="p.hero ? 'bg-felt-light border-felt' : 'bg-surface'">
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
                     <div class="font-bold truncate">{{ p.name }}</div>
@@ -137,7 +137,7 @@
                 </div>
                 <div class="flex gap-3 mt-2">
                   <div class="grid gap-px shrink-0 w-[104px] h-[104px]" style="grid-template-columns: repeat(13, 1fr)" aria-hidden="true">
-                    <div v-for="(w, i) in miniGrid(p.seat)" :key="i" :style="{ background: w > 0 ? `rgba(14,107,92,${0.25 + 0.75 * w})` : '#EEF0F3' }"></div>
+                    <div v-for="(w, i) in miniGrid(p.seat)" :key="i" :style="{ background: w > 0 ? `rgb(var(--felt) / ${0.3 + 0.7 * w})` : 'rgb(var(--rule) / 0.55)' }"></div>
                   </div>
                   <div class="min-w-0 flex-1">
                     <textarea v-model="edits[p.seat]" rows="4" class="input w-full text-[11px] leading-snug font-body" :aria-label="`${p.name} range`"></textarea>
@@ -178,6 +178,11 @@
               </template>
             </div>
             <p class="hint mt-2">{{ boardHint }}</p>
+            <details v-if="spot.players.length === 2" class="mt-3 border-t border-rule pt-3" :open="reportOpen" @toggle="reportOpen = ($event.target as HTMLDetailsElement).open">
+              <summary class="cursor-pointer font-bold text-sm">Not sure which flop? Compare many flops at once</summary>
+              <FlopReport v-if="reportOpen" class="mt-3" :hero="reportNames.hero" :oop="reportNames.oop" :ip="reportNames.ip" :disabled="!!reportProblem || !!solving" :solve="reportSolve" :cancel="studyCancel" @pick="board = $event" @busy="reporting = $event" />
+              <p v-if="reportOpen && reportProblem" class="mt-2 text-sm font-bold text-danger">{{ reportProblem }}</p>
+            </details>
           </section>
 
           <!-- 5 options -->
@@ -231,7 +236,7 @@
         <!-- summary -->
         <aside class="panel xl:sticky xl:top-4">
           <div class="flex gap-2 flex-wrap">
-            <div v-for="c in boardCards" :key="c" class="w-11 h-14 rounded-md border border-rule bg-white flex flex-col items-center justify-center font-display font-extrabold" :class="SUIT_COLOR[c[1]]">
+            <div v-for="c in boardCards" :key="c" class="w-11 h-14 rounded-md border border-rule bg-surface flex flex-col items-center justify-center font-display font-extrabold" :class="SUIT_COLOR[c[1]]">
               <span>{{ c[0] === "T" ? "10" : c[0] }}</span><span class="text-lg leading-none">{{ SUIT_SYMBOL[c[1]] }}</span>
             </div>
             <div v-if="!boardCards.length" class="text-sm text-muted h-14 flex items-center">No board yet</div>
@@ -261,8 +266,8 @@
             <p class="hint mt-1.5">Step {{ progress[1] }} of up to {{ progress[2] }}, {{ elapsedText }} so far. {{ progress[3] >= 100 ? "Measuring accuracy…" : `Within ${progress[3].toFixed(2)}% of the pot so far.` }}</p>
             <p class="hint mt-1">The result opens by itself when this finishes. You can keep reading this page meanwhile; changes made now apply to the next solve.</p>
           </div>
-          <button v-else class="btn-solve mt-4" :disabled="!!problem || !!estimate.problem" @click="go">Solve this spot</button>
-          <p v-if="problem || estimate.problem || runError" class="mt-2 text-sm font-bold text-[#B42318]">{{ problem || estimate.problem || runError }}</p>
+          <button v-else class="btn-solve mt-4" :disabled="!!problem || !!estimate.problem || reporting" @click="go">Solve this spot</button>
+          <p v-if="problem || estimate.problem || runError" class="mt-2 text-sm font-bold text-danger">{{ problem || estimate.problem || runError }}</p>
         </aside>
       </div>
     </div>
@@ -272,6 +277,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import RangeSlider from "./RangeSlider.vue";
+import FlopReport, { type FlopRow } from "./FlopReport.vue";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
 import { parseRange, rangePercent } from "../../guided/rangeTools";
 import { studyCancel, studyProgress } from "../../guided/api";
@@ -283,6 +289,7 @@ type Preview = { text: string; problem: string };
 const props = defineProps<{
   run2: (p: Solve2) => Promise<Outcome>; run3: (p: Solve3) => Promise<Outcome>;
   preview2: (p: Solve2) => Promise<Preview>; preview3: (p: Solve3) => Promise<Preview>;
+  quickFlop: (p: Solve2, flop: number[]) => Promise<FlopRow>;
 }>();
 export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown> }
 export interface Solve3 {
@@ -463,6 +470,11 @@ function payload(): { two?: Solve2; three?: Solve3 } {
 }
 
 // size and time of the spot as it stands, refreshed a moment after the last change
+// flop report: the same two-player spot on a spread of flops
+const reportOpen = ref(false); const reporting = ref(false);
+const reportNames = computed(() => { const ps = spot.value.players; return { oop: ps[0]?.name ?? "", ip: ps[1]?.name ?? "", hero: ps.find((p) => p.hero)?.name ?? ps[0]?.name ?? "" }; });
+const reportProblem = computed(() => (pre.value.errors.length ? pre.value.errors[0] : spot.value.players.some((p) => !edits[p.seat]?.trim()) ? "Give both players a range in step 3 first." : ""));
+const reportSolve = (flop: number[]) => { const two = payload().two; if (!two) throw new Error("The flop report needs exactly two players."); return props.quickFlop({ ...two, profile: null }, flop); };
 const estimate = reactive<Preview>({ text: "", problem: "" });
 let estTimer: number | undefined; let estToken = 0;
 watch(() => (problem.value ? "" : JSON.stringify(payload())), (key) => {
@@ -503,29 +515,29 @@ async function go() {
 </script>
 
 <style scoped>
-.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-white text-sm hover:border-felt transition-colors whitespace-nowrap; }
+.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-surface text-sm hover:border-felt transition-colors whitespace-nowrap; }
 .pill-on { @apply border-felt bg-felt text-white hover:border-felt; }
 .field { @apply flex flex-col text-sm gap-1 font-bold; }
 .lbl { @apply text-sm font-bold mb-1; }
 .input { @apply rounded-md border-rule text-sm font-normal focus:border-felt focus:ring-felt; }
 .hint { @apply text-sm text-muted; }
-.panel { @apply bg-white rounded-xl border border-rule p-4; }
+.panel { @apply bg-surface rounded-xl border border-rule p-4; }
 .step-title { @apply font-display font-extrabold text-lg flex items-center gap-2; }
 .step-num { @apply inline-flex items-center justify-center w-7 h-7 rounded-full bg-ink text-white text-sm; }
 .seat { @apply rounded-lg border p-2.5 transition-colors; }
-.seat-in { @apply bg-white border-ink/40; }
+.seat-in { @apply bg-surface border-ink/40; }
 .seat-out { @apply bg-paper border-rule; }
 .seat-out select:first-of-type { @apply text-muted font-normal; }
 .seat-me { @apply border-felt bg-felt-light ring-1 ring-felt; }
-.me-btn { @apply shrink-0 px-2 py-0.5 rounded-full border border-rule bg-white text-[11px] font-bold hover:border-felt whitespace-nowrap; }
+.me-btn { @apply shrink-0 px-2 py-0.5 rounded-full border border-rule bg-surface text-[11px] font-bold hover:border-felt whitespace-nowrap; }
 .me-on { @apply bg-felt border-felt text-white; }
 .route { @apply rounded-lg border p-3; }
 .route-ok { @apply border-felt bg-felt-light; }
-.route-warn { @apply border-[#B54708] bg-[#FFFAEB]; }
+.route-warn { @apply border-mine bg-mine-light; }
 .route-none { @apply border-rule bg-paper; }
-.keep { @apply flex items-start gap-2 rounded-lg border border-rule bg-white p-2 text-sm cursor-pointer; }
+.keep { @apply flex items-start gap-2 rounded-lg border border-rule bg-surface p-2 text-sm cursor-pointer; }
 .keep-on { @apply border-felt; }
-.deck-btn { @apply h-9 rounded border border-rule bg-white text-sm font-bold font-display hover:border-felt disabled:opacity-30 disabled:hover:border-rule; }
+.deck-btn { @apply h-9 rounded border border-rule bg-surface text-sm font-bold font-display hover:border-felt disabled:opacity-30 disabled:hover:border-rule; }
 .deck-on { @apply !bg-ink !text-white border-ink; }
 .stat { @apply rounded-lg bg-paper px-2 py-1.5 text-center; }
 .stat dt { @apply text-[11px] text-muted; }

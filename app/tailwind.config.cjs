@@ -1,15 +1,21 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: "class",
   content: ["src/**/*.ts", "src/**/*.vue"],
   theme: {
     extend: {
       colors: {
-        ink: "#172033",
-        muted: "#5B6475",
-        paper: "#F3F5F8",
-        rule: "#DCE1E8",
-        felt: { DEFAULT: "#0E6B5C", dark: "#0A5246", light: "#E3F1EE" },
-        mine: { DEFAULT: "#F2B705", light: "#FFF6D6" },
+        // theme colours live in style.css as variables, one set for light and one for dark
+        ink: "rgb(var(--ink) / <alpha-value>)",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        paper: "rgb(var(--paper) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        rule: "rgb(var(--rule) / <alpha-value>)",
+        danger: "rgb(var(--danger) / <alpha-value>)",
+        chrome: "rgb(var(--chrome) / <alpha-value>)",
+        // "felt" is the accent: deep burgundy
+        felt: { DEFAULT: "rgb(var(--felt) / <alpha-value>)", dark: "rgb(var(--felt-dark) / <alpha-value>)", light: "rgb(var(--felt-light) / <alpha-value>)" },
+        mine: { DEFAULT: "rgb(var(--mine) / <alpha-value>)", light: "rgb(var(--mine-light) / <alpha-value>)" },
       },
       fontFamily: {
         body: ['"Atkinson Hyperlegible"', "system-ui", "sans-serif"],

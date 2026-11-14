@@ -30,7 +30,7 @@
         Use chips or big blinds, as long as all four boxes use the same unit. The stack is the smaller of the two
         stacks, counted before the blinds go in. Heads-up a sit-and-go pays the winner only, so no prize adjustment is needed.
       </p>
-      <p v-if="error" class="mt-3 text-sm font-bold text-[#B42318]">{{ error }}</p>
+      <p v-if="error" class="mt-3 text-sm font-bold text-danger">{{ error }}</p>
 
       <div v-if="res" class="grid grid-cols-2 gap-5 mt-5">
         <div v-for="side in sides" :key="side.id" class="panel">
@@ -48,7 +48,7 @@
               :title="`${res.classes[i]}: ${side.verb} ${Math.round(f * 100)}%`"
               @click="picked = picked && picked.side === side.id && picked.i === i ? null : { side: side.id, i }"
             >
-              <div class="absolute inset-0 bg-white"></div>
+              <div class="absolute inset-0 bg-surface"></div>
               <div class="absolute inset-y-0 left-0" :style="{ width: f * 100 + '%', background: side.color }"></div>
               <div class="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-display" :class="f > 0.5 ? 'text-white' : 'text-muted'">{{ res.classes[i] }}</div>
             </div>
@@ -102,7 +102,7 @@ const text = (r: PushFold, f: number[]) => r.classes.map((c, i) => (f[i] >= 1 ? 
 const sides = computed(() => {
   const r = res.value; if (!r) return [];
   return [
-    { id: "jam", title: "Small blind moves all-in with", help: "Everything else folds.", verb: "jams", edgeWord: "Jamming", pct: r.jam_pct, freqs: r.jam, edges: r.jam_edge_bb, color: "#0E6B5C", text: text(r, r.jam) },
+    { id: "jam", title: "Small blind moves all-in with", help: "Everything else folds.", verb: "jams", edgeWord: "Jamming", pct: r.jam_pct, freqs: r.jam, edges: r.jam_edge_bb, color: "rgb(var(--felt))", text: text(r, r.jam) },
     { id: "call", title: "Big blind calls the all-in with", help: "Everything else folds.", verb: "calls", edgeWord: "Calling", pct: r.call_pct, freqs: r.call, edges: r.call_edge_bb, color: "#2F5FB3", text: text(r, r.call) },
   ];
 });
@@ -121,11 +121,11 @@ onMounted(run);
 </script>
 
 <style scoped>
-.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-white text-sm hover:border-felt transition-colors; }
+.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-surface text-sm hover:border-felt transition-colors; }
 .pill-on { @apply border-felt bg-felt text-white hover:border-felt; }
 .field { @apply flex flex-col text-sm gap-1 font-bold; }
 .input { @apply rounded-md border-rule text-sm font-normal focus:border-felt focus:ring-felt; }
 .hint { @apply text-sm text-muted; }
-.panel { @apply bg-white rounded-xl border border-rule p-4; }
+.panel { @apply bg-surface rounded-xl border border-rule p-4; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { @apply outline-none ring-2 ring-felt ring-offset-1; }
 </style>

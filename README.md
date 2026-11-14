@@ -34,6 +34,15 @@ print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 
 `BUILDING.txt` covers building the desktop app.
 
+## What the desktop app shows
+
+- **Study a spot**: describe the table and the preflop action seat by seat; the app picks the two-player or three-player solver and solves on that page.
+- **Result**: the board and the line so far stay pinned at the top. Each decision has the hand chart, a by-suit breakdown, play by type of hand (top pair, flush draw and so on), an equity graph of every player's range with a plain-language reading of it, and coach notes.
+- **Which cards matter**: at each turn or river card choice, one click compares every card: how often the next player bets on it and who it helps.
+- **Flop report**: solves the same two-player preflop spot on 8, 16 or 24 representative flops and lines the answers up, with averages by kind of flop.
+- **Push / Fold**: heads-up and three-handed with prize money (ICM).
+- Dark and light looks (switch in the top bar).
+
 ## Limits
 
 - Preflop is limited to push/fold (heads-up and three-handed); limps and small raises are not solved.

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="relative inline-flex flex-col justify-between bg-white border border-rule rounded-[10%/7%] shadow-[0_1px_0_#c9d0db,0_2px_6px_rgba(23,32,51,0.08)] select-none font-display"
+    class="relative inline-flex flex-col justify-between bg-surface border border-rule rounded-[10%/7%] shadow-[0_1px_0_#c9d0db,0_2px_6px_rgba(23,32,51,0.08)] select-none font-display"
     :class="[sizeClass, colorClass, empty ? '!bg-paper border-dashed shadow-none' : '']"
     :aria-label="empty ? 'empty card slot' : name"
   >
@@ -22,7 +22,7 @@ const NAME: Record<string, string> = { s: "spades", h: "hearts", d: "diamonds", 
 const suitSym = computed(() => SYM[props.card[1]] ?? "");
 const name = computed(() => `${rankLabel.value} of ${NAME[props.card[1]] ?? ""}`);
 // four-colour deck: easier to read suits at a glance
-const colorClass = computed(() => ({ s: "text-ink", h: "text-[#C8102E]", d: "text-[#1F5FBF]", c: "text-[#1E7A3C]" } as Record<string, string>)[props.card[1]] ?? "");
+const colorClass = computed(() => ({ s: "text-ink", h: "suit-h", d: "suit-d", c: "suit-c" } as Record<string, string>)[props.card[1]] ?? "");
 const sizeClass = computed(() => ({ sm: "w-8 h-11 text-sm", md: "w-12 h-[4.25rem] text-xl", lg: "w-16 h-[5.75rem] text-2xl" })[props.size]);
 const suitSize = computed(() => ({ sm: "text-base", md: "text-3xl", lg: "text-4xl" })[props.size]);
 </script>

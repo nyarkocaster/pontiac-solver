@@ -9,245 +9,12 @@
         </button>
       </div>
 
-      <!-- ================= SETUP ================= -->
-      <div v-if="step === 'setup'" class="grid grid-cols-12 gap-8">
-        <div class="col-span-7">
-          <div class="flex items-center justify-between">
-            <h1 class="font-display font-extrabold text-[2rem] leading-tight tracking-tight">Study a spot</h1>
-            <button class="btn-quiet" @click="notebookOpen = true">
-              Notebook<span v-if="notebook.length" class="ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full bg-felt text-white text-xs px-1.5">{{ notebook.length }}</span>
-            </button>
-          </div>
-          <p class="text-muted mt-1 max-w-[60ch]">
-            Set up a hand you play often. The solver finds the soundest strategy for both players, then — if you
-            choose — how to beat an opponent with a specific habit.
-          </p>
-
-          <section class="mt-7">
-            <h2 class="step-title"><span class="step-num">1</span>What happened before the flop?</h2>
-            <div class="grid grid-cols-2 gap-2.5 mt-3">
-              <button
-                v-for="s in SCENARIOS"
-                :key="s.id"
-                class="choice"
-                :class="scenarioId === s.id ? 'choice-on' : ''"
-                :aria-pressed="scenarioId === s.id"
-                @click="pickScenario(s.id)"
-              >
-                <div class="font-bold">{{ s.label }}</div>
-                <div class="text-sm text-muted mt-0.5">{{ s.help }}</div>
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-5 mt-4 items-end">
-              <label class="field">
-                <span>{{ scenario.seatQuestion }}</span>
-                <select v-model="seat" class="input">
-                  <option v-for="s in scenario.seats" :key="s" :value="s">{{ seatLabel(s) }}</option>
-                </select>
-              </label>
-              <label v-if="scenario.format === 'live'" class="field">
-                <span>Opponent</span>
-                <select v-model="opponent" class="input">
-                  <option v-for="o in OPPONENTS" :key="o.id" :value="o.id">{{ o.label }}</option>
-                </select>
-              </label>
-              <label v-if="scenario.format === 'live'" class="field">
-                <span>Open size ($)</span>
-                <input v-model.number="openSize" type="number" min="4" max="60" class="input w-24" />
-              </label>
-              <label class="field">
-                <span>{{ scenario.format === 'live' ? 'Starting stack ($)' : 'Stack (big blinds)' }}</span>
-                <input v-model.number="stackIn" type="number" min="5" max="2000" class="input w-24" />
-              </label>
-            </div>
-            <p v-if="scenario.format === 'live'" class="hint mt-2 max-w-[70ch]">{{ oppHelp }}</p>
-            <details class="mt-2 text-sm">
-              <summary class="cursor-pointer text-felt font-bold">Edit the ranges</summary>
-              <div class="grid grid-cols-2 gap-4 mt-2">
-                <label class="field">
-                  <span>{{ built.oopName }} (acts first after the flop)</span>
-                  <textarea v-model="oopRangeEdit" rows="3" class="input font-body text-xs"></textarea>
-                  <RangeSlider v-model="oopRangeEdit" :label="built.oopName" />
-                </label>
-                <label class="field">
-                  <span>{{ built.ipName }} (acts last)</span>
-                  <textarea v-model="ipRangeEdit" rows="3" class="input font-body text-xs"></textarea>
-                  <RangeSlider v-model="ipRangeEdit" :label="built.ipName" />
-                </label>
-              </div>
-              <button class="text-felt underline mt-1" @click="resetRanges">Reset to the built-in ranges</button>
-            </details>
-          </section>
-
-          <section class="mt-8">
-            <h2 class="step-title"><span class="step-num">2</span>Pick the flop</h2>
-            <div class="flex flex-wrap gap-2 mt-3 items-center">
-              <span class="text-sm text-muted">Deal a random</span>
-              <button v-for="t in TEXTURES" :key="t.id" class="pill" @click="board = randomFlop(t.id)">
-                {{ t.label.replace('Any random flop', 'any flop') }}
-              </button>
-            </div>
-            <div class="mt-3 inline-grid gap-1" style="grid-template-columns: repeat(13, 2.25rem)" role="group" aria-label="Choose flop cards">
-              <template v-for="s in [3, 2, 1, 0]" :key="s">
-                <button
-                  v-for="r in RANKS_DESC"
-                  :key="r * 4 + s"
-                  class="deck-btn"
-                  :class="[suitColor(r * 4 + s), board.includes(r * 4 + s) ? 'deck-on' : '']"
-                  :disabled="!board.includes(r * 4 + s) && board.length >= 3"
-                  :aria-pressed="board.includes(r * 4 + s)"
-                  @click="toggleBoard(r * 4 + s)"
-                >
-                  {{ cardLabel(r * 4 + s) }}
-                </button>
-              </template>
-            </div>
-            <p class="hint mt-1">Click cards to add or remove them. You need exactly three.</p>
-          </section>
-
-          <section class="mt-8">
-            <h2 class="step-title"><span class="step-num">3</span>Exploit a habit? <span class="font-normal text-muted text-base">(optional)</span></h2>
-            <p class="hint mt-1 max-w-[70ch]">
-              This is node locking. We make {{ villainName.toLowerCase() }} play with the habit at every decision in the
-              hand, then the solver works out your best counter-strategy. Start without a habit to learn the baseline.
-            </p>
-            <div class="flex flex-wrap gap-2 mt-3">
-              <button class="pill" :class="!exploitOn ? 'pill-on' : ''" @click="exploitOn = false">No habit</button>
-              <button
-                v-for="p in PROFILES"
-                :key="p.id"
-                class="pill"
-                :class="exploitOn && profileId === p.id ? 'pill-on' : ''"
-                :title="p.help"
-                @click="applyProfile(p.id)"
-              >
-                {{ p.label }}
-              </button>
-              <button class="pill" :class="exploitOn && profileId === 'custom' ? 'pill-on' : ''" @click="applyProfile('custom')">
-                Pick habits myself
-              </button>
-            </div>
-            <div v-if="exploitOn" class="mt-3 bg-white rounded-lg border border-rule">
-              <div
-                v-for="l in LEAKS"
-                :key="l.id"
-                class="flex items-center gap-3 px-4 py-2.5 border-b border-rule last:border-0"
-                :class="leakOn[l.id] ? 'bg-felt-light/60' : ''"
-              >
-                <input :id="'lk' + l.id" v-model="leakOn[l.id]" type="checkbox" class="rounded text-felt" @change="profileId = 'custom'" />
-                <label :for="'lk' + l.id" class="flex-1 cursor-pointer">
-                  <div class="font-bold">{{ l.label }}</div>
-                  <div class="text-sm text-muted">{{ l.help }}</div>
-                </label>
-                <select v-model.number="leakStrength[l.id]" class="input py-1 text-sm" :disabled="!leakOn[l.id]" :aria-label="'How strong: ' + l.label" @change="profileId = 'custom'">
-                  <option v-for="s in STRENGTHS" :key="s.value" :value="s.value">{{ s.label }}</option>
-                </select>
-              </div>
-              <label class="flex items-start gap-3 px-4 py-3 border-t border-rule cursor-pointer">
-                <input v-model="freezeRest" type="checkbox" class="rounded text-felt mt-1" />
-                <span>
-                  <span class="font-bold">Keep the rest of their game normal</span> <span class="text-muted">(recommended)</span>
-                  <span class="block text-sm text-muted">
-                    Everything else they do stays at normal strategy, so they play like a regular player with this one
-                    leak. Untick it to let the solver re-plan the rest of their game around the habit — mathematically
-                    stronger for them, but nothing like how real players adjust.
-                  </span>
-                </span>
-              </label>
-              <div class="px-4 py-3 border-t border-rule">
-                <div class="font-bold">How sure are you about this read?</div>
-                <div class="flex flex-wrap gap-2 mt-2" role="group" aria-label="Read confidence">
-                  <button
-                    v-for="c in CONFIDENCE"
-                    :key="c.value"
-                    class="pill"
-                    :class="confidence === c.value ? 'pill-on' : ''"
-                    @click="confidence = c.value"
-                  >
-                    {{ c.label }}
-                  </button>
-                </div>
-                <p class="text-sm text-muted mt-1.5">{{ CONFIDENCE.find((c) => c.value === confidence)?.help }}</p>
-              </div>
-              <p class="hint px-4 py-3 border-t border-rule">
-                Strength moves that share of the relevant frequency: a little 30%, a lot 60%, extreme 90%.
-                Test one habit at a time first — combinations can produce surprising answers. Exploits often need a
-                bigger bet size, so use a sizing with two flop sizes: with only a small bet available, the solver may
-                prefer to check and trap instead.
-              </p>
-            </div>
-          </section>
-
-          <section class="mt-8 mb-6">
-            <h2 class="step-title"><span class="step-num">4</span>Bet sizes and accuracy</h2>
-            <div class="grid grid-cols-3 gap-2.5 mt-3">
-              <button
-                v-for="s in sizingList"
-                :key="s.id"
-                class="choice"
-                :class="sizingId === s.id ? 'choice-on' : ''"
-                :aria-pressed="sizingId === s.id"
-                @click="sizingId = s.id"
-              >
-                <div class="font-bold">{{ s.label }}</div>
-                <div class="text-sm text-muted mt-0.5">{{ s.help }}</div>
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-2 mt-3" role="group" aria-label="Accuracy">
-              <button
-                v-for="a in ACCURACY"
-                :key="a.id"
-                class="pill"
-                :class="accuracyId === a.id ? 'pill-on' : ''"
-                @click="accuracyId = a.id"
-              >
-                {{ a.label }}<span class="opacity-75"> · {{ a.help.replace('.', '') }}</span>
-              </button>
-            </div>
-          </section>
-        </div>
-
-        <!-- summary rail -->
-        <aside class="col-span-5">
-          <div class="sticky top-4 bg-white border border-rule rounded-xl p-5">
-            <div class="flex gap-2">
-              <PlayingCard v-for="i in 3" :key="i" :card="boardCards[i - 1] ?? ''" size="lg" />
-            </div>
-            <p class="mt-4 font-bold leading-snug">{{ built.description }}</p>
-            <dl class="grid grid-cols-3 gap-2 mt-3 text-center">
-              <div class="stat"><dt>Pot</dt><dd>{{ fmt(built.pot) }}</dd></div>
-              <div class="stat"><dt>Behind</dt><dd>{{ fmt(built.stack) }}</dd></div>
-              <div class="stat" title="Stack-to-pot ratio: how many pots are left to bet. Low = easy to get all-in.">
-                <dt>SPR</dt><dd>{{ (built.stack / built.pot).toFixed(1) }}</dd>
-              </div>
-            </dl>
-            <div class="grid grid-cols-2 gap-4 mt-4">
-              <RangePreview :title="built.oopName" :range="oopRangeEdit" />
-              <RangePreview :title="built.ipName" :range="ipRangeEdit" />
-            </div>
-            <div v-if="exploitOn && leakList.length" class="mt-4 text-sm rounded-lg bg-mine-light px-3 py-2">
-              <b>Exploiting:</b> {{ leakSummary }} ({{ villainName.toLowerCase() }})
-            </div>
-            <button class="btn-solve mt-5" :disabled="board.length !== 3 || !!setupError" @click="startSolve">
-              Solve this spot
-            </button>
-            <p v-if="board.length !== 3" class="text-sm text-[#B42318] mt-2">Pick three flop cards.</p>
-            <p v-else-if="setupError" class="text-sm text-[#B42318] mt-2">{{ setupError }}</p>
-            <p v-if="setupError && memory.heldThreeMb > 200" class="text-sm mt-2">
-              3-Way Pots is holding {{ gb(memory.heldThreeMb) }} for its last solve.
-              <button class="text-felt underline font-bold" @click="releaseSolve('threeway')">Clear that solve to free it</button>
-            </p>
-            <p v-else-if="memNeeded" class="hint mt-2">
-              Uses about {{ memNeeded >= 1024 ? (memNeeded / 1024).toFixed(1) + ' GB' : memNeeded.toFixed(0) + ' MB' }} of memory<template v-if="freeMb">, {{ (freeMb / 1024).toFixed(1) }} GB free</template>.
-              <template v-if="lowMemory"> Memory saver is on, so switching views later takes a few seconds.</template>
-            </p>
-            <label v-if="leakList.length" class="hint flex items-center gap-1.5 mt-1">
-              <input v-model="forceSaver" type="checkbox" class="rounded text-felt" /> Always use memory saver
-            </label>
-          </div>
-        </aside>
+      <!-- nothing solved yet -->
+      <div v-if="step === 'setup'" class="max-w-xl mx-auto mt-24 text-center">
+        <h1 class="font-display font-extrabold text-2xl">No result yet</h1>
+        <p class="text-muted mt-2">This page shows a solved spot: what each player does, hand by hand. Set a spot up first and it opens here when the solve finishes.</p>
+        <button class="btn-solve mt-5 !w-auto px-6" @click="emit('new')">Study a spot</button>
       </div>
-
       <!-- ================= SOLVING ================= -->
       <div v-if="step === 'solving'" class="max-w-xl mx-auto mt-20">
         <div class="flex gap-2 justify-center">
@@ -278,13 +45,10 @@
               Accurate to within {{ summary?.base_expl_pct.toFixed(2) }}% of the pot. Solved in {{ secs(summary?.base_secs ?? 0) }}<template v-if="summary?.locked">, exploit solve {{ secs(summary.locked_secs) }}</template>.
             </p>
           </div>
-          <div class="flex gap-1.5 shrink-0" :aria-label="'Board ' + boardText(node.board)">
-            <PlayingCard v-for="(c, i) in displayBoard" :key="i" :card="c" size="md" />
-          </div>
         </div>
 
         <!-- first-run guide -->
-        <div v-if="!introDismissed" class="mt-4 bg-white border border-rule rounded-xl p-4 flex gap-4">
+        <div v-if="!introDismissed" class="mt-4 bg-surface border border-rule rounded-xl p-4 flex gap-4">
           <div class="text-sm leading-relaxed max-w-[90ch]">
             <b>How to read this.</b> Each decision shows what the player does and how often. Click an action to follow
             that line; click a turn or river card when one is dealt. The chart colours every starting hand by what it
@@ -295,7 +59,7 @@
         </div>
 
         <!-- exploit bar -->
-        <div v-if="summary?.locked" class="mt-4 rounded-xl border border-[#E8C760] bg-mine-light p-4">
+        <div v-if="summary?.locked" class="mt-4 rounded-xl border border-mine bg-mine-light p-4">
           <div class="flex flex-wrap items-center gap-3">
             <div class="seg" role="group" aria-label="Which strategy to show">
               <button :class="view === 'base' ? 'seg-on' : ''" @click="setView('base')">Normal strategy</button>
@@ -310,19 +74,19 @@
           <p class="text-sm mt-2.5">
             You win on average <b>{{ fmt(summary.base_ev[heroIdx]) }}</b> of this {{ fmt(built.pot) }} pot normally, and
             <b>{{ fmt(summary.locked_ev[heroIdx]) }}</b> against this player —
-            <b :class="evGain >= 0 ? 'text-felt' : 'text-[#B42318]'">{{ evGain >= 0 ? '+' : '' }}{{ fmt(evGain) }}</b> a hand,
+            <b :class="evGain >= 0 ? 'text-felt' : 'text-danger'">{{ evGain >= 0 ? '+' : '' }}{{ fmt(evGain) }}</b> a hand,
             if the habit is as strong as you set it. Real players are less consistent, so trust the direction of each
             change more than its size.
           </p>
         </div>
 
         <!-- line -->
-        <ActionBar class="mt-4" start="Flop" :steps="steps" :now="nowText" :pot="node ? fmt(node.pot) : ''" @goto="goTo" />
+        <ActionBar class="mt-4" start="Flop" :board="displayBoard" :steps="steps" :now="nowText" :pot="node ? fmt(node.pot) : ''" @goto="goTo" />
 
         <div class="mt-4 grid grid-cols-12 gap-5">
           <!-- decision -->
           <div class="col-span-7 min-[1500px]:col-span-5">
-            <div class="bg-white rounded-xl border border-rule p-5">
+            <div class="bg-surface rounded-xl border border-rule p-5">
               <template v-if="node.kind === 'player'">
                 <div class="flex items-baseline justify-between gap-3">
                   <h2 class="font-display font-extrabold text-xl">
@@ -331,7 +95,7 @@
                   </h2>
                   <span class="text-sm text-muted">Pot {{ fmt(node.pot) }}</span>
                 </div>
-                <p class="text-sm mt-1" :class="lineProb < 0.03 ? 'text-[#B42318]' : 'text-muted'">
+                <p class="text-sm mt-1" :class="lineProb < 0.03 ? 'text-danger' : 'text-muted'">
                   <template v-if="history.length">Players take this line {{ probText(lineProb) }} of the time<template v-if="node.board.length > 3"> when {{ node.board.length === 4 ? 'this turn card comes' : 'these turn and river cards come' }}</template>.</template>
                   <template v-else>Click an action to see what happens next.</template>
                   <template v-if="lineProb < 0.03"> That's rare, so the solver spent little effort here — treat these numbers as rough.</template>
@@ -387,6 +151,8 @@
                     </button>
                   </template>
                 </div>
+                <h3 class="font-bold mt-5">Which cards matter</h3>
+                <CardReport class="mt-2" :cards="node.cards" :names="[built.oopName, built.ipName]" :hero="heroIdx" :street="node.board.length === 3 ? 'turn' : 'river'" :reset-key="view + ':' + history.join(',')" :load="loadCard" @pick="play($event, cardLabel($event))" />
               </template>
 
               <template v-else>
@@ -416,7 +182,7 @@
                   <PlayingCard :card="myHand.slice(2)" size="sm" />
                 </div>
               </div>
-              <p v-if="myHandError" class="text-sm text-[#B42318] mt-2">{{ myHandError }}</p>
+              <p v-if="myHandError" class="text-sm text-danger mt-2">{{ myHandError }}</p>
               <div v-else-if="myHand && myView" class="mt-3 text-sm">
                 <template v-if="myView.blocked">One of your cards is on the board. Track a different hand.</template>
                 <template v-else-if="!myView.in_range">
@@ -470,6 +236,16 @@
               </template>
             </section>
 
+            <section v-if="node.curves && node.curves.length" class="panel">
+              <h3 class="font-bold">Who has the stronger range</h3>
+              <EquityGraph class="mt-2" :curves="node.curves" :names="[built.oopName, built.ipName]" />
+            </section>
+
+            <section v-if="node.kind === 'player'" class="panel">
+              <h3 class="font-bold">{{ actorName }}'s play by type of hand</h3>
+              <HandTypes class="mt-2" :combos="node.combos" :board="node.board" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" />
+            </section>
+
             <section v-if="node.kind === 'player'" class="panel">
               <h3 class="font-bold">By hand strength</h3>
               <p class="text-xs text-muted">Strength = chance to win at showdown against the other player's range right now.</p>
@@ -495,12 +271,12 @@
         </div>
       </div>
 
-      <div v-if="error" class="mt-6 bg-[#FEF3F2] border border-[#FDA29B] text-[#912018] rounded-lg p-3" role="alert">{{ error }}</div>
+      <div v-if="error" class="mt-6 bg-danger/10 border border-danger/40 text-danger rounded-lg p-3" role="alert">{{ error }}</div>
     </div>
 
     <!-- notebook drawer -->
     <div v-if="notebookOpen" class="fixed inset-0 z-40 flex justify-end bg-ink/30" @click.self="notebookOpen = false">
-      <aside class="w-[440px] h-full bg-white shadow-xl p-6 overflow-y-auto" aria-label="Notebook">
+      <aside class="w-[440px] h-full bg-surface shadow-xl p-6 overflow-y-auto" aria-label="Notebook">
         <div class="flex items-center justify-between">
           <h2 class="font-display font-extrabold text-xl">Notebook</h2>
           <button class="btn-quiet" @click="notebookOpen = false">Close</button>
@@ -515,7 +291,7 @@
           <li v-for="(n, i) in notebook" :key="n.at" class="border border-rule rounded-lg p-3">
             <div class="text-xs text-muted">{{ new Date(n.at).toLocaleString() }}</div>
             <p class="text-sm mt-1 whitespace-pre-wrap">{{ n.text }}</p>
-            <button class="text-xs text-[#B42318] underline mt-2" @click="removeNote(i)">Delete</button>
+            <button class="text-xs text-danger underline mt-2" @click="removeNote(i)">Delete</button>
           </li>
         </ul>
       </aside>
@@ -529,6 +305,9 @@ import HandGrid from "./HandGrid.vue";
 import RangeSlider from "./RangeSlider.vue";
 import ActionBar, { type Step } from "./ActionBar.vue";
 import SuitBreakdown from "./SuitBreakdown.vue";
+import EquityGraph from "./EquityGraph.vue";
+import HandTypes from "./HandTypes.vue";
+import CardReport, { type CardRow } from "./CardReport.vue";
 import PlayingCard from "./PlayingCard.vue";
 import RangePreview from "./RangePreview.vue";
 import {
@@ -614,7 +393,22 @@ async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
   await startSolve();
   return { ok: step.value === "results", error: error.value };
 }
-defineExpose({ loadCustom, previewCustom });
+/** One quick solve of this spot on another flop, for the flop report. Leaves this screen empty afterwards. */
+async function quickFlop(p: Custom2, flop: number[]) {
+  const sp = { ...specCore.value, oop_range: p.res.oopRange, ip_range: p.res.ipRange, board: flop.map((c) => RANK_CHARS[c >> 2] + SUIT_CHARS[c & 3]).join(""), pot: p.res.pot, stack: p.res.stack, ...p.overrides, leaks: [], low_memory: false, accuracy_pct: Math.max(1, Number(p.overrides.accuracy_pct ?? 0)), max_iter: 300 } as api.StudySpec;
+  step.value = "setup"; node.value = null;
+  const s = await api.studySolve(sp);
+  if (s.error) throw new Error(s.error);
+  const root = await api.studyNode("base", []);
+  const bets = (v: api.NodeView) => v.actions.reduce((a, n, i) => a + (/^(Bet|Raise|All-in)/.test(n) ? v.action_freqs[i] : 0), 0);
+  const check = root.actions.findIndex((a) => a.startsWith("Check"));
+  const after = check >= 0 ? await api.studyNode("base", [check]) : root;
+  let best = -1; after.actions.forEach((n, i) => { if (/^(Bet|All-in)/.test(n) && (best < 0 || after.action_freqs[i] > after.action_freqs[best])) best = i; });
+  const h = p.res.heroIsOop ? 0 : 1;
+  return { heroEq: root.equity[h], heroEv: s.base_ev[h] / p.res.pot, oopBet: bets(root), ipBet: after.kind === "player" ? bets(after) : 0,
+    ipSize: best >= 0 && after.action_freqs[best] > 0.02 ? (after.actions[best].startsWith("All-in") ? "all-in" : Math.round((after.action_amounts[best] / after.pot) * 100) + "% of the pot") : "–" };
+}
+defineExpose({ loadCustom, previewCustom, quickFlop });
 const oopRangeEdit = ref(""), ipRangeEdit = ref("");
 const resetRanges = () => { oopRangeEdit.value = built.value.oopRange; ipRangeEdit.value = built.value.ipRange; };
 watch(() => [built.value.oopRange, built.value.ipRange], resetRanges, { immediate: true });
@@ -839,6 +633,12 @@ const cardLabel = (id: number) => RANK_CHARS[id >> 2] + SUIT_SYMBOL[SUIT_CHARS[i
 const suitColor = (id: number) => SUIT_COLOR[SUIT_CHARS[id & 3]];
 const RANK_ORDER = "23456789TJQKA";
 const sortFlop = (b: string[]) => [...b.slice(0, 3).sort((x, y) => RANK_ORDER.indexOf(y[0]) - RANK_ORDER.indexOf(x[0])), ...b.slice(3)];
+/** what the next player does, and who is ahead, if this card comes */
+async function loadCard(id: number): Promise<CardRow> {
+  const v = await api.studyNode(view.value, [...history.value, id]);
+  const bet = v.actions.reduce((a, name, i) => a + (/^(Bet|Raise|All-in)/.test(name) ? v.action_freqs[i] : 0), 0);
+  return { actor: v.player === 0 ? built.value.oopName : built.value.ipName, bet, equity: [...v.equity] };
+}
 const displayBoard = computed(() => sortFlop(node.value?.board ?? []));
 const boardText = (b: string[]) => sortFlop(b).map((c) => c[0] + SUIT_SYMBOL[c[1]]).join(" ");
 const R = "AKQJT98765432";
@@ -988,26 +788,26 @@ const downloadNotebook = () => {
 <style scoped>
 .step-title { @apply font-display font-extrabold text-lg flex items-center gap-2.5; }
 .step-num { @apply inline-flex items-center justify-center w-7 h-7 rounded-full bg-ink text-white text-sm font-body font-bold; }
-.choice { @apply w-full text-left bg-white border border-rule rounded-lg px-3.5 py-3 hover:border-felt transition-colors; }
+.choice { @apply w-full text-left bg-surface border border-rule rounded-lg px-3.5 py-3 hover:border-felt transition-colors; }
 .choice-on { @apply border-felt ring-1 ring-felt bg-felt-light; }
-.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-white text-sm hover:border-felt transition-colors; }
+.pill { @apply px-3 py-1.5 rounded-full border border-rule bg-surface text-sm hover:border-felt transition-colors; }
 .pill-on { @apply border-felt bg-felt text-white hover:border-felt; }
 .field { @apply flex flex-col text-sm gap-1 font-bold; }
 .input { @apply rounded-md border-rule text-sm font-normal focus:border-felt focus:ring-felt; }
 .hint { @apply text-sm text-muted; }
-.deck-btn { @apply h-9 rounded-md border border-rule bg-white text-sm font-bold font-display hover:border-felt disabled:opacity-25 disabled:hover:border-rule; }
+.deck-btn { @apply h-9 rounded-md border border-rule bg-surface text-sm font-bold font-display hover:border-felt disabled:opacity-25 disabled:hover:border-rule; }
 .deck-on { @apply !bg-ink !text-white border-ink; }
 .stat { @apply rounded-lg bg-paper py-2; }
 .stat dt { @apply text-xs text-muted; }
 .stat dd { @apply font-display font-extrabold text-lg tabular-nums; }
 .btn-solve { @apply w-full py-3 rounded-lg bg-felt text-white text-lg font-bold hover:bg-felt-dark disabled:opacity-40 disabled:hover:bg-felt; }
 .btn-primary { @apply px-3.5 py-1.5 rounded-md bg-felt text-white text-sm font-bold hover:bg-felt-dark; }
-.btn-quiet { @apply px-3 py-1.5 rounded-md border border-rule bg-white text-sm font-bold hover:border-felt disabled:opacity-40; }
-.crumb { @apply px-2.5 py-1 rounded-md bg-white border border-rule hover:border-felt; }
-.panel { @apply bg-white rounded-xl border border-rule p-4; }
+.btn-quiet { @apply px-3 py-1.5 rounded-md border border-rule bg-surface text-sm font-bold hover:border-felt disabled:opacity-40; }
+.crumb { @apply px-2.5 py-1 rounded-md bg-surface border border-rule hover:border-felt; }
+.panel { @apply bg-surface rounded-xl border border-rule p-4; }
 .action-row { @apply w-full flex items-center gap-3 rounded-lg border border-rule px-3 py-2 hover:border-felt hover:bg-felt-light/40 transition-colors; }
 .seg { @apply inline-flex rounded-lg border border-ink overflow-hidden; }
-.seg button { @apply px-3 py-1.5 text-sm font-bold bg-white; }
+.seg button { @apply px-3 py-1.5 text-sm font-bold bg-surface; }
 .seg .seg-on { @apply bg-ink text-white; }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { @apply outline-none ring-2 ring-felt ring-offset-1; }
 </style>
