@@ -57,10 +57,13 @@ export function describeNode(v: NodeView, name: string, fmt: (n: number) => stri
   const [strong, medium, weak] = v.buckets;
   const bAggr = (b: typeof strong) => b.freqs.map((f, i) => (aggressive(v.actions[i]) ? f : 0)).reduce((s, x) => s + x, 0);
   if (strong && weak && strong.share > 0.02 && weak.share > 0.02 && v.actions.some(aggressive)) {
+    const hasMedium = !!medium && medium.share > 0.02;
     notes.push(
-      `Strong hands are aggressive ${pct(bAggr(strong))} of the time, medium hands ${pct(bAggr(medium))}, weak hands ${pct(bAggr(weak))}.`
+      hasMedium
+        ? `Strong hands are aggressive ${pct(bAggr(strong))} of the time, medium hands ${pct(bAggr(medium))}, weak hands ${pct(bAggr(weak))}.`
+        : `Strong hands are aggressive ${pct(bAggr(strong))} of the time, weak hands ${pct(bAggr(weak))}. This range has almost no medium-strength hands on this board, which is why it has little reason to check.`
     );
-    if (bAggr(weak) > bAggr(medium) + 0.1)
+    if (hasMedium && bAggr(weak) > bAggr(medium) + 0.1)
       notes.push("Notice the weak hands bet more than the medium ones: those are bluffs, while medium hands prefer to check and get to showdown.");
   }
   if (v.actions[0] === "Fold") {

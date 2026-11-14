@@ -317,13 +317,7 @@
         </div>
 
         <!-- line -->
-        <nav class="mt-4 flex flex-wrap items-center gap-1 text-sm" aria-label="Hand so far">
-          <button class="crumb" @click="goTo(0)">Flop</button>
-          <template v-for="(c, i) in crumbs" :key="i">
-            <span class="text-muted" aria-hidden="true">›</span>
-            <button class="crumb" @click="goTo(i + 1)">{{ c }}</button>
-          </template>
-        </nav>
+        <ActionBar class="mt-4" start="Flop" :steps="steps" :now="nowText" :pot="node ? fmt(node.pot) : ''" @goto="goTo" />
 
         <div class="mt-4 grid grid-cols-12 gap-6">
           <!-- decision -->
@@ -371,8 +365,8 @@
                   </ul>
                 </div>
                 <div class="mt-2">
-                  <HandGrid :grid="node.grid" :colors="colors" :selected="selectedCell" :mine="myCell" @select="selectCell" />
-                  <p class="hint mt-1.5">The fill height shows how much of each hand is still in the range here. A sliver means that hand rarely reaches this point.</p>
+                  <HandGrid :grid="node.grid" :colors="colors" :selected="selectedCell" :mine="myCell" :marks="suitMarks" @select="selectCell" />
+                  <p class="hint mt-1.5">The fill height shows how much of each hand is still in the range here. A sliver means that hand rarely reaches this point. A dot in the corner marks squares where the suits play differently; click one to see each suit.</p>
                 </div>
               </template>
 
@@ -457,6 +451,8 @@
                   <span class="w-3 h-3 rounded-sm" :style="{ background: colors[a] }"></span>
                   <span class="flex-1">{{ actionLabel(a) }}</span><span class="tabular-nums font-bold">{{ pct(f) }}</span>
                 </div>
+                <h4 class="font-bold text-sm mt-4">By suit</h4>
+                <SuitBreakdown class="mt-1" :combos="cellCombos" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" :fmt-ev="fmt" />
               </template>
               <p v-else class="text-sm text-muted">Not in {{ actorName.toLowerCase() }}'s range at this point.</p>
             </section>
@@ -531,6 +527,8 @@
 import { computed, reactive, ref, watch } from "vue";
 import HandGrid from "./HandGrid.vue";
 import RangeSlider from "./RangeSlider.vue";
+import ActionBar, { type Step } from "./ActionBar.vue";
+import SuitBreakdown from "./SuitBreakdown.vue";
 import PlayingCard from "./PlayingCard.vue";
 import RangePreview from "./RangePreview.vue";
 import {
@@ -816,6 +814,32 @@ const cellName = (i: number) => {
   const r = Math.floor(i / 13), c = i % 13;
   return r === c ? R[r] + R[c] : r < c ? R[r] + R[c] + " suited" : R[c] + R[r] + " offsuit";
 };
+const SYMBOL_SUIT: Record<string, string> = { "♣": "c", "♦": "d", "♥": "h", "♠": "s" };
+const steps = computed<Step[]>(() => crumbs.value.map((c) => {
+  const k = c.indexOf(": ");
+  if (k >= 0) return { who: c.slice(0, k), text: c.slice(k + 2) };
+  const [street, card = ""] = c.split(" ");
+  const suit = SYMBOL_SUIT[card.slice(-1)]; const r = card.slice(0, -1) === "10" ? "T" : card.slice(0, -1);
+  return suit ? { who: street, text: card, card: r + suit } : { who: street, text: card };
+}));
+const nowText = computed(() => {
+  const v = node.value; if (!v) return "";
+  return v.kind === "player" ? `${actorName.value} to act` : v.kind === "chance" ? `Deal the ${v.board.length === 3 ? "turn" : "river"}` : "Hand over";
+});
+const cellCombos = computed(() => (node.value?.combos ?? []).filter((c) => c.cell === selectedCell.value));
+// squares where the exact hands do not all play alike (20 points or more apart on some action)
+const suitMarks = computed(() => {
+  const lo = new Map<number, number[]>(); const hi = new Map<number, number[]>();
+  for (const c of node.value?.combos ?? []) {
+    if (c.weight < 0.02) continue;
+    const a = lo.get(c.cell), b = hi.get(c.cell);
+    if (!a || !b) { lo.set(c.cell, [...c.freqs]); hi.set(c.cell, [...c.freqs]); continue; }
+    c.freqs.forEach((f, i) => { a[i] = Math.min(a[i], f); b[i] = Math.max(b[i], f); });
+  }
+  const out = new Set<number>();
+  lo.forEach((a, cell) => { const b = hi.get(cell)!; if (a.some((x, i) => b[i] - x >= 0.2)) out.add(cell); });
+  return out;
+});
 const selectCell = (i: number) => { selectedCell.value = selectedCell.value === i ? null : i; };
 
 // ---------- your hand ----------
@@ -878,16 +902,25 @@ async function suggestTakeaway(): Promise<string> {
   const hist = history.value;
   let hv = await api.studyNode(view.value, hist);
   let path = hist;
-  if (hv.kind === "player" && hv.player !== heroIdx.value && hv.actions[0] === "Check") {
-    path = [...hist, 0];
+  let facing = "";
+  if (hv.kind === "player" && hv.player !== heroIdx.value) {
+    // follow the other player's most common action, so the note is about a spot that actually comes up
+    const top = hv.action_freqs.indexOf(Math.max(...hv.action_freqs));
+    const name = hv.actions[top];
+    facing = name === "Check" ? " when checked to" : ` facing a ${/^All-in/.test(name) ? "shove" : "bet"} of ${fmt(hv.action_amounts[top])}`;
+    path = [...hist, top];
     hv = await api.studyNode(view.value, path);
   }
   if (hv.kind !== "player") return "";
   const words = (v: api.NodeView) => {
     const ag = (fr: number[]) => fr.map((f, i) => (/^(Bet|Raise|All-in)/.test(v.actions[i]) ? f : 0)).reduce((x, y) => x + y, 0);
+    if (v.actions[0] === "Fold") {
+      const call = v.actions.findIndex((x) => x === "Call");
+      return `fold ${pct(v.action_freqs[0])}, call ${pct(call >= 0 ? v.action_freqs[call] : 0)}, raise ${pct(ag(v.action_freqs))}`;
+    }
     return `bet ${pct(ag(v.action_freqs))} (strong hands ${pct(ag(v.buckets[0].freqs))}, weak hands ${pct(ag(v.buckets[2].freqs))})`;
   };
-  const where = path.length > hist.length ? " when checked to" : "";
+  const where = facing;
   const base = view.value === "base" ? hv : await api.studyNode("base", path);
   let text = `${built.value.description} On ${boardText(hv.board)}${where}: game-theory play is to ${words(base)}.`;
   if (summary.value?.locked) {

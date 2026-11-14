@@ -234,7 +234,12 @@ pub struct NodeView {
     pub cards: Vec<(String, usize)>, // chance node: dealable cards (label, id)
     pub locked: bool,
     pub range_combos: [f64; 2],
+    /// acting player's exact hands still in range
+    pub combos: Vec<Combo>,
 }
+
+#[derive(Serialize, Default, Clone)]
+pub struct Combo { pub hand: String, pub cell: usize, pub weight: f64, pub freqs: Vec<f64>, pub equity: f64, pub ev: f64 }
 
 fn parse_board(board: &str) -> Result<(  [Card; 3], Card, Card, BoardState), String> {
     let s: String = board.chars().filter(|c| !c.is_whitespace()).collect();
@@ -709,6 +714,13 @@ pub fn node_view(game: &mut PostFlopGame, history: &[usize]) -> Result<NodeView,
         let wt = w[h] as f64;
         if wt <= 0.0 { continue; }
         let gi = grid_index(cards[h]);
+        {
+            let (lo, hi) = if cards[h].0 / 4 >= cards[h].1 / 4 { (cards[h].1, cards[h].0) } else { (cards[h].0, cards[h].1) };
+            v.combos.push(Combo {
+                hand: format!("{}{}", card_to_string(hi).unwrap_or_default(), card_to_string(lo).unwrap_or_default()),
+                cell: gi, weight: raw[h] as f64, freqs: (0..na).map(|a| strat[a * n + h] as f64).collect(), equity: eq[h] as f64, ev: ev[h] as f64,
+            });
+        }
         let c = &mut grid[gi];
         c.weight += wt;
         c.reach += raw[h] as f64;

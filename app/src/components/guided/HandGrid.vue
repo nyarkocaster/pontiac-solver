@@ -25,6 +25,7 @@
         >
           {{ label(i) }}
         </div>
+        <div v-if="marks && marks.has(i)" class="absolute top-[2px] right-[2px] w-[6px] h-[6px] rounded-full bg-ink ring-1 ring-white" title="Suits play differently here: click to see each one"></div>
       </div>
     </div>
   </div>
@@ -35,7 +36,7 @@ import { computed } from "vue";
 import type { Cell } from "../../guided/api";
 type GridCell = Cell;
 
-const props = defineProps<{ grid: GridCell[]; colors: string[]; selected: number | null; mine?: number | null }>();
+const props = defineProps<{ grid: GridCell[]; colors: string[]; selected: number | null; mine?: number | null; marks?: Set<number> }>();
 defineEmits<{ (e: "select", i: number): void }>();
 
 const R = "AKQJT98765432";

@@ -238,15 +238,9 @@
         </div>
 
         <!-- line so far -->
-        <div class="flex flex-wrap items-center gap-1.5 mt-3 text-sm">
-          <button class="crumb" @click="goto(0)">{{ ["Flop", "Turn", "River"][startLen - 3] }} starts</button>
-          <template v-for="(st, k) in line" :key="k">
-            <span class="text-muted">›</span>
-            <button class="crumb" @click="goto(k + 1)"><template v-if="st.player >= 0"><b>{{ players[st.player].name }}</b> {{ st.label.toLowerCase() }}</template><b v-else>{{ st.label }}</b></button>
-          </template>
-          <button v-if="history.length" class="ml-2 text-felt underline font-bold" @click="goto(history.length - 1)">Back one step</button>
-          <span v-if="node.exact" class="ml-2 text-xs font-bold bg-felt-light border border-felt rounded px-1.5 py-0.5" title="This turn card was solved on its own with every river card, starting from the ranges the flop solve sends here">exact turn solve</span>
-        </div>
+        <ActionBar class="mt-3" :start="['Flop', 'Turn', 'River'][startLen - 3]" :steps="steps" :now="nowText" :pot="money(node.pot)" @goto="goto">
+          <span v-if="node.exact" class="self-center ml-2 text-xs font-bold bg-felt-light border border-felt rounded px-1.5 py-0.5 whitespace-nowrap" title="This turn card was solved on its own with every river card, starting from the ranges the flop solve sends here">exact turn solve</span>
+        </ActionBar>
 
         <div class="grid grid-cols-12 gap-5 mt-4">
           <div class="col-span-5 space-y-4">
@@ -371,25 +365,11 @@
                   <span v-for="(a, i) in node.actions" :key="i" class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm" :style="{ background: colors[i] }"></span>{{ actionText(a) }}</span>
                 </div>
               </div>
-              <HandGrid class="mt-3" :grid="node.grid" :colors="colors" :selected="selected" @select="selected = selected === $event ? null : $event" />
+              <HandGrid class="mt-3" :grid="node.grid" :colors="colors" :selected="selected" :marks="suitMarks" @select="selected = selected === $event ? null : $event" />
               <p class="hint mt-2">The fill height shows how much of each hand is still here. A sliver means that hand rarely reaches this point, so it barely moves the totals on the left.</p>
-              <p v-if="selected === null" class="hint mt-1">Click a square to see every exact hand in it.</p>
+              <p v-if="selected === null" class="hint mt-1">Click a square to see every exact hand in it. A dot in the corner marks squares where the suits play differently.</p>
               <div v-else class="mt-3">
-                <div v-if="!cellCombos.length" class="hint">No hands from this square get here.</div>
-                <table v-else class="w-full text-sm">
-                  <thead><tr class="text-left text-xs text-muted"><th class="font-normal">Hand</th><th class="font-normal pl-2">What it does</th><th class="font-normal text-right" title="How often this exact hand is still here, after starting ranges and earlier actions">Gets here</th><th class="font-normal text-right">Wins</th><th class="font-normal text-right">EV</th></tr></thead>
-                  <tbody>
-                    <tr v-for="c in cellCombos" :key="c.hand" class="border-t border-rule">
-                      <td class="py-1 font-display font-bold whitespace-nowrap">
-                        <span :class="SUIT_COLOR[c.hand[1]]">{{ c.hand[0] }}{{ SUIT_SYMBOL[c.hand[1]] }}</span><span :class="SUIT_COLOR[c.hand[3]]">{{ c.hand[2] }}{{ SUIT_SYMBOL[c.hand[3]] }}</span>
-                      </td>
-                      <td class="pl-2">{{ mixText(c.freqs) }}</td>
-                      <td class="text-right tabular-nums">{{ pct1(Math.min(1, c.weight)) }}</td>
-                      <td class="text-right tabular-nums">{{ pct(c.equity) }}</td>
-                      <td class="text-right tabular-nums">{{ node.has_ev ? money1(c.ev) : "…" }}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <SuitBreakdown :combos="cellCombos" :actions="node.actions.map((x) => actionText(x))" :colors="colors" :fmt-ev="money1" :show-ev="node.has_ev" />
               </div>
             </div>
           </div>
@@ -408,6 +388,8 @@ import { RANGES, PROFILES, LEAKS, RANK_CHARS, SUIT_CHARS, SUIT_SYMBOL, SUIT_COLO
 import { actionColors } from "../../guided/coach";
 import HandGrid from "./HandGrid.vue";
 import RangeSlider from "./RangeSlider.vue";
+import ActionBar, { type Step } from "./ActionBar.vue";
+import SuitBreakdown from "./SuitBreakdown.vue";
 import PlayingCard from "./PlayingCard.vue";
 
 interface Seat3 { name: string; preset: string; range: string }
@@ -693,6 +675,28 @@ const mixText = (f: number[]) => {
   const parts = f.map((x, i) => [x, i]).filter(([x]) => x >= 0.005).sort((a, b) => b[0] - a[0]).map(([x, i]) => `${actionText(acts[i]).toLowerCase()} ${pct(x)}`);
   return parts.join(", ");
 };
+const steps = computed<Step[]>(() => line.value.map((st, k) => {
+  if (st.player >= 0) return { who: players[st.player].name, text: st.label };
+  const [street] = st.label.split(" ");
+  return { who: street, text: st.label, card: cardStr(history.value[k]) };
+}));
+const nowText = computed(() => {
+  const v = node.value; if (!v) return "";
+  return v.kind === "player" ? `${players[v.player].name} to act` : v.kind === "chance" ? `Deal the ${v.street === "flop" ? "turn" : "river"}` : "Hand over";
+});
+// squares where the exact hands do not all play alike (20 points or more apart on some action)
+const suitMarks = computed(() => {
+  const lo = new Map<number, number[]>(); const hi = new Map<number, number[]>();
+  for (const c of node.value?.combos ?? []) {
+    if (c.weight < 0.02) continue;
+    const a = lo.get(c.cell), b = hi.get(c.cell);
+    if (!a || !b) { lo.set(c.cell, [...c.freqs]); hi.set(c.cell, [...c.freqs]); continue; }
+    c.freqs.forEach((f, i) => { a[i] = Math.min(a[i], f); b[i] = Math.max(b[i], f); });
+  }
+  const out = new Set<number>();
+  lo.forEach((a, cell) => { const b = hi.get(cell)!; if (a.some((x, i) => b[i] - x >= 0.2)) out.add(cell); });
+  return out;
+});
 const cellCombos = computed(() => (node.value?.combos ?? []).filter((c) => c.cell === selected.value).sort((a, b) => b.ev - a.ev));
 const stillIn = computed(() => players.filter((_p, i) => !node.value?.folded[i]).map((p) => p.name).join(" and "));
 const worstGain = computed(() => {

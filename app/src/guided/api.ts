@@ -31,7 +31,9 @@ export interface NodeView {
   bets: [number, number]; stack: number; actions: string[]; action_amounts: number[];
   action_freqs: number[]; grid: Cell[]; buckets: Bucket[]; ev: [number, number];
   equity: [number, number]; cards: [string, number][]; locked: boolean; range_combos: [number, number];
+  combos: Combo[];
 }
+export interface Combo { hand: string; cell: number; weight: number; freqs: number[]; equity: number; ev: number }
 
 export const studySolve = (spec: StudySpec) => call<StudySummary>("study_solve", { spec });
 export const studyProgress = () => call<[number, number, number, number]>("study_progress");
