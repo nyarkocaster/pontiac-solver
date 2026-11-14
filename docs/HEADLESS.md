@@ -11,7 +11,7 @@ For running the solver with nobody at the keyboard: a JSON spot file goes in, a 
   pip install -e ".[test]" && pytest
   ```
 
-  Fourteen tests, about 15 seconds. They solve a river spot, query the saved solve, exercise full locks, partial locks, habits and error messages, solve three-player spots, check push/fold ranges, and compare the two engines on the same spots.
+  Sixteen tests, about 30 seconds. They solve a river spot, query the saved solve, exercise full locks, partial locks, habits and error messages, solve three-player spots, check push/fold ranges, and compare the two engines on the same spots.
 - **What gets installed:** a small Python package, `pontiac`, plus a prebuilt solver program for Linux x86-64 at `pontiac/bin/pontiac-linux-x86_64` (3 MB, no dependencies beyond glibc). If that program will not run on a machine, the package falls back to building it with `cargo build --release` in `cli/` (needs Rust; crates come from crates.io). `PONTIAC_BIN` overrides the choice.
 - **Where the code lives:** `github.com/nyarkocaster/pontiac-solver` (public). Saved solves (`*.pontiac`) are large and are git-ignored.
 
@@ -37,6 +37,8 @@ pontiac solve spot.json [-o result.json] [--save solved.pontiac]
 pontiac query solved.pontiac --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]
 pontiac estimate spot.json
 pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]
+pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20]
+pontiac icm --stacks 5000,3000,2000 --payouts 50,30,20
 pontiac version
 ```
 
@@ -235,6 +237,24 @@ dict(zip(r["classes"], r["jam"]))["K5o"]  # frequency for one hand class
 ```
 
 The small blind moves all-in or folds; the big blind calls or folds. `stack_bb` is the shorter stack before the blinds are posted. The answer is the equilibrium (checked against published charts: 58% jam / 37% call at 10 bb), found in well under a second. `jam_edge_bb` and `call_edge_bb` say how much each hand gains over folding, so values near zero are close decisions. `ev_small_blind_bb` is the small blind's average result per hand. Heads-up sit-and-gos pay the winner only, so chip values need no prize adjustment.
+
+### Three-handed, and prize money (ICM)
+
+```python
+r = pontiac.pushfold3([12, 8, 15])                               # button, small blind, big blind; chips
+r = pontiac.pushfold3([12, 8, 15], payouts=[50, 30, 20])         # play for prize money
+r = pontiac.pushfold3([12, 8, 15], payouts=[50, 30, 20], others_bb=[6], bb_ante=1)   # a fourth player waiting; big-blind ante
+{d["id"]: d["pct"] for d in r["decisions"]}     # btn_jam, sb_call, sb_jam, bb_call_btn, bb_call_sb, bb_call_both
+pontiac.icm([5000, 3000, 2000], [50, 30, 20])["prize_value"]     # [38.39, 32.75, 28.86]
+```
+
+Command line: `pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 6] [--ante 0.125] [--bb-ante 1]` and `pontiac icm --stacks ... --payouts ...`.
+
+- Stacks are in big blinds before antes and blinds. Each decision has `pct`, `range` (text), and `freq` / `edge` per hand class; `edge` is what committing gains over folding each time the spot comes up.
+- `value` is each player's average result: big blinds per hand for chips, expected prize for prize money (`value_before` is the stack's prize value before the hand). `max_gain` is the most any one player could gain by changing only their own ranges.
+- Prize values use the Independent Chip Model (Malmuth-Harville). A call counts as all-in for the caller's whole stack.
+- Three-way all-in results come from a sampled table (24,000 boards), so a hand right on the edge of a range can land on the wrong side. Takes about 10 seconds on 2 cores at the default 200 iterations.
+- **Not included:** prize-money payoffs in the postflop solver. Postflop solves play for chips.
 
 ## 7. Extras
 

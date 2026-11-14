@@ -1,8 +1,14 @@
 <template>
   <div class="h-full overflow-y-auto bg-paper text-ink font-body">
     <div class="max-w-[1180px] mx-auto px-6 py-6">
-      <h1 class="font-display font-extrabold text-[2rem] leading-tight tracking-tight">Heads-up push or fold</h1>
-      <p class="text-muted mt-1 max-w-[70ch]">
+      <h1 class="font-display font-extrabold text-[2rem] leading-tight tracking-tight">Push or fold</h1>
+      <div class="flex gap-1.5 mt-3" role="tablist">
+        <button class="pill" :class="mode === 'hu' ? 'pill-on' : ''" role="tab" :aria-selected="mode === 'hu'" @click="mode = 'hu'">Heads-up</button>
+        <button class="pill" :class="mode === 'three' ? 'pill-on' : ''" role="tab" :aria-selected="mode === 'three'" @click="mode = 'three'">3-handed, with prize money</button>
+      </div>
+      <PushFoldThree v-if="mode === 'three'" />
+      <template v-else>
+      <p class="text-muted mt-3 max-w-[70ch]">
         For short stacks heads-up: the small blind (the button) either moves all-in or folds, and the big blind calls
         or folds. These are the ranges where neither player can do better by changing their own.
       </p>
@@ -70,6 +76,7 @@
           <li class="flex gap-2"><span class="text-felt font-bold">•</span><span>Limping and small raises are not part of this calculation.</span></li>
         </ul>
       </div>
+      </template>
     </div>
   </div>
 </template>
@@ -77,6 +84,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { pushfoldSolve, type PushFold } from "../../guided/api3";
+import PushFoldThree from "./PushFoldThree.vue";
+
+const mode = ref<"hu" | "three">("hu");
 
 const stack = ref(10);
 const bb = ref(1);

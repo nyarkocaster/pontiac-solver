@@ -14,8 +14,8 @@ import tempfile
 
 from ._binary import binary
 
-__version__ = "0.5.0"
-__all__ = ["solve", "query", "estimate", "pushfold", "version", "SolverError", "binary"]
+__version__ = "0.6.0"
+__all__ = ["solve", "query", "estimate", "pushfold", "pushfold3", "icm", "version", "SolverError", "binary"]
 
 
 class SolverError(RuntimeError):
@@ -90,6 +90,28 @@ def pushfold(stack_bb, small_blind=0.5, ante=0.0):
     calls or folds. `stack_bb` is the shorter stack before the blinds are posted. Returns the
     two ranges as text (`jam_range`, `call_range`) and per hand class (`jam`, `call`, `classes`)."""
     return _run(["pushfold", "--stack", str(stack_bb), "--sb", str(small_blind), "--ante", str(ante)])
+
+
+def pushfold3(stacks_bb, payouts=None, others_bb=None, small_blind=0.5, ante=0.0, bb_ante=0.0, iterations=200):
+    """Three-handed push/fold. `stacks_bb` is (button, small blind, big blind) before antes and
+    blinds. With `payouts` (first prize first) players play for prize money (ICM) instead of chips;
+    `others_bb` lists stacks of players still in the tournament but not in the hand. Returns six
+    decisions (`btn_jam`, `sb_call`, `sb_jam`, `bb_call_btn`, `bb_call_sb`, `bb_call_both`), each
+    with `pct`, `range`, and `freq` / `edge` per hand class."""
+    join = lambda xs: ",".join(str(x) for x in (xs or []))
+    args = ["pushfold", "--stacks", join(stacks_bb), "--sb", str(small_blind), "--ante", str(ante),
+            "--bb-ante", str(bb_ante), "--iterations", str(iterations)]
+    if payouts:
+        args += ["--payouts", join(payouts)]
+    if others_bb:
+        args += ["--others", join(others_bb)]
+    return _run(args)
+
+
+def icm(stacks, payouts):
+    """Prize-money value of tournament stacks (Independent Chip Model). Returns `prize_value`,
+    `chip_share` and `prize_share`, one entry per stack."""
+    return _run(["icm", "--stacks", ",".join(str(x) for x in stacks), "--payouts", ",".join(str(x) for x in payouts)])
 
 
 def version():

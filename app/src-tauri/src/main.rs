@@ -104,6 +104,8 @@ fn main() {
             mw_node,
             mw_resolve,
             pushfold_solve,
+            pushfold3_solve,
+            icm_values,
             cpu_threads
         ])
         .run(tauri::generate_context!())

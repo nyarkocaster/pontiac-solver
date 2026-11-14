@@ -1,3 +1,4 @@
+import { topPercent, without } from "./rangeTools";
 // Guided Study data: range library, scenarios, sizing presets, leak presets.
 // Hero ranges = Chris's Austin Stage 1 charts (retooled for the $15 open).
 // Rec ranges = CLP "for-fun rec" profile + Claude estimates (slowplay weights).
@@ -47,6 +48,29 @@ export const SEAT_LABEL: Record<string, string> = {
   UTG: "UTG", UTG1: "UTG+1", UTG2: "UTG+2", LJ: "Lojack", HJ: "Hijack", CO: "Cutoff", BTN: "Button", SB: "Small blind",
 };
 const group = (s: string) => (["UTG", "UTG1", "UTG2"].includes(s) ? "EP" : ["LJ", "HJ"].includes(s) ? "MP" : s);
+
+// Tournament starting ranges by stack depth. These are sensible starting points built from the
+// hand-strength order (opens) and from wide defends with the re-raising hands taken out (calls).
+// They are not solver output; adjust them with the slider or by typing.
+const T_SRC = "Tournament starting point";
+const tOpen = (pct: number) => topPercent(pct);
+export const TOURNEY_RANGES: Record<string, { label: string; range: string; source: string }> = {
+  t_deep_open_EP: { label: "Tournament 25-40 bb: early open (15%)", range: tOpen(15), source: T_SRC },
+  t_deep_open_MP: { label: "Tournament 25-40 bb: middle open (20%)", range: tOpen(20), source: T_SRC },
+  t_deep_open_CO: { label: "Tournament 25-40 bb: cutoff open (27%)", range: tOpen(27), source: T_SRC },
+  t_deep_open_BTN: { label: "Tournament 25-40 bb: button open (43%)", range: tOpen(43), source: T_SRC },
+  t_deep_bb_vs_early: { label: "Tournament 25-40 bb: big blind calls an early open", range: without(tOpen(50), "QQ+,AKs,AKo"), source: T_SRC },
+  t_deep_bb_vs_late: { label: "Tournament 25-40 bb: big blind calls a late open", range: without(tOpen(68), "JJ+,AQs+,AKo"), source: T_SRC },
+  t_deep_btn_flat: { label: "Tournament 25-40 bb: button calls an open", range: "99-22,AJs-A8s,A5s-A4s,KTs+,QTs+,J9s+,T9s,98s,87s,76s,AQo-AJo,KQo", source: T_SRC },
+  t_short_open_EP: { label: "Tournament 15-20 bb: early open (13%)", range: tOpen(13), source: T_SRC },
+  t_short_open_MP: { label: "Tournament 15-20 bb: middle open (17%)", range: tOpen(17), source: T_SRC },
+  t_short_open_CO: { label: "Tournament 15-20 bb: cutoff open (23%)", range: tOpen(23), source: T_SRC },
+  t_short_open_BTN: { label: "Tournament 15-20 bb: button open (35%)", range: tOpen(35), source: T_SRC },
+  t_short_bb_vs_early: { label: "Tournament 15-20 bb: big blind calls an early open", range: without(tOpen(45), "TT+,AQs+,AKo"), source: T_SRC },
+  t_short_bb_vs_late: { label: "Tournament 15-20 bb: big blind calls a late open", range: without(tOpen(60), "88+,ATs+,AJo+,KQs"), source: T_SRC },
+  t_short_btn_flat: { label: "Tournament 15-20 bb: button calls an open", range: "99-66,AJs-ATs,KTs+,QTs+,JTs,T9s,AQo", source: T_SRC },
+};
+Object.assign(RANGES, TOURNEY_RANGES);
 
 export interface Opponent { id: string; label: string; help: string }
 export const OPPONENTS: Opponent[] = [

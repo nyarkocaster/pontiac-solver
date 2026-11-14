@@ -72,3 +72,16 @@ pub fn mw_resolve(state: tauri::State<RwLock<State3>>, prog: tauri::State<Arc<Pr
 pub fn pushfold_solve(stack: f64, sb: f64, ante: f64) -> Result<pushfold::PushFold, String> {
     pushfold::solve(stack, sb, ante)
 }
+
+/// Three-handed push/fold, for chips or prize money.
+#[tauri::command(async)]
+pub fn pushfold3_solve(spot: pushfold::three::Spot3) -> Result<pushfold::three::PushFold3, String> {
+    pushfold::three::solve(&spot)
+}
+
+/// Prize-money value of tournament stacks.
+#[tauri::command(async)]
+pub fn icm_values(stacks: Vec<f64>, payouts: Vec<f64>) -> Result<Vec<f64>, String> {
+    if stacks.is_empty() || stacks.len() > 10 || payouts.len() > 10 || stacks.iter().any(|&x| x < 0.0) { return Err("give 1 to 10 stacks and at most 10 prizes".into()); }
+    Ok(pushfold::icm::icm(&stacks, &payouts))
+}

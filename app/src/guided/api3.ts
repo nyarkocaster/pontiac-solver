@@ -49,3 +49,12 @@ export interface PushFold {
   ev_small_blind_bb: number; ev_big_blind_bb: number; classes: string[];
 }
 export const pushfoldSolve = (stack: number, sb: number, ante: number) => call<PushFold>("pushfold_solve", { stack, sb, ante });
+
+export interface Spot3P { stacks: [number, number, number]; small_blind: number; ante: number; bb_ante: number; payouts: number[]; others: number[]; iterations?: number }
+export interface Decision3 { id: string; title: string; pct: number; freq: number[]; edge: number[]; range: string }
+export interface PushFold3 {
+  players: string[]; stacks_bb: number[]; playing_for: string; value_unit: string; value: number[]; value_before: number[] | null;
+  max_gain: number[]; decisions: Decision3[]; classes: string[]; iterations: number;
+}
+export const pushfold3Solve = (spot: Spot3P) => call<PushFold3>("pushfold3_solve", { spot });
+export const icmValues = (stacks: number[], payouts: number[]) => call<number[]>("icm_values", { stacks, payouts });

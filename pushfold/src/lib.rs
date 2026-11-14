@@ -3,6 +3,10 @@
 //! values and prize values coincide and no prize-structure model is needed.
 use serde::Serialize;
 
+pub mod tables;
+pub mod icm;
+pub mod three;
+
 static EQUITY: &[u8] = include_bytes!("../data/preflop_equity_169.bin");
 pub const RANKS: &str = "AKQJT98765432";
 

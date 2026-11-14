@@ -7,17 +7,22 @@ description = "Heads-up push/fold equilibrium calculator (part of Pontiac Solver
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+rayon = "1.8"
 
 # only the table generator needs these
 multiway = { path = "../multiway", optional = true }
-rayon = { version = "1.8", optional = true }
 
 [features]
-generate = ["dep:multiway", "dep:rayon"]
+generate = ["dep:multiway"]
 
 [[bin]]
 name = "gen_equity"
 path = "src/bin/gen_equity.rs"
+required-features = ["generate"]
+
+[[bin]]
+name = "gen_three"
+path = "src/bin/gen_three.rs"
 required-features = ["generate"]
 
 [profile.release]

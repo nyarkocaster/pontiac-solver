@@ -17,7 +17,7 @@ const RANKS: &str = "23456789TJQKA";
 const SUITS: &str = "cdhs";
 pub const SEATS: [&str; 9] = ["SB", "BB", "UTG", "UTG1", "UTG2", "LJ", "HJ", "CO", "BTN"];
 
-pub fn version_string() -> String { format!("pontiac {VERSION} (two-player engine: postflop-solver nodelock fork; three-player engine: pontiac multiway; push/fold calculator)") }
+pub fn version_string() -> String { format!("pontiac {VERSION} (two-player engine: postflop-solver nodelock fork; three-player engine: pontiac multiway; push/fold and ICM calculators)") }
 
 fn card_name(c: u8) -> String { format!("{}{}", RANKS.as_bytes()[(c / 4) as usize] as char, SUITS.as_bytes()[(c % 4) as usize] as char) }
 fn hand_name(h: (u8, u8)) -> String { let (lo, hi) = if h.0 < h.1 { (h.0, h.1) } else { (h.1, h.0) }; format!("{}{}", card_name(hi), card_name(lo)) }
@@ -623,7 +623,7 @@ fn query(save: &str, node: &str, only: Option<&str>, detail: &str) -> Result<Val
 }
 
 fn usage() -> String {
-    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac]\n  pontiac query <solved.pontiac> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]\n  pontiac estimate <spot.json>\n  pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
+    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac]\n  pontiac query <solved.pontiac> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]\n  pontiac estimate <spot.json>\n  pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]\n  pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 6] [--sb 0.5] [--ante 0] [--bb-ante 1]\n  pontiac icm --stacks 5000,3000,2000 --payouts 50,30,20\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
 }
 
 fn main() {
@@ -646,6 +646,33 @@ fn main() {
                 let spot = parse_spot(&raw)?; let g = build(&spot)?; let (m, mc) = g.memory_usage();
                 let two = ["habits", "node_locks"].iter().any(|k| spot.raw.get(*k).and_then(|x| x.as_array()).map_or(false, |a| !a.is_empty()));
                 Ok(json!({"memory_mb": round(m as f64 / 1048576.0, 1), "memory_mb_compressed": round(mc as f64 / 1048576.0, 1), "solves_at_most": if two { 2 } else { 1 }, "out_of_position": spot.names[0], "in_position": spot.names[1]})) }),
+        Some("icm") => (|| -> Result<Value, String> {
+            let list = |name: &str| -> Result<Vec<f64>, String> { flag(name).ok_or(format!("{name} is needed, e.g. pontiac icm --stacks 5000,3000,2000 --payouts 50,30,20"))?.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("{name} needs numbers separated by commas"))).collect() };
+            let (stacks, payouts) = (list("--stacks")?, list("--payouts")?);
+            if stacks.is_empty() || stacks.len() > 10 || stacks.iter().any(|&x| x < 0.0) || payouts.len() > 10 { return Err("give 1 to 10 stacks (zero or more chips each) and at most 10 prizes".into()); }
+            let e = pushfold::icm::icm(&stacks, &payouts);
+            let chips: f64 = stacks.iter().sum();
+            let pool: f64 = payouts.iter().take(stacks.len()).sum();
+            Ok(json!({"ok": true, "version": version_string(), "stacks": stacks, "payouts": payouts,
+                "prize_value": e.iter().map(|x| round(*x, 4)).collect::<Vec<_>>(),
+                "chip_share": stacks.iter().map(|x| round(x / chips, 4)).collect::<Vec<_>>(),
+                "prize_share": e.iter().map(|x| round(if pool > 0.0 { x / pool } else { 0.0 }, 4)).collect::<Vec<_>>(),
+                "note": "Independent Chip Model (Malmuth-Harville): expected prize for each stack if the rest of the tournament were decided by chip counts alone"}))
+        })(),
+        Some("pushfold") if flag("--stacks").is_some() => (|| -> Result<Value, String> {
+            let list = |name: &str| -> Result<Vec<f64>, String> { match flag(name) { None => Ok(vec![]), Some(t) if t.trim().is_empty() => Ok(vec![]), Some(t) => t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("{name} needs numbers separated by commas"))).collect() } };
+            let num = |name: &str, d: f64| -> Result<f64, String> { match flag(name) { Some(x) => x.parse::<f64>().map_err(|_| format!("{name} needs a number")), None => Ok(d) } };
+            let st = list("--stacks")?;
+            if st.len() != 3 { return Err("--stacks needs three numbers in big blinds: button, small blind, big blind (use --stack for heads-up)".into()); }
+            let spot = pushfold::three::Spot3 { stacks: [st[0], st[1], st[2]], small_blind: num("--sb", 0.5)?, ante: num("--ante", 0.0)?, bb_ante: num("--bb-ante", 0.0)?,
+                payouts: list("--payouts")?, others: list("--others")?, iterations: num("--iterations", 200.0)? as usize };
+            let r = pushfold::three::solve(&spot)?;
+            let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
+            let m = v.as_object_mut().unwrap();
+            m.insert("ok".into(), json!(true)); m.insert("version".into(), json!(version_string()));
+            m.insert("note".into(), json!("each player may only move all-in (or call all-in) or fold. Stacks in big blinds before antes and blinds. Per decision: pct of all hands, freq and edge by hand class (see classes); edge is what committing gains over folding each time the spot comes up. Three-way all-in results come from a sampled table, so individual close hands can be off by a little."));
+            Ok(v)
+        })(),
         Some("pushfold") => {
             let num = |name: &str, d: f64| -> Result<f64, String> { match flag(name) { Some(x) => x.parse::<f64>().map_err(|_| format!("{name} needs a number")), None => Ok(d) } };
             (|| -> Result<Value, String> {

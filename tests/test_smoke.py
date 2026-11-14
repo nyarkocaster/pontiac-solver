@@ -156,3 +156,27 @@ def test_three_player_engine_agrees_with_two_player_engine(board, street):
     assert three["ev_bb"]["BTN"] == 0
     assert three["ev_bb"]["BB"] == pytest.approx(two["ev_bb"]["BB"], abs=0.02)
     assert three["ev_bb"]["CO"] == pytest.approx(two["ev_bb"]["SB"], abs=0.02)
+
+
+# ---- tournaments ----
+
+def test_icm_known_values():
+    r = pontiac.icm([5000, 3000, 2000], [50, 30, 20])
+    assert r["prize_value"] == pytest.approx([38.3929, 32.75, 28.8571], abs=1e-3)
+    assert sum(r["prize_value"]) == pytest.approx(100)
+
+
+def test_three_handed_pushfold_chips_and_prizes():
+    chips = pontiac.pushfold3([10, 10, 10], iterations=120)
+    prizes = pontiac.pushfold3([10, 10, 10], payouts=[50, 30, 20], iterations=120)
+    d = lambda r: {x["id"]: x for x in r["decisions"]}
+    assert sum(chips["value"]) == pytest.approx(0, abs=1e-3)
+    assert sum(prizes["value"]) == pytest.approx(100, abs=0.01)
+    assert max(chips["max_gain"]) < 0.02
+    # with the button folded, the blinds play close to the heads-up ranges
+    assert d(chips)["sb_jam"]["pct"] == pytest.approx(pontiac.pushfold(10)["jam_pct"], abs=0.03)
+    # playing for prize money tightens every call
+    for k in ("sb_call", "bb_call_btn", "bb_call_sb", "bb_call_both"):
+        assert d(prizes)[k]["pct"] < d(chips)[k]["pct"]
+    aa = chips["classes"].index("AA")
+    assert all(x["freq"][aa] == 1 for x in chips["decisions"])

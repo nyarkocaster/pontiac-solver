@@ -63,6 +63,8 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
             }
         }
         "pushfold_solve" => Ok(serde_json::to_value(pushfold::solve(args["stack"].as_f64().unwrap_or(0.0), args["sb"].as_f64().unwrap_or(0.5), args["ante"].as_f64().unwrap_or(0.0))?).unwrap()),
+        "pushfold3_solve" => { let spot: pushfold::three::Spot3 = serde_json::from_value(args["spot"].clone()).map_err(|e| e.to_string())?; Ok(serde_json::to_value(pushfold::three::solve(&spot)?).unwrap()) }
+        "icm_values" => { let st: Vec<f64> = serde_json::from_value(args["stacks"].clone()).unwrap_or_default(); let pay: Vec<f64> = serde_json::from_value(args["payouts"].clone()).unwrap_or_default(); Ok(json!(pushfold::icm::icm(&st, &pay))) }
         "cpu_threads" => Ok(json!(2)),
         "memory" => Ok(json!([6u64<<30, 8u64<<30])),
         "memory_status" => Ok(json!([2u64<<30, 8u64<<30, state.try_lock().map(|s| s.held_bytes()).unwrap_or(0), mstate.try_read().map(|s| s.held_bytes()).unwrap_or(0)])),

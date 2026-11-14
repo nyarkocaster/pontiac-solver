@@ -67,10 +67,12 @@
                 <label class="field">
                   <span>{{ built.oopName }} (acts first after the flop)</span>
                   <textarea v-model="oopRangeEdit" rows="3" class="input font-body text-xs"></textarea>
+                  <RangeSlider v-model="oopRangeEdit" :label="built.oopName" />
                 </label>
                 <label class="field">
                   <span>{{ built.ipName }} (acts last)</span>
                   <textarea v-model="ipRangeEdit" rows="3" class="input font-body text-xs"></textarea>
+                  <RangeSlider v-model="ipRangeEdit" :label="built.ipName" />
                 </label>
               </div>
               <button class="text-felt underline mt-1" @click="resetRanges">Reset to the built-in ranges</button>
@@ -528,6 +530,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import HandGrid from "./HandGrid.vue";
+import RangeSlider from "./RangeSlider.vue";
 import PlayingCard from "./PlayingCard.vue";
 import RangePreview from "./RangePreview.vue";
 import {

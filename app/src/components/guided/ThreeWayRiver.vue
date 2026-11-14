@@ -14,6 +14,31 @@
 
           <section class="mt-7">
             <h2 class="step-title"><span class="step-num">1</span>Who is in the hand?</h2>
+            <div class="flex flex-wrap items-center gap-2 mt-3" role="group" aria-label="Game type">
+              <button class="pill" :class="format === 'cash' ? 'pill-on' : ''" :aria-pressed="format === 'cash'" @click="setFormat('cash')">Cash game</button>
+              <button class="pill" :class="format === 'tourney' ? 'pill-on' : ''" :aria-pressed="format === 'tourney'" @click="setFormat('tourney')">Tournament</button>
+            </div>
+            <div v-if="format === 'tourney'" class="panel !p-3 mt-3">
+              <div class="flex flex-wrap items-end gap-4">
+                <label class="field"><span>Stack depth before the hand (bb)</span><input v-model.number="depth" type="number" min="3" max="300" step="any" class="input w-28" /></label>
+                <div class="flex flex-wrap gap-1.5 pb-0.5"><button v-for="n in [15, 20, 25, 30, 40]" :key="n" class="pill !py-1" :class="depth === n ? 'pill-on' : ''" @click="depth = n">{{ n }} bb</button></div>
+                <label class="field"><span>Open raise to (bb)</span><input v-model.number="openTo" type="number" min="2" max="10" step="0.1" class="input w-24" /></label>
+                <label class="field">
+                  <span>Antes</span>
+                  <select v-model="anteKind" class="input w-52">
+                    <option value="bb">Big-blind ante (1 bb)</option>
+                    <option value="each">Each player, 9 at the table (0.125 bb)</option>
+                    <option value="none">None</option>
+                  </select>
+                </label>
+              </div>
+              <p class="hint mt-2 max-w-[75ch]">
+                Amounts are in big blinds. The pot and stacks in step 3 are worked out from these: the opener raises, two
+                players call (one of them the big blind), the small blind folds. Ranges switch to tournament starting
+                points for this depth; they are reasonable defaults, not solved ranges, so adjust them with the sliders.
+                The solve plays for chips: prize-money pressure is not part of it yet (use the Push / Fold tab for that).
+              </p>
+            </div>
             <div class="grid grid-cols-1 gap-2.5 mt-3">
               <button v-for="s in SCENARIOS3" :key="s.id" class="choice" :class="scenarioId === s.id ? 'choice-on' : ''" :aria-pressed="scenarioId === s.id" @click="pickScenario(s.id)">
                 <div class="font-bold">{{ s.label }}</div>
@@ -40,6 +65,7 @@
                   <span class="ml-auto text-sm text-muted pb-2">{{ comboText(i) }}</span>
                 </div>
                 <textarea v-model="p.range" rows="2" class="input font-body text-xs w-full mt-2" @input="p.preset = ''"></textarea>
+                <RangeSlider v-model="p.range" :label="p.name" />
               </div>
             </div>
             <p class="hint mt-2 max-w-[70ch]">
@@ -78,8 +104,8 @@
           <section class="mt-8">
             <h2 class="step-title"><span class="step-num">3</span>Money and bet sizes</h2>
             <div class="flex flex-wrap gap-5 mt-3 items-end">
-              <label class="field"><span>Pot now ($)</span><input v-model.number="pot" type="number" min="1" class="input w-28" /></label>
-              <label v-for="(p, i) in players" :key="i" class="field"><span class="max-w-[11rem] truncate" :title="p.name">{{ p.name || "Player " + (i + 1) }}'s stack ($)</span><input v-model.number="stacks[i]" type="number" min="1" class="input w-28" /></label>
+              <label class="field"><span>Pot now ({{ unit }})</span><input v-model.number="pot" type="number" min="0" step="any" class="input w-28" /></label>
+              <label v-for="(p, i) in players" :key="i" class="field"><span class="max-w-[11rem] truncate" :title="p.name">{{ p.name || "Player " + (i + 1) }}'s stack ({{ unit }})</span><input v-model.number="stacks[i]" type="number" min="0" step="any" class="input w-28" /></label>
               <label class="field">
                 <span>Bet sizes</span>
                 <select v-model="sizingId" class="input w-72">
@@ -102,7 +128,7 @@
             </div>
             <div class="flex flex-wrap gap-5 mt-4 items-end">
               <label class="field"><span>Rake (% of the pot)</span><input v-model.number="rakePct" type="number" min="0" max="20" step="0.5" class="input w-28" /></label>
-              <label class="field"><span>Rake cap ($, 0 = none)</span><input v-model.number="rakeCap" type="number" min="0" class="input w-28" /></label>
+              <label class="field"><span>Rake cap ({{ unit }}, 0 = none)</span><input v-model.number="rakeCap" type="number" min="0" class="input w-28" /></label>
             </div>
             <p class="hint mt-2 max-w-[70ch]">
               Stacks are what each player has behind, on top of the pot. They can differ: a shorter stack that goes
@@ -140,17 +166,17 @@
               <PlayingCard v-for="k in 5" :key="k" :card="board[k - 1] !== undefined ? cardStr(board[k - 1]) : ''" size="md" />
             </div>
             <dl class="grid grid-cols-3 gap-2 mt-4 text-center">
-              <div class="stat"><dt>Pot</dt><dd>${{ pot }}</dd></div>
+              <div class="stat"><dt>Pot</dt><dd>{{ amt(pot) }}</dd></div>
               <div class="stat"><dt>Stacks</dt><dd>{{ stackText }}</dd></div>
               <div class="stat"><dt>Stack-to-pot</dt><dd>{{ (Math.min(...stacks) / Math.max(pot, 1)).toFixed(1) }}<span v-if="!sameStacks">–{{ (Math.max(...stacks) / Math.max(pot, 1)).toFixed(1) }}</span></dd></div>
             </dl>
             <ol class="mt-4 space-y-1 text-sm">
               <li v-for="(p, i) in players" :key="i" class="flex justify-between">
                 <span><b>{{ i + 1 }}.</b> {{ p.name }}<span v-if="i === hero" class="ml-1 text-xs font-bold bg-mine-light border border-mine rounded px-1">you</span></span>
-                <span class="text-muted">${{ stacks[i] }} · {{ comboText(i) }}</span>
+                <span class="text-muted">{{ amt(stacks[i]) }} · {{ comboText(i) }}</span>
               </li>
             </ol>
-            <p v-if="rakePct > 0" class="hint mt-2">Rake {{ rakePct }}%{{ rakeCap > 0 ? ` up to $${rakeCap}` : ", no cap" }}.</p>
+            <p v-if="rakePct > 0" class="hint mt-2">Rake {{ rakePct }}%{{ rakeCap > 0 ? ` up to ${amt(rakeCap)}` : ", no cap" }}.</p>
             <p v-if="estimate" class="hint mt-3">
               {{ estimate.start === 3 ? "Flop, turn and river" : estimate.start === 4 ? "Turn and river" : "River only" }}: about {{ estimate.nodes.toLocaleString() }} decision points, {{ Math.round(estimate.memory_mb) }} MB of memory.
               Rough solve time on this computer: <b class="text-ink">{{ timeText }}</b>.
@@ -381,6 +407,7 @@ import { memory, refreshMemory, releaseSolve, startMemoryWatch, gb } from "../..
 import { RANGES, PROFILES, LEAKS, RANK_CHARS, SUIT_CHARS, SUIT_SYMBOL, SUIT_COLOR, cardStr } from "../../guided/data";
 import { actionColors } from "../../guided/coach";
 import HandGrid from "./HandGrid.vue";
+import RangeSlider from "./RangeSlider.vue";
 import PlayingCard from "./PlayingCard.vue";
 
 interface Seat3 { name: string; preset: string; range: string }
@@ -409,7 +436,30 @@ const stacks = reactive<number[]>([285, 285, 285]);
 const rakePct = ref(0);
 const rakeCap = ref(0);
 const sameStacks = computed(() => stacks[0] === stacks[1] && stacks[1] === stacks[2]);
-const stackText = computed(() => (sameStacks.value ? `$${stacks[0]}` : `$${Math.min(...stacks)}–${Math.max(...stacks)}`));
+const stackText = computed(() => (sameStacks.value ? amt(stacks[0]) : `${amt(Math.min(...stacks))} to ${amt(Math.max(...stacks))}`));
+// cash games are typed in dollars; tournaments in big blinds (sent to the engine as hundredths of a big blind)
+const format = ref<"cash" | "tourney">("cash");
+const depth = ref(25);
+const openTo = ref(2.2);
+const anteKind = ref<"bb" | "each" | "none">("bb");
+const unit = computed(() => (format.value === "tourney" ? "bb" : "$"));
+const scale = computed(() => (format.value === "tourney" ? 100 : 1));
+const solvedScale = ref(1);
+const amt = (x: number) => (format.value === "tourney" ? `${Math.round(x * 100) / 100} bb` : `$${x}`);
+function tourneyMoney() {
+  const dead = anteKind.value === "bb" ? 1 : anteKind.value === "each" ? 9 * 0.125 : 0;
+  const each = anteKind.value === "each" ? 0.125 : 0;
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  pot.value = r2(3 * openTo.value + 0.5 + dead);
+  // the big blind pays the big-blind ante on top of the call
+  const bbSeat = 0;
+  for (let i = 0; i < 3; i++) stacks[i] = r2(Math.max(0.5, depth.value - openTo.value - each - (i === bbSeat && anteKind.value === "bb" ? 1 : 0)));
+  rakePct.value = 0; rakeCap.value = 0;
+}
+function setFormat(f: "cash" | "tourney") { format.value = f; pickScenario(scenarioId.value); }
+watch([depth, openTo, anteKind], () => { if (format.value === "tourney") pickScenario(scenarioId.value); });
+const T_SEATS: Record<string, string[]> = { open_two: ["bb_vs_late", "open_CO", "btn_flat"], call_btn: ["bb_vs_late", "open_CO", "btn_flat"], bb_two: ["bb_vs_early", "open_MP", "btn_flat"] };
+
 const sizingId = ref("std");
 const DETAILS = [
   { id: "fast", label: "Balanced sample: one card of each rank (fastest)", turn: 1, river: 1 },
@@ -436,8 +486,13 @@ const estimateError = ref("");
 function pickScenario(id: string) {
   const s = SCENARIOS3.find((x) => x.id === id)!;
   scenarioId.value = id;
-  s.seats.forEach(([name, preset], i) => { players[i].name = name; players[i].preset = preset; players[i].range = RANGES[preset].range; });
-  hero.value = s.hero; pot.value = s.pot; stacks.splice(0, 3, s.stack, s.stack, s.stack);
+  const tier = depth.value < 23 ? "short" : "deep";
+  s.seats.forEach(([name, cash], i) => {
+    const preset = format.value === "tourney" ? `t_${tier}_${T_SEATS[id][i]}` : cash;
+    players[i].name = name; players[i].preset = preset; players[i].range = RANGES[preset].range;
+  });
+  hero.value = s.hero;
+  if (format.value === "tourney") tourneyMoney(); else { pot.value = s.pot; stacks.splice(0, 3, s.stack, s.stack, s.stack); }
   if (habitSeat.value === s.hero) habitSeat.value = -1;
 }
 function setPreset(i: number, k: string) { players[i].preset = k; if (k) players[i].range = RANGES[k].range; }
@@ -476,7 +531,7 @@ const spec = computed<api.Spec3>(() => {
   const s = SIZINGS3.find((x) => x.id === sizingId.value)!;
   return {
     ranges: [players[0].range, players[1].range, players[2].range], board: board.value.map(cardStr).join(""),
-    pot: pot.value, stack: Math.max(...stacks), stacks: [stacks[0], stacks[1], stacks[2]], rake_rate: Math.max(0, rakePct.value || 0) / 100, rake_cap: Math.max(0, rakeCap.value || 0), flop_bet_sizes: s.flop, flop_max_raises: s.turnMax, turn_bet_sizes: s.turn, turn_max_raises: s.turnMax,
+    pot: pot.value * scale.value, stack: Math.max(...stacks) * scale.value, stacks: [stacks[0] * scale.value, stacks[1] * scale.value, stacks[2] * scale.value], rake_rate: Math.max(0, rakePct.value || 0) / 100, rake_cap: Math.max(0, rakeCap.value || 0) * scale.value, flop_bet_sizes: s.flop, flop_max_raises: s.turnMax, turn_bet_sizes: s.turn, turn_max_raises: s.turnMax,
     bet_sizes: s.bet, raise_sizes: s.raise, max_raises: s.max, allin_spr: 1.0, threads: 0,
     turn_cards: detail.value.turn, river_cards: board.value.length === 5 ? 0 : detail.value.river,
     accuracy_pct: [0.5, 0.3, 0.1][board.value.length - 3] ?? 0.1, max_iter: [400, 300, 600][board.value.length - 3] ?? 600, leaks: leaks.value,
@@ -538,7 +593,9 @@ async function solve() {
   const began = Date.now(); elapsed.value = 0;
   const timer = window.setInterval(async () => { elapsed.value = Math.round((Date.now() - began) / 1000); try { progress.value = await api.mwProgress(); } catch { /* ignore */ } }, 400);
   try {
+    const usedScale = scale.value;
     const s = await api.mwSolve(spec.value);
+    solvedScale.value = usedScale;
     if (s.error) { error.value = s.error; return; }
     summary.value = s;
     startLen.value = board.value.length;
@@ -625,11 +682,11 @@ async function setWhich(w: "base" | "locked") {
 }
 
 const colors = computed(() => actionColors(node.value?.actions ?? []));
-const money = (x: number) => `${x < -0.5 ? "-" : ""}$${Math.abs(Math.round(x))}`;
-const money1 = (x: number) => `${x < -0.05 ? "-" : ""}$${Math.abs(x).toFixed(1)}`;
+const money = (x: number) => (solvedScale.value > 1 ? `${x < -0.5 ? "-" : ""}${(Math.abs(x) / solvedScale.value).toFixed(1)} bb` : `${x < -0.5 ? "-" : ""}$${Math.abs(Math.round(x))}`);
+const money1 = (x: number) => (solvedScale.value > 1 ? `${x < -0.5 ? "-" : ""}${(Math.abs(x) / solvedScale.value).toFixed(2)} bb` : `${x < -0.05 ? "-" : ""}$${Math.abs(x).toFixed(1)}`);
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const pct1 = (x: number) => `${(x * 100).toFixed(x > 0 && x < 0.1 ? 1 : 0)}%`;
-const actionText = (a: string) => a.replace(/^(Bet|Raise to|All-in) (\d+)/, (_m, v, n) => `${v === "Bet" ? "Bets" : v === "Raise to" ? "Raises to" : "All-in"} $${n}`)
+const actionText = (a: string) => a.replace(/^(Bet|Raise to|All-in) (\d+)/, (_m, v, n) => `${v === "Bet" ? "Bets" : v === "Raise to" ? "Raises to" : "All-in"} ${money(Number(n))}`)
   .replace(/^Fold$/, "Folds").replace(/^Check$/, "Checks").replace(/^Call$/, "Calls");
 const mixText = (f: number[]) => {
   const acts = node.value?.actions ?? [];

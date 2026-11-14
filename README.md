@@ -2,7 +2,7 @@
 
 A free, open-source no-limit hold'em postflop solver with node locking, built for study.
 
-- **Desktop app (Windows):** guided heads-up study with opponent habits, three-way pots from the flop, turn or river (different stacks, side pots and rake), a heads-up push/fold calculator, and the original advanced solver screens.
+- **Desktop app (Windows):** guided heads-up study with opponent habits, three-way pots from the flop, turn or river (different stacks, side pots and rake), push/fold calculators (heads-up, and three-handed for chips or prize money), tournament setup in big blinds with antes, range sliders, and the original advanced solver screens.
 - **Headless (Linux, Python or command line):** JSON spot in, JSON result out, for two or three players, plus push/fold ranges. See [docs/HEADLESS.md](docs/HEADLESS.md).
 
 ## Quick start, headless
@@ -36,7 +36,8 @@ print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 
 ## Limits
 
-- Preflop is limited to heads-up push/fold; limps and small raises are not solved.
+- Preflop is limited to push/fold (heads-up and three-handed); limps and small raises are not solved.
+- Prize-money (ICM) payoffs apply to push/fold only; postflop solves play for chips.
 - Three-player solves cannot be saved and queried later yet; the result lists the first street.
 - Three-player flop spots deal a sample of turn and river cards by default. The app can then solve any single turn card exactly.
 
