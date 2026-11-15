@@ -45,6 +45,15 @@
               Accurate to within {{ summary?.base_expl_pct.toFixed(2) }}% of the pot. Solved in {{ secs(summary?.base_secs ?? 0) }}<template v-if="summary?.locked">, exploit solve {{ secs(summary.locked_secs) }}</template>.
             </p>
           </div>
+          <div class="shrink-0 text-right">
+            <div v-if="saveOpen" class="flex items-center gap-2">
+              <input v-model="saveName" class="input !w-72" aria-label="Name for this solve" @keyup.enter="saveNow" />
+              <button class="btn-quiet" :disabled="saveBusy || !saveName.trim()" @click="saveNow">{{ saveBusy ? "Saving…" : "Save" }}</button>
+              <button class="text-xs text-muted underline" @click="saveOpen = false">Cancel</button>
+            </div>
+            <button v-else class="btn-quiet" @click="openSave">{{ savedId ? "Saved to library ✓" : "Save to library" }}</button>
+            <p v-if="saveError" class="text-xs font-bold text-danger mt-1">{{ saveError }}</p>
+          </div>
         </div>
 
         <!-- first-run guide -->
@@ -63,7 +72,7 @@
           <div class="flex flex-wrap items-center gap-3">
             <div class="seg" role="group" aria-label="Which strategy to show">
               <button :class="view === 'base' ? 'seg-on' : ''" @click="setView('base')">Normal strategy</button>
-              <button :class="view === 'locked' ? 'seg-on' : ''" @click="setView('locked')">Vs {{ leakSummary.toLowerCase() }}</button>
+              <button :class="view === 'locked' ? 'seg-on' : ''" @click="setView('locked')">{{ lockedLabel }}</button>
             </div>
             <label class="text-sm flex items-center gap-1.5">
               <input v-model="compareOn" type="checkbox" class="rounded text-felt" @change="load" />
@@ -73,9 +82,9 @@
           </div>
           <p class="text-sm mt-2.5">
             You win on average <b>{{ fmt(summary.base_ev[heroIdx]) }}</b> of this {{ fmt(built.pot) }} pot normally, and
-            <b>{{ fmt(summary.locked_ev[heroIdx]) }}</b> against this player —
+            <b>{{ fmt(summary.locked_ev[heroIdx]) }}</b> {{ manualLocks.length ? "with the locks in place" : "against this player" }} —
             <b :class="evGain >= 0 ? 'text-felt' : 'text-danger'">{{ evGain >= 0 ? '+' : '' }}{{ fmt(evGain) }}</b> a hand,
-            if the habit is as strong as you set it. Real players are less consistent, so trust the direction of each
+            {{ manualLocks.length ? "if they really play the way you locked." : "if the habit is as strong as you set it." }} Real players are less consistent, so trust the direction of each
             change more than its size.
           </p>
         </div>
@@ -91,7 +100,7 @@
                 <div class="flex items-baseline justify-between gap-3">
                   <h2 class="font-display font-extrabold text-xl">
                     {{ actorName }}
-                    <span v-if="node.locked && view === 'locked'" class="ml-1 align-middle text-xs font-body font-bold bg-mine text-ink px-2 py-0.5 rounded">habit applied</span>
+                    <span v-if="node.locked && view === 'locked'" class="ml-1 align-middle text-xs font-body font-bold bg-mine text-[#1B1417] px-2 py-0.5 rounded">{{ manualLocks.length ? "locked" : "habit applied" }}</span>
                   </h2>
                   <span class="text-sm text-muted">Pot {{ fmt(node.pot) }}</span>
                 </div>
@@ -114,13 +123,48 @@
                     </span>
                     <span class="w-12 text-right tabular-nums font-bold">{{ pct(node.action_freqs[i]) }}</span>
                     <span v-if="compareNode" class="w-24 text-right text-xs tabular-nums text-muted">
-                      {{ view === 'locked' ? 'normally' : 'vs habit' }} {{ pct(compareNode.action_freqs[i] ?? 0) }}
+                      {{ view === 'locked' ? 'normally' : manualLocks.length ? 'locked' : 'vs habit' }} {{ pct(compareNode.action_freqs[i] ?? 0) }}
                     </span>
                   </button>
                 </div>
 
-                <div class="mt-5 flex items-center justify-between">
+                <details class="mt-3 rounded-lg border border-rule px-3 py-2" :open="lockOpen" @toggle="lockOpen = ($event.target as HTMLDetailsElement).open">
+                  <summary class="cursor-pointer text-sm font-bold">Change how {{ actorName }} plays here (node lock){{ manualLocks.length ? ` · ${manualLocks.length} set` : "" }}</summary>
+                  <div v-if="lockOpen" class="mt-2 text-sm">
+                    <p class="hint">Fix what this player does at this exact point, then solve again to see how everyone should adjust. Use it for reads like "this player never raises here".</p>
+                    <div class="seg mt-2" role="group" aria-label="Which hands the lock covers">
+                      <button :class="lockScope === 'all' ? 'seg-on' : ''" @click="lockScope = 'all'">Every hand</button>
+                      <button :class="lockScope === 'cell' ? 'seg-on' : ''" :disabled="selectedCell === null" :title="selectedCell === null ? 'Click a square in the chart first' : ''" @click="lockScope = 'cell'">Only {{ selectedCell !== null ? cellName(selectedCell) : "the square I click" }}</button>
+                    </div>
+                    <div class="mt-2 space-y-1">
+                      <label v-for="(a, i) in node.actions" :key="i" class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-sm shrink-0" :style="{ background: colors[i] }"></span>
+                        <span class="w-40">{{ actionLabel(i) }}</span>
+                        <input v-model.number="lockPct[i]" type="number" min="0" max="100" step="5" class="input !w-20 !py-1 text-right" :aria-label="actionLabel(i) + ' percent'" /><span>%</span>
+                      </label>
+                    </div>
+                    <div class="mt-2 flex items-center gap-3">
+                      <button class="btn-quiet" :disabled="lockTotal !== 100" @click="addLock">Add this lock</button>
+                      <span class="text-xs" :class="lockTotal === 100 ? 'text-muted' : 'text-danger font-bold'">Total {{ lockTotal }}%{{ lockTotal === 100 ? "" : " (must be 100)" }}</span>
+                    </div>
+                    <ul v-if="manualLocks.length" class="mt-3 space-y-1">
+                      <li v-for="(l, i) in manualLocks" :key="i" class="flex items-start justify-between gap-2 border-t border-rule pt-1">
+                        <span>{{ l.label }}</span>
+                        <button class="text-xs text-danger underline shrink-0" @click="removeLock(i)">Remove</button>
+                      </li>
+                    </ul>
+                    <div v-if="manualLocks.length || lockStale" class="mt-3">
+                      <button class="btn-solve !w-auto px-5 !py-2" :disabled="relocking || !manualLocks.length" @click="relockNow">{{ relocking ? `Solving again… ${iter} of ${maxIter}` : `Solve again with ${manualLocks.length} lock${manualLocks.length === 1 ? "" : "s"}` }}</button>
+                      <button v-if="relocking" class="ml-2 text-xs underline" @click="cancel">Stop</button>
+                      <p v-if="lockStale && !relocking" class="hint mt-1">The locks changed since the last solve. Solve again to see their effect.</p>
+                      <p v-if="lockError" class="text-sm font-bold text-danger mt-1">{{ lockError }}</p>
+                    </div>
+                  </div>
+                </details>
+
+                <div class="mt-5 flex items-center justify-between gap-2 flex-wrap">
                   <h3 class="text-sm font-bold">{{ actorName }}'s hands</h3>
+                  <ChartMode v-model="chartMode" />
                   <ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted" aria-label="Colour key">
                     <li v-for="(a, i) in node.actions" :key="i" class="flex items-center gap-1">
                       <span class="w-2.5 h-2.5 rounded-sm" :style="{ background: colors[i] }"></span>{{ shortAction(i) }}
@@ -129,7 +173,7 @@
                   </ul>
                 </div>
                 <div class="mt-2">
-                  <HandGrid :grid="node.grid" :colors="colors" :selected="selectedCell" :mine="myCell" :marks="suitMarks" @select="selectCell" />
+                  <HandGrid :grid="node.grid" :colors="colors" :selected="selectedCell" :mine="myCell" :marks="suitMarks" :mode="chartMode" :fmt-ev="fmt" @select="selectCell" />
                   <p class="hint mt-1.5">The fill height shows how much of each hand is still in the range here. A sliver means that hand rarely reaches this point. A dot in the corner marks squares where the suits play differently; click one to see each suit.</p>
                 </div>
               </template>
@@ -194,7 +238,7 @@
                       <span class="w-3 h-3 rounded-sm" :style="{ background: colors[a] }"></span>
                       <span class="flex-1">{{ actionLabel(a) }}</span>
                       <span class="tabular-nums font-bold">{{ pct(f) }}</span>
-                      <span v-if="myCompare && myCompare.acting" class="w-20 text-right text-xs text-muted tabular-nums">{{ view === 'locked' ? 'normally' : 'vs habit' }} {{ pct(myCompare.freqs[a] ?? 0) }}</span>
+                      <span v-if="myCompare && myCompare.acting" class="w-20 text-right text-xs text-muted tabular-nums">{{ view === 'locked' ? 'normally' : manualLocks.length ? 'locked' : 'vs habit' }} {{ pct(myCompare.freqs[a] ?? 0) }}</span>
                     </div>
                   </div>
                   <div v-else class="text-muted">Waiting on the other player.</div>
@@ -229,7 +273,7 @@
                 <li v-for="(n, i) in notes" :key="i">{{ n }}</li>
               </ul>
               <template v-if="view === 'locked' && compareNotes.length">
-                <h3 class="font-bold mt-4">What changes against this player</h3>
+                <h3 class="font-bold mt-4">{{ manualLocks.length ? "What changes with the locks" : "What changes against this player" }}</h3>
                 <ul class="mt-2 space-y-1.5 text-sm list-disc pl-5 marker:text-mine">
                   <li v-for="(n, i) in compareNotes" :key="i">{{ n }}</li>
                 </ul>
@@ -244,6 +288,11 @@
             <section v-if="node.kind === 'player'" class="panel">
               <h3 class="font-bold">{{ actorName }}'s play by type of hand</h3>
               <HandTypes class="mt-2" :combos="node.combos" :board="node.board" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" />
+            </section>
+
+            <section v-if="node.kind === 'player' && node.actions.some((a) => /^(Bet|Raise|All-in)/.test(a))" class="panel">
+              <h3 class="font-bold">Blockers</h3>
+              <Blockers class="mt-2" :actor="actorName" :opp="node.player === 0 ? built.ipName : built.oopName" :board="node.board" :actions="node.actions" :labels="node.actions.map((_x, a) => actionLabel(a))" :freqs="node.action_freqs" :combos="node.combos" :reset-key="view + ':' + history.join(',')" :load="loadReply" />
             </section>
 
             <section v-if="node.kind === 'player'" class="panel">
@@ -300,12 +349,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch, onMounted } from "vue";
 import HandGrid from "./HandGrid.vue";
 import RangeSlider from "./RangeSlider.vue";
 import ActionBar, { type Step } from "./ActionBar.vue";
 import SuitBreakdown from "./SuitBreakdown.vue";
 import EquityGraph from "./EquityGraph.vue";
+import ChartMode from "./ChartMode.vue";
+import Blockers from "./Blockers.vue";
 import HandTypes from "./HandTypes.vue";
 import CardReport, { type CardRow } from "./CardReport.vue";
 import PlayingCard from "./PlayingCard.vue";
@@ -370,7 +421,7 @@ const built = computed(() => custom.value?.res ?? scenario.value.build(seat.valu
 const emit = defineEmits<{ (e: "new"): void }>();
 const newSpot = () => { step.value = "setup"; };
 watch(step, (v) => { if (v === "setup" && custom.value) emit("new"); });
-type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown> };
+type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown>; heroHand?: string };
 /** Memory a spot from the spot builder needs, without touching what is on this screen. */
 async function previewCustom(p: Custom2): Promise<{ text: string; problem: string }> {
   const sp = { ...specCore.value, oop_range: p.res.oopRange, ip_range: p.res.ipRange, board: p.board.map((c) => RANK_CHARS[c >> 2] + SUIT_CHARS[c & 3]).join(""), pot: p.res.pot, stack: p.res.stack, leaks: [], ...p.overrides } as api.StudySpec;
@@ -385,12 +436,14 @@ async function previewCustom(p: Custom2): Promise<{ text: string; problem: strin
 }
 /** Takes a spot from the spot builder and solves it. Resolves when the solve is over. */
 async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
+  lastPayload = p; manualLocks.value = []; lockStale.value = false; savedId.value = "";
   custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
   if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
   await nextTick();
   oopRangeEdit.value = p.res.oopRange; ipRangeEdit.value = p.res.ipRange;
   await nextTick();
   await startSolve();
+  if (step.value === "results" && p.heroHand) { myHandInput.value = p.heroHand; await trackHand(); }
   return { ok: step.value === "results", error: error.value };
 }
 /** One quick solve of this spot on another flop, for the flop report. Leaves this screen empty afterwards. */
@@ -408,7 +461,76 @@ async function quickFlop(p: Custom2, flop: number[]) {
   return { heroEq: root.equity[h], heroEv: s.base_ev[h] / p.res.pot, oopBet: bets(root), ipBet: after.kind === "player" ? bets(after) : 0,
     ipSize: best >= 0 && after.action_freqs[best] > 0.02 ? (after.actions[best].startsWith("All-in") ? "all-in" : Math.round((after.action_amounts[best] / after.pot) * 100) + "% of the pot") : "–" };
 }
-defineExpose({ loadCustom, previewCustom, quickFlop });
+
+// ---------- saving, and locks made by hand ----------
+let lastPayload: Custom2 | null = null;
+const chartMode = ref<"strategy" | "ev" | "equity">("strategy");
+const manualLocks = ref<api.ManualLock[]>([]);
+const lockOpen = ref(false); const lockScope = ref<"all" | "cell">("all"); const lockPct = ref<number[]>([]);
+const lockStale = ref(false); const relocking = ref(false); const lockError = ref("");
+const lockedLabel = computed(() => (manualLocks.value.length && summary.value?.locked_nodes ? (leakList.value.length ? "Vs habit and your locks" : "With your locks") : "Vs " + leakSummary.value.toLowerCase()));
+const lockTotal = computed(() => lockPct.value.reduce((a, v) => a + (Number(v) || 0), 0));
+function fillLock() {
+  const v = node.value; if (!v || v.kind !== "player") return;
+  if (lockScope.value === "cell" && selectedCell.value === null) lockScope.value = "all";
+  const src = lockScope.value === "cell" && selectedCell.value !== null && v.grid[selectedCell.value].weight > 0 ? v.grid[selectedCell.value].freqs : v.action_freqs;
+  const out = src.map((f) => Math.round(f * 100));
+  const off = 100 - out.reduce((a, x) => a + x, 0);
+  if (out.length) out[out.indexOf(Math.max(...out))] += off;
+  lockPct.value = out;
+}
+onMounted(() => watch([node, selectedCell, lockScope, lockOpen], fillLock));
+function addLock() {
+  const v = node.value!; const cell = lockScope.value === "cell" ? selectedCell.value : null;
+  const what = lockPct.value.map((p, i) => (p > 0 ? `${shortAction(i).toLowerCase()} ${p}%` : "")).filter(Boolean).join(", ");
+  const where = crumbs.value.length ? crumbs.value.join(" › ") : "First decision";
+  manualLocks.value = [...manualLocks.value.filter((l) => !(l.history.join() === history.value.join() && l.cells.join() === (cell === null ? "" : String(cell)))),
+    { history: [...history.value], cells: cell === null ? [] : [cell], freqs: lockPct.value.map((p) => (Number(p) || 0) / 100), label: `${where}: ${v.player === 0 ? built.value.oopName : built.value.ipName} with ${cell === null ? "every hand" : cellName(cell)}: ${what}` }];
+  lockStale.value = true; savedId.value = "";
+}
+const removeLock = (i: number) => { manualLocks.value = manualLocks.value.filter((_l, j) => j !== i); lockStale.value = true; };
+async function relockNow() {
+  relocking.value = true; lockError.value = ""; iter.value = 0;
+  const t = window.setInterval(async () => { try { const [, it, mx] = await api.studyProgress(); iter.value = it; maxIter.value = mx || 1; } catch { /* ignore */ } }, 500);
+  try {
+    const s = await api.studyRelock(spec.value, manualLocks.value);
+    if (s.error) { lockError.value = s.error === "Solve cancelled" ? "Stopped. The normal solve is still here." : s.error; summary.value = { ...s, error: null }; view.value = "base"; }
+    else { summary.value = s; view.value = "locked"; compareOn.value = true; lockStale.value = false; savedId.value = ""; }
+    await load();
+  } catch (e) { lockError.value = String((e as Error).message ?? e); }
+  finally { window.clearInterval(t); relocking.value = false; }
+}
+/** the other player's hands and replies after one of this player's actions */
+async function loadReply(action: number) { const v = await api.studyNode(view.value, [...history.value, action]); return { actions: v.actions, combos: v.kind === "player" ? v.combos : [] }; }
+
+const saveOpen = ref(false); const saveName = ref(""); const saveBusy = ref(false); const saveError = ref(""); const savedId = ref("");
+function openSave() { saveName.value = `${built.value.description} · ${boardText(node.value?.board.slice(0, 3) ?? [])}`; saveError.value = ""; saveOpen.value = true; }
+async function saveNow() {
+  if (!lastPayload) { saveError.value = "Only spots set up in Study a spot can be saved."; return; }
+  saveBusy.value = true; saveError.value = "";
+  try { const e = await api.librarySaveTwo(saveName.value, { payload: lastPayload, locks: lockStale.value ? [] : manualLocks.value, board: boardStr.value }); savedId.value = e.id; saveOpen.value = false; }
+  catch (e) { saveError.value = String((e as Error).message ?? e); }
+  finally { saveBusy.value = false; }
+}
+/** Re-opens a solve from the library without solving again. */
+async function openSaved(e: api.LibraryEntry): Promise<{ ok: boolean; error: string }> {
+  const p = e.meta.payload as Custom2 | undefined;
+  if (!p || !e.summary) return { ok: false, error: "That entry cannot be opened." };
+  try {
+    await api.libraryOpenTwo(e.id);
+    lastPayload = p; custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
+    if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
+    await nextTick();
+    oopRangeEdit.value = p.res.oopRange; ipRangeEdit.value = p.res.ipRange;
+    manualLocks.value = (e.meta.locks as api.ManualLock[] | undefined) ?? []; lockStale.value = false; savedId.value = e.id;
+    summary.value = { ...e.summary, swap_mode: false }; view.value = e.summary.locked ? "locked" : "base"; compareOn.value = true;
+    history.value = []; crumbs.value = []; probs.value = []; takeaway.value = ""; saved.value = false; error.value = "";
+    await load();
+    step.value = "results";
+    return { ok: true, error: "" };
+  } catch (x) { return { ok: false, error: String((x as Error).message ?? x) }; }
+}
+defineExpose({ loadCustom, previewCustom, quickFlop, openSaved });
 const oopRangeEdit = ref(""), ipRangeEdit = ref("");
 const resetRanges = () => { oopRangeEdit.value = built.value.oopRange; ipRangeEdit.value = built.value.ipRange; };
 watch(() => [built.value.oopRange, built.value.ipRange], resetRanges, { immediate: true });
@@ -808,6 +930,6 @@ const downloadNotebook = () => {
 .action-row { @apply w-full flex items-center gap-3 rounded-lg border border-rule px-3 py-2 hover:border-felt hover:bg-felt-light/40 transition-colors; }
 .seg { @apply inline-flex rounded-lg border border-ink overflow-hidden; }
 .seg button { @apply px-3 py-1.5 text-sm font-bold bg-surface; }
-.seg .seg-on { @apply bg-ink text-white; }
+.seg .seg-on { @apply bg-felt text-white; }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { @apply outline-none ring-2 ring-felt ring-offset-1; }
 </style>

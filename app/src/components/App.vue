@@ -14,6 +14,10 @@
       <ThreeWayRiver ref="threeway" @new="store.navView = 'builder'" />
     </div>
 
+    <div v-show="store.navView === 'library'" style="height: calc(100% - 2.5rem)">
+      <Library :active="store.navView === 'library'" :open2="open2" :open3="run3" @done="showResult" />
+    </div>
+
     <div v-show="store.navView === 'pushfold'" style="height: calc(100% - 2.5rem)">
       <PushFold />
     </div>
@@ -89,6 +93,8 @@ import ResultViewer from "./ResultViewer.vue";
 import GuidedStudy from "./guided/GuidedStudy.vue";
 import ThreeWayRiver from "./guided/ThreeWayRiver.vue";
 import PushFold from "./guided/PushFold.vue";
+import Library from "./guided/Library.vue";
+import type { LibraryEntry } from "../guided/api";
 import SpotBuilder, { type Solve2, type Solve3 } from "./guided/SpotBuilder.vue";
 
 const guided = ref<InstanceType<typeof GuidedStudy> | null>(null);
@@ -99,6 +105,7 @@ const run3 = async (p: Solve3) => (await threeway.value?.loadCustom(p)) ?? fail;
 const preview2 = async (p: Solve2) => (await guided.value?.previewCustom(p)) ?? { text: "", problem: "" };
 const preview3 = async (p: Solve3) => (await threeway.value?.previewCustom(p)) ?? { text: "", problem: "" };
 const quickFlop = async (p: Solve2, flop: number[]) => { if (store.lastResult === "guided") store.lastResult = ""; if (!guided.value) throw new Error(fail.error); return guided.value.quickFlop(p, flop); };
+const open2 = async (e: LibraryEntry) => (await guided.value?.openSaved(e)) ?? fail;
 const showResult = (kind: "guided" | "threeway") => { store.lastResult = kind; store.navView = kind; };
 
 const store = useStore();

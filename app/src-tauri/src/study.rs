@@ -77,3 +77,32 @@ pub fn study_hand(
 pub fn study_range_grid(range: String) -> Result<Vec<f32>, String> {
     range_grid(&range)
 }
+
+/// Solve again with hand-made locks, keeping the normal solve already done.
+#[tauri::command(async)]
+pub fn study_relock(state: tauri::State<Mutex<StudyState>>, prog: tauri::State<Arc<StudyProgress>>, spec: StudySpec, locks: Vec<ManualLock>) -> Result<StudySummary, String> {
+    let prog: Arc<StudyProgress> = prog.inner().clone();
+    let (base, summary) = state.lock().unwrap().begin_relock()?;
+    let (base, out) = relock(base, &spec, &locks, &prog, summary);
+    prog.phase.store(if out.is_ok() { 4 } else { 5 }, Ordering::Relaxed);
+    Ok(state.lock().unwrap().finish_relock(base, out))
+}
+
+#[tauri::command]
+pub fn library_entries() -> Vec<LibraryEntry> { library_list() }
+
+#[tauri::command]
+pub fn library_remove(id: String) -> Result<(), String> { library_delete(&id) }
+
+#[tauri::command(async)]
+pub fn library_save_two(state: tauri::State<Mutex<StudyState>>, name: String, meta: serde_json::Value) -> Result<LibraryEntry, String> {
+    state.lock().unwrap().library_save(&name, meta)
+}
+
+#[tauri::command]
+pub fn library_save_three(name: String, meta: serde_json::Value) -> Result<LibraryEntry, String> { library_save_spot(&name, meta) }
+
+#[tauri::command(async)]
+pub fn library_open_two(state: tauri::State<Mutex<StudyState>>, id: String) -> Result<LibraryEntry, String> {
+    state.lock().unwrap().library_open(&id)
+}

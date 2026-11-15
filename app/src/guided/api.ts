@@ -48,3 +48,13 @@ export interface HandView { player: number; acting: boolean; in_range: boolean; 
 export const studyHand = (which: "base" | "locked", history: number[], player: number, hand: string) =>
   call<HandView>("study_hand", { which, history, player, hand });
 export const studyRangeGrid = (range: string) => call<number[]>("study_range_grid", { range });
+
+// hand-made locks and the saved-solve library
+export interface ManualLock { history: number[]; cells: number[]; freqs: number[]; label?: string }
+export interface LibraryEntry { id: string; name: string; saved_at: number; kind: "two" | "three"; bytes: number; summary: StudySummary | null; confidence: number; meta: Record<string, unknown> }
+export const studyRelock = (spec: StudySpec, locks: ManualLock[]) => call<StudySummary>("study_relock", { spec, locks: locks.map((l) => ({ history: l.history, cells: l.cells, freqs: l.freqs })) });
+export const libraryEntries = () => call<LibraryEntry[]>("library_entries");
+export const libraryRemove = (id: string) => call<void>("library_remove", { id });
+export const librarySaveTwo = (name: string, meta: Record<string, unknown>) => call<LibraryEntry>("library_save_two", { name, meta });
+export const librarySaveThree = (name: string, meta: Record<string, unknown>) => call<LibraryEntry>("library_save_three", { name, meta });
+export const libraryOpenTwo = (id: string) => call<LibraryEntry>("library_open_two", { id });

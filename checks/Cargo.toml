@@ -28,3 +28,7 @@ path="src/battery.rs"
 [[bin]]
 name="focus"
 path="src/focus.rs"
+
+[features]
+default = ["zstd"]
+zstd = ["postflop-solver/zstd"]

@@ -14,6 +14,11 @@ use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 
+#[cfg(feature = "zstd")]
+const SAVE_LEVEL: Option<i32> = Some(3);
+#[cfg(not(feature = "zstd"))]
+const SAVE_LEVEL: Option<i32> = None;
+
 #[derive(Default)]
 pub struct StudyProgress {
     pub phase: AtomicU8, // 0 idle, 1 baseline, 2 building locks, 3 locked solve, 4 done, 5 error/cancelled
@@ -184,7 +189,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Serialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct StudySummary {
     pub base_ev: [f64; 2],
     pub base_expl_pct: f64,
@@ -834,5 +839,212 @@ pub fn range_grid(range: &str) -> Result<Vec<f32>, String> {
 impl StudyState {
     pub fn hand(&mut self, locked: bool, history: &[usize], player: usize, hand: &str) -> Result<HandView, String> {
         hand_view(self.game(locked)?, history, player, hand)
+    }
+}
+
+
+// ---------- hand-made locks on top of a finished solve ----------
+
+/// "This player does this here": a fixed action mix for the whole range at one decision, or for
+/// some chart squares only (the other hands stay free to adjust).
+#[derive(Deserialize, Clone, Debug)]
+pub struct ManualLock {
+    pub history: Vec<usize>,
+    #[serde(default)]
+    pub cells: Vec<usize>,
+    pub freqs: Vec<f32>,
+}
+
+/// Solves the spot again with the given locks (and the spec's habits, if any) in place, reusing the
+/// normal solve already in hand. The normal solve is handed back whatever happens.
+pub fn relock(mut base: PostFlopGame, spec: &StudySpec, locks: &[ManualLock], prog: &StudyProgress, mut summary: StudySummary) -> (PostFlopGame, Result<(PostFlopGame, StudySummary, f32), String>) {
+    let weight = if spec.leaks.is_empty() { 1.0 } else { spec.confidence };
+    let pool = match rayon::ThreadPoolBuilder::new().num_threads(spec.threads).build() { Ok(p) => p, Err(e) => return (base, Err(e.to_string())) };
+    let out = pool.install(|| -> Result<(PostFlopGame, StudySummary, f32), String> {
+        prog.cancel.store(false, Ordering::Relaxed);
+        prog.iter.store(0, Ordering::Relaxed);
+        prog.phase.store(2, Ordering::Relaxed);
+        let mut g = build_game(spec)?;
+        g.allocate_memory(true);
+        let mut n = 0;
+        if !spec.leaks.is_empty() {
+            n += collect_locks(&mut base, &spec.leaks, spec.freeze_rest, |hist, strat| {
+                g.apply_history(hist);
+                g.lock_current_strategy_with_weight(strat, weight);
+            });
+        }
+        for l in locks {
+            base.apply_history(&l.history);
+            if base.is_terminal_node() || base.is_chance_node() { return Err("A lock points at a place where nobody acts.".into()); }
+            let player = base.current_player();
+            let hands = base.private_cards(player).to_vec();
+            let na = base.available_actions().len();
+            if l.freqs.len() != na { return Err("A lock has the wrong number of actions for its decision.".into()); }
+            let total: f32 = l.freqs.iter().sum();
+            if l.freqs.iter().any(|f| !(0.0..=1.0001).contains(f)) || (total - 1.0).abs() > 0.02 { return Err("The percentages in a lock must add up to 100.".into()); }
+            let mut strat = vec![0.0f32; na * hands.len()];
+            for (h, &cards) in hands.iter().enumerate() {
+                if l.cells.is_empty() || l.cells.contains(&grid_index(cards)) {
+                    for a in 0..na { strat[a * hands.len() + h] = l.freqs[a] / total; }
+                }
+            }
+            g.apply_history(&l.history);
+            // a later lock at the same decision adds to an earlier one, hand by hand
+            if let Some(prev) = g.current_locking_strategy() {
+                for h in 0..hands.len() {
+                    if (0..na).all(|a| strat[a * hands.len() + h] == 0.0) { for a in 0..na { strat[a * hands.len() + h] = prev[a * hands.len() + h]; } }
+                }
+            }
+            g.lock_current_strategy_with_weight(&strat, weight);
+            n += 1;
+        }
+        base.back_to_root();
+        g.back_to_root();
+        prog.phase.store(3, Ordering::Relaxed);
+        let t = Instant::now();
+        let expl = run_solve(&g, spec, prog);
+        if prog.cancel.load(Ordering::Relaxed) { return Err("Solve cancelled".into()); }
+        finalize(&mut g);
+        summary.locked = true;
+        summary.locked_secs = t.elapsed().as_secs_f64();
+        summary.locked_expl_pct = (expl / spec.pot as f32 * 100.0) as f64;
+        summary.locked_ev = root_ev(&mut g);
+        summary.locked_nodes = n;
+        summary.swap_mode = false;
+        Ok((g, summary, weight))
+    });
+    base.back_to_root();
+    (base, out)
+}
+
+impl StudyState {
+    /// Takes the normal solve out for a re-solve with locks; `finish_relock` puts things back.
+    pub fn begin_relock(&mut self) -> Result<(PostFlopGame, StudySummary), String> {
+        let summary = self.summary.clone().ok_or("No solved game yet")?;
+        self.game(false)?;
+        self.locked = None;
+        self.locked_file = None;
+        self.cache.clear();
+        Ok((self.base.take().unwrap(), summary))
+    }
+    pub fn finish_relock(&mut self, base: PostFlopGame, out: Result<(PostFlopGame, StudySummary, f32), String>) -> StudySummary {
+        self.base = Some(base);
+        self.swap_mode = false;
+        match out {
+            Ok((g, summary, weight)) => { self.locked = Some(g); self.confidence = weight; self.summary = Some(summary.clone()); summary }
+            Err(e) => {
+                let mut s = self.summary.clone().unwrap_or_default();
+                s.locked = false; s.locked_nodes = 0;
+                self.summary = Some(s.clone());
+                s.error = Some(e);
+                s
+            }
+        }
+    }
+}
+
+// ---------- saved solves ----------
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LibraryEntry {
+    pub id: String,
+    pub name: String,
+    pub saved_at: u64,
+    /// "two" keeps the solve itself; "three" keeps the spot and is solved again when opened
+    pub kind: String,
+    pub bytes: u64,
+    #[serde(default)]
+    pub summary: Option<StudySummary>,
+    #[serde(default)]
+    pub confidence: f32,
+    /// whatever the screen needs to show the spot again
+    pub meta: serde_json::Value,
+}
+
+pub fn library_dir() -> PathBuf {
+    let root = std::env::var_os("PONTIAC_LIBRARY").map(PathBuf::from)
+        .or_else(|| std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("PontiacSolver").join("library")))
+        .or_else(|| std::env::var_os("HOME").map(|d| PathBuf::from(d).join(".local/share/pontiac-solver/library")))
+        .unwrap_or_else(|| std::env::temp_dir().join("pontiac-solver-library"));
+    let _ = std::fs::create_dir_all(&root);
+    root
+}
+
+fn safe_id(id: &str) -> Result<PathBuf, String> {
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') { return Err("Unknown saved solve".into()); }
+    Ok(library_dir().join(id))
+}
+
+pub fn library_list() -> Vec<LibraryEntry> {
+    let mut out: Vec<LibraryEntry> = std::fs::read_dir(library_dir()).into_iter().flatten().flatten()
+        .filter_map(|e| std::fs::read_to_string(e.path().join("entry.json")).ok())
+        .filter_map(|t| serde_json::from_str(&t).ok()).collect();
+    out.sort_by(|a, b| b.saved_at.cmp(&a.saved_at));
+    out
+}
+
+pub fn library_delete(id: &str) -> Result<(), String> {
+    std::fs::remove_dir_all(safe_id(id)?).map_err(|e| format!("Could not delete it: {e}"))
+}
+
+fn new_entry(name: &str, kind: &str, meta: serde_json::Value) -> Result<(LibraryEntry, PathBuf), String> {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let id = format!("s{now}");
+    let dir = safe_id(&id)?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create the library folder: {e}"))?;
+    Ok((LibraryEntry { id, name: name.trim().chars().take(120).collect(), saved_at: (now / 1000) as u64, kind: kind.into(), bytes: 0, summary: None, confidence: 1.0, meta }, dir))
+}
+
+fn write_entry(e: &LibraryEntry, dir: &std::path::Path) -> Result<(), String> {
+    std::fs::write(dir.join("entry.json"), serde_json::to_string(e).map_err(|x| x.to_string())?).map_err(|x| format!("Could not write to the library: {x}"))
+}
+
+/// Keeps a spot only (three-player solves are run again when opened).
+pub fn library_save_spot(name: &str, meta: serde_json::Value) -> Result<LibraryEntry, String> {
+    let (e, dir) = new_entry(name, "three", meta)?;
+    write_entry(&e, &dir)?;
+    Ok(e)
+}
+
+impl StudyState {
+    /// Writes the solve on screen (and its locked version, if any) to the library.
+    pub fn library_save(&mut self, name: &str, meta: serde_json::Value) -> Result<LibraryEntry, String> {
+        let summary = self.summary.clone().ok_or("No solved game to save")?;
+        let (mut e, dir) = new_entry(name, "two", meta)?;
+        let result = (|| -> Result<(), String> {
+            for locked in [false, true] {
+                if locked && !summary.locked { continue; }
+                let target = dir.join(if locked { "locked.bin" } else { "base.bin" });
+                let (mem, file) = if locked { (self.locked.as_ref(), self.locked_file.as_ref()) } else { (self.base.as_ref(), self.base_file.as_ref()) };
+                match (mem, file) {
+                    (Some(g), _) => save_data_to_file(g, "", &target, SAVE_LEVEL).map_err(|x| format!("Could not save the solve: {x}"))?,
+                    (None, Some(f)) => { std::fs::copy(f, &target).map_err(|x| format!("Could not save the solve: {x}"))?; }
+                    (None, None) => return Err("No solved game to save".into()),
+                }
+                e.bytes += std::fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+            }
+            e.summary = Some(summary.clone());
+            e.confidence = self.confidence;
+            write_entry(&e, &dir)
+        })();
+        if let Err(x) = result { let _ = std::fs::remove_dir_all(&dir); return Err(x); }
+        Ok(e)
+    }
+
+    /// Points this screen at a saved solve; the games are read from disk when first looked at.
+    pub fn library_open(&mut self, id: &str) -> Result<LibraryEntry, String> {
+        let dir = safe_id(id)?;
+        let text = std::fs::read_to_string(dir.join("entry.json")).map_err(|_| "That saved solve is missing.".to_string())?;
+        let e: LibraryEntry = serde_json::from_str(&text).map_err(|x| x.to_string())?;
+        let mut summary = e.summary.clone().ok_or("That entry has no solve stored.")?;
+        if !dir.join("base.bin").exists() { return Err("That saved solve is missing its file.".into()); }
+        self.reset();
+        summary.swap_mode = false;
+        self.base_file = Some(dir.join("base.bin"));
+        self.locked_file = if summary.locked { Some(dir.join("locked.bin")) } else { None };
+        self.confidence = e.confidence;
+        self.summary = Some(summary);
+        self.game(false)?; // fail now, not later, if the file cannot be read
+        Ok(e)
     }
 }

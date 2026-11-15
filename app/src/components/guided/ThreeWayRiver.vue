@@ -12,6 +12,8 @@
       <div v-if="step === 'results' && node && summary">
         <div class="flex items-center justify-between gap-4">
           <button class="btn-quiet" @click="newSpot">New spot</button>
+          <button class="btn-quiet ml-2" :disabled="saveState === 'busy'" title="Keeps the spot. Three-player solves are run again when opened." @click="saveSpot">{{ saveState === "done" ? "Saved to library ✓" : "Save to library" }}</button>
+          <span v-if="saveError" class="ml-2 text-xs font-bold text-danger">{{ saveError }}</span>
           <div v-if="summary.locked" class="seg" role="group" aria-label="Which solution to show">
             <button :class="which === 'base' ? 'seg-on' : ''" @click="setWhich('base')">Normal strategy</button>
             <button :class="which === 'locked' ? 'seg-on' : ''" @click="setWhich('locked')">Vs {{ players[habitSolved].name }}'s habit</button>
@@ -179,7 +181,8 @@
                   <span v-for="(a, i) in node.actions" :key="i" class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm" :style="{ background: colors[i] }"></span>{{ actionText(a) }}</span>
                 </div>
               </div>
-              <HandGrid class="mt-3" :grid="node.grid" :colors="colors" :selected="selected" :marks="suitMarks" @select="selected = selected === $event ? null : $event" />
+              <ChartMode v-model="chartMode" class="mt-2" />
+              <HandGrid class="mt-3" :grid="node.grid" :colors="colors" :selected="selected" :marks="suitMarks" :mode="node.has_ev ? chartMode : chartMode === 'ev' ? 'strategy' : chartMode" :fmt-ev="money" @select="selected = selected === $event ? null : $event" />
               <p class="hint mt-2">The fill height shows how much of each hand is still here. A sliver means that hand rarely reaches this point, so it barely moves the totals on the left.</p>
               <p v-if="selected === null" class="hint mt-1">Click a square to see every exact hand in it. A dot in the corner marks squares where the suits play differently.</p>
               <div v-else class="mt-3">
@@ -197,6 +200,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import * as api from "../../guided/api3";
 import { studyRangeGrid } from "../../guided/api";
+import * as api2 from "../../guided/api";
 import { memory, refreshMemory, releaseSolve, startMemoryWatch, gb } from "../../guided/memory";
 import { RANGES, PROFILES, LEAKS, RANK_CHARS, SUIT_CHARS, SUIT_SYMBOL, SUIT_COLOR, cardStr } from "../../guided/data";
 import { actionColors } from "../../guided/coach";
@@ -205,6 +209,7 @@ import RangeSlider from "./RangeSlider.vue";
 import ActionBar, { type Step } from "./ActionBar.vue";
 import SuitBreakdown from "./SuitBreakdown.vue";
 import EquityGraph from "./EquityGraph.vue";
+import ChartMode from "./ChartMode.vue";
 import HandTypes from "./HandTypes.vue";
 import CardReport, { type CardRow } from "./CardReport.vue";
 import PlayingCard from "./PlayingCard.vue";
@@ -413,7 +418,18 @@ async function previewCustom(p: Custom3): Promise<{ text: string; problem: strin
   } catch (e) { return { text: "", problem: String((e as Error).message ?? e) }; }
 }
 /** Takes a spot from the spot builder and solves it. Resolves when the solve is over. */
+const chartMode = ref<"strategy" | "ev" | "equity">("strategy");
+let lastPayload: Custom3 | null = null;
+const saveState = ref<"" | "busy" | "done">(""); const saveError = ref("");
+async function saveSpot() {
+  if (!lastPayload) { saveError.value = "Only spots set up in Study a spot can be saved."; return; }
+  saveState.value = "busy"; saveError.value = "";
+  const cards = lastPayload.board.map((c) => RANK_CHARS[c >> 2] + SUIT_SYMBOL[SUIT_CHARS[c & 3]]).join(" ");
+  try { await api2.librarySaveThree(`${lastPayload.names.join(", ")} · ${cards}`, { payload: lastPayload }); saveState.value = "done"; }
+  catch (e) { saveError.value = String((e as Error).message ?? e); saveState.value = ""; }
+}
 async function loadCustom(p: Custom3): Promise<{ ok: boolean; error: string }> {
+  lastPayload = p; saveState.value = "";
   fromBuilder.value = true; format.value = p.format;
   p.names.forEach((n, i) => { players[i].name = n; players[i].preset = ""; players[i].range = p.ranges[i]; });
   hero.value = p.hero; pot.value = p.pot; stacks.splice(0, 3, p.stacks[0], p.stacks[1], p.stacks[2]);
@@ -626,6 +642,6 @@ onMounted(() => {
 .action-row { @apply w-full flex items-center gap-3 rounded-lg border border-rule px-3 py-2 hover:border-felt hover:bg-felt-light/40 transition-colors; }
 .seg { @apply inline-flex rounded-lg border border-ink overflow-hidden; }
 .seg button { @apply px-3 py-1.5 text-sm font-bold bg-surface; }
-.seg .seg-on { @apply bg-ink text-white; }
+.seg .seg-on { @apply bg-felt text-white; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { @apply outline-none ring-2 ring-felt ring-offset-1; }
 </style>

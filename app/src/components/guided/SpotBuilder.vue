@@ -10,8 +10,22 @@
         </div>
         <div class="flex gap-1.5">
           <button v-for="q in quickStarts" :key="q.id" class="pill" :title="q.help" @click="applyQuick(q.id)">{{ q.label }}</button>
+          <button class="pill" :class="hhOpen ? 'pill-on' : ''" title="Fill everything in from a hand you played" @click="hhOpen = !hhOpen">Paste a hand history</button>
         </div>
       </div>
+      <section v-if="hhOpen" class="panel mt-4">
+        <h2 class="font-bold">Load a hand you played</h2>
+        <p class="hint mt-1">Paste the hand's text (PokerStars layout; most sites and trackers can export it). The table, each player's preflop action, the stacks, the flop and your cards are filled in below for you to check.</p>
+        <textarea v-model="hhText" rows="7" class="input w-full mt-2 font-mono text-xs" placeholder="PokerStars Hand #…: Hold'em No Limit ($1/$2 USD)…" aria-label="Hand history text"></textarea>
+        <div class="mt-2 flex items-center gap-3">
+          <button class="btn-quiet" :disabled="!hhText.trim()" @click="loadHistory">Load this hand</button>
+          <span v-if="hhDone" class="text-sm font-bold text-felt">Loaded. Check steps 1 to 4 below{{ heroHand ? `; your hand ${heroHand} will be tracked on the result` : "" }}.</span>
+        </div>
+        <p v-if="hhError" class="mt-2 text-sm font-bold text-danger">{{ hhError }}</p>
+        <ul v-if="hhNotes.length" class="mt-2 space-y-1 text-sm">
+          <li v-for="(n, i) in hhNotes" :key="i" class="flex gap-2"><span class="text-felt font-bold">•</span><span>{{ n }}</span></li>
+        </ul>
+      </section>
 
       <div class="grid gap-5 mt-4 xl:grid-cols-[minmax(0,1fr)_370px] items-start">
         <div class="space-y-5 min-w-0">
@@ -275,9 +289,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import RangeSlider from "./RangeSlider.vue";
 import FlopReport, { type FlopRow } from "./FlopReport.vue";
+import { parseHandHistory } from "../../guided/handHistory";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
 import { parseRange, rangePercent } from "../../guided/rangeTools";
 import { studyCancel, studyProgress } from "../../guided/api";
@@ -291,7 +306,7 @@ const props = defineProps<{
   preview2: (p: Solve2) => Promise<Preview>; preview3: (p: Solve3) => Promise<Preview>;
   quickFlop: (p: Solve2, flop: number[]) => Promise<FlopRow>;
 }>();
-export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown> }
+export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; heroHand?: string; overrides: Record<string, unknown> }
 export interface Solve3 {
   format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[];
   rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string;
@@ -459,7 +474,7 @@ function payload(): { two?: Solve2; three?: Solve3 } {
         stack: Math.max(1, Math.round(Math.min(oop.behind, ip.behind) * k)), pfrIsOop: oop.raisedLast,
         description: pre.value.story + left, oopName: oop.name, ipName: ip.name,
       },
-      format: tourney ? "hu" : "live", board: [...board.value], profile,
+      format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value,
       overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value },
     } };
   }
@@ -475,6 +490,22 @@ const reportOpen = ref(false); const reporting = ref(false);
 const reportNames = computed(() => { const ps = spot.value.players; return { oop: ps[0]?.name ?? "", ip: ps[1]?.name ?? "", hero: ps.find((p) => p.hero)?.name ?? ps[0]?.name ?? "" }; });
 const reportProblem = computed(() => (pre.value.errors.length ? pre.value.errors[0] : spot.value.players.some((p) => !edits[p.seat]?.trim()) ? "Give both players a range in step 3 first." : ""));
 const reportSolve = (flop: number[]) => { const two = payload().two; if (!two) throw new Error("The flop report needs exactly two players."); return props.quickFlop({ ...two, profile: null }, flop); };
+// a pasted hand history fills the whole setup in
+const hhOpen = ref(false); const hhText = ref(""); const hhError = ref(""); const hhNotes = ref<string[]>([]); const hhDone = ref(false);
+const heroHand = ref("");
+async function loadHistory() {
+  hhError.value = ""; hhNotes.value = []; hhDone.value = false;
+  try {
+    const h = parseHandHistory(hhText.value);
+    Object.assign(table, h.table);
+    blindId.value = table.game === "cash" ? BLINDS.find((b) => b.sb === h.table.sb && b.bb === h.table.bb)?.id ?? "custom" : blindId.value;
+    seats.splice(0, seats.length, ...h.seats);
+    hero.value = h.hero;
+    await nextTick();
+    board.value = [...h.board]; heroHand.value = h.heroHand; hhNotes.value = h.notes; hhDone.value = true;
+  } catch (e) { hhError.value = String((e as Error).message ?? e); }
+}
+watch(() => [hero.value, seats.map((x) => x.act).join()], () => { if (!hhDone.value) heroHand.value = ""; });
 const estimate = reactive<Preview>({ text: "", problem: "" });
 let estTimer: number | undefined; let estToken = 0;
 watch(() => (problem.value ? "" : JSON.stringify(payload())), (key) => {
@@ -515,6 +546,7 @@ async function go() {
 </script>
 
 <style scoped>
+.btn-quiet { @apply px-3 py-1.5 rounded-lg border border-rule bg-surface text-sm font-bold hover:border-felt disabled:opacity-50; }
 .pill { @apply px-3 py-1.5 rounded-full border border-rule bg-surface text-sm hover:border-felt transition-colors whitespace-nowrap; }
 .pill-on { @apply border-felt bg-felt text-white hover:border-felt; }
 .field { @apply flex flex-col text-sm gap-1 font-bold; }

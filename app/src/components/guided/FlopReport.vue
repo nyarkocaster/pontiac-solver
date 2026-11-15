@@ -3,13 +3,14 @@
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-sm font-bold">Compare</span>
       <div class="seg" role="group" aria-label="How many flops">
-        <button v-for="n in [8, 16, 24]" :key="n" :class="count === n ? 'seg-on' : ''" :disabled="busy" @click="count = n">{{ n }} flops</button>
+        <button v-for="n in [8, 24, 49, 95]" :key="n" :class="count === n ? 'seg-on' : ''" :disabled="busy" @click="count = n">{{ n }} flops</button>
       </div>
       <button v-if="!busy" class="btn-quiet" :disabled="disabled" @click="run">{{ rows.length ? "Run again" : "Run the flop report" }}</button>
-      <button v-else class="btn-quiet" @click="stop">Stop</button>
+      <button v-else class="btn-quiet" @click="stop">Stop and keep these</button>
+      <button v-if="rows.length && !busy" class="text-xs text-felt font-bold underline" @click="download">Download as a spreadsheet file</button>
     </div>
     <p class="hint mt-1.5">
-      Solves this same preflop spot on {{ count }} different kinds of flop, one after another, each to within about 1% of the pot,
+      Solves this same preflop spot on {{ count }} different flops, one after another, each to within about 1% of the pot,
       and lines the answers up. {{ !busy && rows.length ? "" : perFlop ? `About ${timeText(perFlop * (count - rows.length))} left at this pace.` : "The first flop tells you how long the rest will take." }}
       It replaces the result on the Result page.
     </p>
@@ -42,7 +43,7 @@
               <td class="text-right text-xs">{{ r.ipSize }}</td>
             </tr>
             <tr class="border-t-2 border-rule font-bold">
-              <td class="py-1">Average of {{ rows.length }}</td>
+              <td class="py-1" title="Weighted by how often each kind of flop is dealt">Average of {{ rows.length }}</td>
               <td class="text-right pr-2">{{ pc(avg((r) => r.heroEq)) }}</td><td class="text-right pr-2">{{ pc(avg((r) => r.heroEv)) }}</td>
               <td class="text-right pr-2">{{ pc(avg((r) => r.oopBet)) }}</td><td class="text-right pr-2">{{ pc(avg((r) => r.ipBet)) }}</td><td></td>
             </tr>
@@ -75,8 +76,28 @@ const emit = defineEmits<{ (e: "pick", cards: number[]): void; (e: "busy", on: b
 const FLOPS = ["As7d2c", "Ks8s3d", "QhJh6c", "Ts9s8d", "7s6d5c", "KsKd4c", "Jh9h5h", "8s3d2c",
   "AsKdTc", "Ah8h5c", "Qs7d2c", "Jd7d4s", "Ts6d2c", "9c6c4d", "7s7d4d", "As5d5c",
   "KsQsJd", "KcTc6c", "Ad4d3s", "Qs9d8c", "Js6d2c", "Th5h4c", "6s5s2d", "QsQd7c"];
+// Larger sets: one flop from every rank pattern in turn, cycling through suit patterns, so high
+// cards, pairs, connectedness and suits all stay in proportion.
+function spread(n: number): string[] {
+  const out = [...FLOPS]; const seen = new Set(out.map(key));
+  const suits = [["s", "d", "c"], ["s", "s", "d"], ["h", "d", "h"], ["c", "h", "h"], ["d", "d", "d"]];
+  let k = 0;
+  for (let step = 0; out.length < n && step < 40; step++) {
+    for (let a = 12; a >= 0 && out.length < n; a--) for (let b = a; b >= 0 && out.length < n; b--) for (let c = b; c >= 0 && out.length < n; c--) {
+      if ((a * 7 + b * 3 + c + step * 5) % 9 !== 0 || (a === b && b === c)) continue;
+      let su = suits[k++ % suits.length];
+      if (a === b && su[0] === su[1]) su = [su[0], su[2] === su[0] ? "h" : su[2], su[2]];
+      if (b === c && su[1] === su[2]) su = [su[0], su[1], su[0] === su[1] ? "c" : su[0]];
+      if (a === b && su[0] === su[1]) continue;
+      const f = RANK_CHARS[a] + su[0] + RANK_CHARS[b] + su[1] + RANK_CHARS[c] + su[2];
+      if (!seen.has(key(f))) { seen.add(key(f)); out.push(f); }
+    }
+  }
+  return out.slice(0, n);
+}
+function key(f: string) { const ns = new Set([f[1], f[3], f[5]]).size; return f[0] + f[2] + f[4] + ns + (ns === 2 ? (f[1] === f[3] ? "a" : f[3] === f[5] ? "b" : "c") : ""); }
 const ids = (f: string) => [0, 2, 4].map((k) => RANK_CHARS.indexOf(f[k]) * 4 + SUIT_CHARS.indexOf(f[k + 1]));
-interface Row extends FlopRow { flop: string; names: string[]; cards: number[]; kind: string; high: string; suits: string; paired: boolean; joined: boolean }
+interface Row extends FlopRow { ways: number; flop: string; names: string[]; cards: number[]; kind: string; high: string; suits: string; paired: boolean; joined: boolean }
 function describe(f: string) {
   const r = [0, 2, 4].map((k) => RANK_CHARS.indexOf(f[k])).sort((a, b) => b - a);
   const ns = new Set([f[1], f[3], f[5]]).size;
@@ -84,7 +105,8 @@ function describe(f: string) {
   const suits = ns === 1 ? "One suit" : ns === 2 ? "Two of a suit" : "Three suits";
   const high = r[0] === 12 ? "Ace high" : r[0] >= 10 ? "King or queen high" : r[0] >= 8 ? "Jack or ten high" : "Nine high or lower";
   const joined = !paired && r[0] - r[2] <= 4;
-  return { high, suits, paired, joined, kind: [paired ? "paired" : joined ? "connected" : "", ns === 1 ? "one suit" : ns === 2 ? "two-tone" : "rainbow"].filter(Boolean).join(", ") };
+  const ways = paired ? 12 : ns === 1 ? 4 : ns === 2 ? 12 : 24; // how many real flops share this shape
+  return { ways, high, suits, paired, joined, kind: [paired ? "paired" : joined ? "connected" : "", ns === 1 ? "one suit" : ns === 2 ? "two-tone" : "rainbow"].filter(Boolean).join(", ") };
 }
 
 const count = ref(8); const rows = ref<Row[]>([]); const busy = ref(false); const error = ref("");
@@ -95,7 +117,7 @@ async function run() {
   const began = Date.now(); elapsed.value = 0;
   timer = window.setInterval(() => (elapsed.value = Math.round((Date.now() - began) / 1000)), 500);
   try {
-    for (const f of FLOPS.slice(0, count.value)) {
+    for (const f of spread(count.value)) {
       nowFlop.value = [0, 2, 4].map((k) => f[k] + SUIT_SYMBOL[f[k + 1]]).join(" ");
       const r = await props.solve(ids(f));
       if (mine !== token) return;
@@ -108,6 +130,13 @@ async function run() {
 function stop() { token++; props.cancel(); window.clearInterval(timer); busy.value = false; emit("busy", false); }
 onBeforeUnmount(() => window.clearInterval(timer));
 
+function download() {
+  const head = ["Flop", "Kind", `${props.hero} wins %`, `${props.hero} share of pot %`, `${props.oop} bets first %`, `${props.ip} bets when checked to %`, "Favourite size"];
+  const lines = rows.value.map((r) => [r.flop, r.kind, (r.heroEq * 100).toFixed(1), (r.heroEv * 100).toFixed(1), (r.oopBet * 100).toFixed(1), (r.ipBet * 100).toFixed(1), r.ipSize].map((x) => `"${x}"`).join(","));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([[head.map((x) => `"${x}"`).join(","), ...lines].join("\r\n")], { type: "text/csv" }));
+  a.download = "flop-report.csv"; a.click(); URL.revokeObjectURL(a.href);
+}
 const COLS = [{ id: "flop" }, { id: "heroEq" }, { id: "heroEv" }, { id: "oopBet" }, { id: "ipBet" }, { id: "ipSize" }] as const;
 type ColId = (typeof COLS)[number]["id"];
 const label = (id: ColId) => ({ flop: "Flop", heroEq: `${props.hero} wins`, heroEv: `${props.hero}'s share of the pot`, oopBet: `${props.oop} bets first`, ipBet: `${props.ip} bets when checked to`, ipSize: "Favourite size" })[id];
@@ -118,7 +147,7 @@ const sorted = computed(() => {
   return [...rows.value].sort((a, b) => (sortDown.value ? b[id] - a[id] : a[id] - b[id]));
 });
 const pc = (v: number) => Math.round(v * 100) + "%";
-const avg = (f: (r: Row) => number, list: Row[] = rows.value) => (list.length ? list.reduce((a, r) => a + f(r), 0) / list.length : 0);
+const avg = (f: (r: Row) => number, list: Row[] = rows.value) => { const w = list.reduce((a, r) => a + r.ways, 0); return w ? list.reduce((a, r) => a + f(r) * r.ways, 0) / w : 0; };
 const timeText = (s: number) => (s < 90 ? `${Math.max(1, Math.round(s))} seconds` : `${Math.round(s / 60)} minutes`);
 const groups = computed(() => {
   const out: { name: string; n: number; eq: number; ipBet: number }[] = [];

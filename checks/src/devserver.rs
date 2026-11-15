@@ -88,6 +88,19 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
                 Err(e) => { prog.phase.store(5, Ordering::Relaxed); Ok(json!({"error": e, "base_ev":[0,0],"base_expl_pct":0,"base_secs":0,"locked":false,"locked_ev":[0,0],"locked_expl_pct":0,"locked_secs":0,"locked_nodes":0,"memory_mb":0})) }
             }
         }
+        "study_relock" => {
+            let spec: StudySpec = serde_json::from_value(args["spec"].clone()).map_err(|e| e.to_string())?;
+            let locks: Vec<ManualLock> = serde_json::from_value(args["locks"].clone()).map_err(|e| e.to_string())?;
+            let (base, summary) = state.lock().unwrap().begin_relock()?;
+            let (base, out) = relock(base, &spec, &locks, &prog, summary);
+            prog.phase.store(if out.is_ok() { 4 } else { 5 }, Ordering::Relaxed);
+            Ok(serde_json::to_value(state.lock().unwrap().finish_relock(base, out)).unwrap())
+        }
+        "library_entries" => Ok(serde_json::to_value(library_list()).unwrap()),
+        "library_remove" => { library_delete(args["id"].as_str().unwrap_or(""))?; Ok(Value::Null) }
+        "library_save_two" => Ok(serde_json::to_value(state.lock().unwrap().library_save(args["name"].as_str().unwrap_or(""), args["meta"].clone())?).unwrap()),
+        "library_save_three" => Ok(serde_json::to_value(library_save_spot(args["name"].as_str().unwrap_or(""), args["meta"].clone())?).unwrap()),
+        "library_open_two" => Ok(serde_json::to_value(state.lock().unwrap().library_open(args["id"].as_str().unwrap_or(""))?).unwrap()),
         "study_hand" => {
             let which = args["which"].as_str().unwrap_or("base").to_string();
             let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default();

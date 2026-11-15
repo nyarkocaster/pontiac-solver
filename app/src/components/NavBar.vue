@@ -47,6 +47,13 @@
           <span class="pl-3">Result</span>
         </button>
         <button
+          :class="'flex relative w-36 items-center justify-center font-semibold transition-colors hover:bg-white/10 hover:text-white ' + (store.navView === 'library' ? 'nav-on text-white' : '')"
+          @click="store.navView = 'library'"
+        >
+          <BookmarkIcon class="w-6 h-6" />
+          <span class="pl-3">Library</span>
+        </button>
+        <button
           :class="'flex relative w-36 items-center justify-center font-semibold transition-colors hover:bg-white/10 hover:text-white ' + (store.navView === 'pushfold' ? 'nav-on text-white' : '')"
           @click="store.navView = 'pushfold'"
         >
@@ -67,7 +74,7 @@
 
 <script setup lang="ts">
 import { useStore } from "../store";
-import { ComputerDesktopIcon, ChartBarIcon, AcademicCapIcon, UserGroupIcon, BoltIcon, SunIcon, MoonIcon } from "@heroicons/vue/24/solid";
+import { ComputerDesktopIcon, ChartBarIcon, AcademicCapIcon, UserGroupIcon, BoltIcon, SunIcon, MoonIcon, BookmarkIcon } from "@heroicons/vue/24/solid";
 
 const store = useStore();
 const applyTheme = () => { document.documentElement.classList.toggle("dark", store.theme === "dark"); };
