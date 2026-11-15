@@ -40,7 +40,7 @@ print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 - **Result**: the board and the line so far stay pinned at the top. Each decision has the hand chart, a by-suit breakdown, play by type of hand (top pair, flush draw and so on), an equity graph of every player's range with a plain-language reading of it, and coach notes.
 - **Which cards matter**: at each turn or river card choice, one click compares every card: how often the next player bets on it and who it helps.
 - **Flop report**: solves the same two-player preflop spot on 8, 16 or 24 representative flops and lines the answers up, with averages by kind of flop.
-- **Push / Fold**: heads-up and three-handed with prize money (ICM).
+- **Preflop**: heads-up push or fold; heads-up with limps, raises and re-raises (all-in pots exact, pots that see a flop estimated, with each line's ranges handed to the flop solver); three-handed push or fold with prize money (ICM).
 - **Library**: save a solve from the Result page and open it again later. Two-player solves are stored whole (compressed); three-player spots are solved again when opened.
 - **Node locks in the app**: at any decision, fix what a player does (whole range or one chart square) and solve again; the normal solve is reused.
 - **Chart views**: actions, value (EV) or chance to win on the hand chart. **Blockers**: which cards in your hand make the other player fold more or less after a bet.

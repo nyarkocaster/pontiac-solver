@@ -115,6 +115,7 @@ fn main() {
             mw_resolve,
             pushfold_solve,
             pushfold3_solve,
+            preflop_solve,
             icm_values,
             cpu_threads
         ])

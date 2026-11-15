@@ -85,3 +85,9 @@ pub fn icm_values(stacks: Vec<f64>, payouts: Vec<f64>) -> Result<Vec<f64>, Strin
     if stacks.is_empty() || stacks.len() > 10 || payouts.len() > 10 || stacks.iter().any(|&x| x < 0.0) { return Err("give 1 to 10 stacks and at most 10 prizes".into()); }
     Ok(pushfold::icm::icm(&stacks, &payouts))
 }
+
+/// Heads-up preflop with limps and raises (flops are modelled, not solved).
+#[tauri::command(async)]
+pub fn preflop_solve(spec: pushfold::preflop::PreSpec) -> Result<pushfold::preflop::Preflop, String> {
+    pushfold::preflop::solve(&spec)
+}

@@ -663,6 +663,22 @@ fn main() {
                 "prize_share": e.iter().map(|x| round(if pool > 0.0 { x / pool } else { 0.0 }, 4)).collect::<Vec<_>>(),
                 "note": "Independent Chip Model (Malmuth-Harville): expected prize for each stack if the rest of the tournament were decided by chip counts alone"}))
         })(),
+        Some("preflop") => (|| -> Result<Value, String> {
+            let num = |name: &str| -> Result<Option<f64>, String> { match flag(name) { Some(x) => x.parse::<f64>().map(Some).map_err(|_| format!("{name} needs a number")), None => Ok(None) } };
+            let mut spec = json!({"stack": match num("--stack")? { Some(x) => x, None => args.get(1).and_then(|x| x.parse::<f64>().ok()).ok_or("give the stack in big blinds, e.g. pontiac preflop --stack 20")? }});
+            for (flag_name, key) in [("--sb", "small_blind"), ("--ante", "ante"), ("--reraise", "reraise"), ("--iterations", "iterations")] { if let Some(x) = num(flag_name)? { spec[key] = json!(x); } }
+            if let Some(t) = flag("--open") { spec["open_sizes"] = json!(t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| "--open needs numbers separated by commas, e.g. --open 2,2.5".to_string())).collect::<Result<Vec<_>, _>>()?); }
+            if args.iter().any(|a| a == "--no-limp") { spec["limp"] = json!(false); }
+            if let Some(t) = flag("--model") { let v = t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| "--model needs four numbers: position,initiative,playability,half_spr".to_string())).collect::<Result<Vec<_>, _>>()?; if v.len() != 4 { return Err("--model needs four numbers: position,initiative,playability,half_spr".into()); } spec["model"] = json!({"position": v[0], "initiative": v[1], "playability": v[2], "half_spr": v[3]}); }
+            if spec.get("iterations").is_some() { spec["iterations"] = json!(spec["iterations"].as_f64().unwrap_or(0.0) as u64); }
+            let spec: pushfold::preflop::PreSpec = serde_json::from_value(spec).map_err(|e| e.to_string())?;
+            let r = pushfold::preflop::solve(&spec)?;
+            let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
+            let m = v.as_object_mut().unwrap();
+            m.insert("ok".into(), json!(true)); m.insert("version".into(), json!(version_string()));
+            m.insert("units".into(), json!("stacks, pots, amounts and EVs in big blinds; frequencies 0-1; the 169 values in `strategy` and `range` follow `classes`; the small blind is the button and acts last after the flop"));
+            Ok(v)
+        })(),
         Some("pushfold") if flag("--stacks").is_some() => (|| -> Result<Value, String> {
             let list = |name: &str| -> Result<Vec<f64>, String> { match flag(name) { None => Ok(vec![]), Some(t) if t.trim().is_empty() => Ok(vec![]), Some(t) => t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("{name} needs numbers separated by commas"))).collect() } };
             let num = |name: &str, d: f64| -> Result<f64, String> { match flag(name) { Some(x) => x.parse::<f64>().map_err(|_| format!("{name} needs a number")), None => Ok(d) } };

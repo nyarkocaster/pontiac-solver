@@ -13,6 +13,7 @@
           <button class="pill" :class="hhOpen ? 'pill-on' : ''" title="Fill everything in from a hand you played" @click="hhOpen = !hhOpen">Paste a hand history</button>
         </div>
       </div>
+      <p v-if="fromPreflop" class="mt-3 rounded-lg border border-mine bg-mine-light px-3 py-2 text-sm">Loaded from the heads-up preflop solver: both ranges in step 3 are its ranges for this line. Pick a flop in step 4 and solve. <button class="underline font-bold" @click="fromPreflop = ''">Dismiss</button></p>
       <section v-if="hhOpen" class="panel mt-4">
         <h2 class="font-bold">Load a hand you played</h2>
         <p class="hint mt-1">Paste the hand's text (PokerStars layout; most sites and trackers can export it). The table, each player's preflop action, the stacks, the flop and your cards are filled in below for you to check.</p>
@@ -293,6 +294,7 @@ import { computed, nextTick, reactive, ref, watch } from "vue";
 import RangeSlider from "./RangeSlider.vue";
 import FlopReport, { type FlopRow } from "./FlopReport.vue";
 import { parseHandHistory } from "../../guided/handHistory";
+import { useStore } from "../../store";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
 import { parseRange, rangePercent } from "../../guided/rangeTools";
 import { studyCancel, studyProgress } from "../../guided/api";
@@ -490,6 +492,25 @@ const reportOpen = ref(false); const reporting = ref(false);
 const reportNames = computed(() => { const ps = spot.value.players; return { oop: ps[0]?.name ?? "", ip: ps[1]?.name ?? "", hero: ps.find((p) => p.hero)?.name ?? ps[0]?.name ?? "" }; });
 const reportProblem = computed(() => (pre.value.errors.length ? pre.value.errors[0] : spot.value.players.some((p) => !edits[p.seat]?.trim()) ? "Give both players a range in step 3 first." : ""));
 const reportSolve = (flop: number[]) => { const two = payload().two; if (!two) throw new Error("The flop report needs exactly two players."); return props.quickFlop({ ...two, profile: null }, flop); };
+// a line from the heads-up preflop solver: set the table up and use its ranges as they are
+const store = useStore();
+const fromPreflop = ref("");
+watch(() => store.preflopLine, async (l) => {
+  if (!l) return;
+  store.preflopLine = null;
+  Object.assign(table, { game: "tourney", size: 2, sb: 0.5, bb: 1, ante: l.ante > 0 ? "each" : "none", startStack: l.stack });
+  const mk = (seat: string): SeatInput => ({ seat, act: "fold", raiseTo: 0, reply: "call", stack: l.stack, type: "solid" });
+  const btn = mk("BTN"), bb = mk("BB"); let raised = false;
+  for (const step of l.path.split(" > ")) {
+    const [who, what, size] = step.split(" "); const x = who === "SB" ? btn : bb;
+    if (what === "limp") x.act = "limp"; else if (what === "check") x.act = "limp";
+    else if (what === "raise") { x.act = "raise"; x.raiseTo = Number(size); raised = true; }
+    else if (what === "call") { if (x.act === "fold") x.act = raised ? "call" : "limp"; else x.reply = "call"; }
+  }
+  seats.splice(0, seats.length, btn, bb); hero.value = "BB";
+  await nextTick(); await nextTick();
+  edits.BTN = l.button; edits.BB = l.bigBlind; fromPreflop.value = l.path; hhOpen.value = false;
+}, { immediate: true });
 // a pasted hand history fills the whole setup in
 const hhOpen = ref(false); const hhText = ref(""); const hhError = ref(""); const hhNotes = ref<string[]>([]); const hhDone = ref(false);
 const heroHand = ref("");

@@ -180,3 +180,25 @@ def test_three_handed_pushfold_chips_and_prizes():
         assert d(prizes)[k]["pct"] < d(chips)[k]["pct"]
     aa = chips["classes"].index("AA")
     assert all(x["freq"][aa] == 1 for x in chips["decisions"])
+
+
+def test_heads_up_preflop():
+    """Limps and raises can only help the button compared with push-or-fold, the strategy is
+    stable inside its own model, and every flop line hands over two usable ranges."""
+    r = pontiac.preflop(20, iterations=1200)
+    pf = pontiac.pushfold(20)
+    assert r["ev_button_bb"] > pf["ev_small_blind_bb"]
+    assert abs(r["ev_button_bb"] + r["ev_big_blind_bb"]) < 1e-3
+    assert r["max_gain_bb"] < 0.01
+    root = r["nodes"][0]
+    assert root["actions"][0] == "Fold" and "Limp" in root["actions"] and "All-in" in root["actions"]
+    assert abs(sum(root["freqs"]) - 1) < 1e-3
+    for k in range(169):
+        assert abs(sum(a[k] for a in root["strategy"]) - 1) < 0.01
+    aces = r["classes"].index("AA"); worst = r["classes"].index("32o")
+    assert root["strategy"][0][aces] == 0 and root["strategy"][0][worst] > root["strategy"][0][aces]
+    assert r["lines"] and all(l["button_range"] and l["big_blind_range"] and 0 < l["button_share"] < 1 for l in r["lines"])
+    # with nothing but all-in or fold allowed past 2 bb the answer must match the push/fold calculator
+    tiny = pontiac.preflop(3, limp=False, open_sizes=[2.0], iterations=3000)
+    jam = tiny["nodes"][0]["freqs"][tiny["nodes"][0]["actions"].index("All-in")]
+    assert abs(jam - pontiac.pushfold(3)["jam_pct"]) < 0.03

@@ -14,8 +14,8 @@ import tempfile
 
 from ._binary import binary
 
-__version__ = "0.10.0"
-__all__ = ["solve", "query", "estimate", "pushfold", "pushfold3", "icm", "version", "SolverError", "binary"]
+__version__ = "0.11.0"
+__all__ = ["solve", "query", "estimate", "pushfold", "pushfold3", "preflop", "icm", "version", "SolverError", "binary"]
 
 
 class SolverError(RuntimeError):
@@ -90,6 +90,24 @@ def pushfold(stack_bb, small_blind=0.5, ante=0.0):
     calls or folds. `stack_bb` is the shorter stack before the blinds are posted. Returns the
     two ranges as text (`jam_range`, `call_range`) and per hand class (`jam`, `call`, `classes`)."""
     return _run(["pushfold", "--stack", str(stack_bb), "--sb", str(small_blind), "--ante", str(ante)])
+
+
+def preflop(stack_bb, open_sizes=(2.0,), limp=True, reraise=3.0, small_blind=0.5, ante=0.0, iterations=0, model=None):
+    """Heads-up preflop with limps, raises, re-raises and all-ins. `stack_bb` is the shorter
+    stack before blinds; `open_sizes` are the raise sizes the button may open to (big blinds).
+    Returns `nodes` (every decision: `path`, `actions`, `freqs`, `strategy` per hand class),
+    `lines` (each way to reach a flop, with both ranges for the postflop solver), EVs and
+    `max_gain_bb`. All-in pots are exact; pots that see a flop are estimated (see `model_note`).
+    `model` overrides the estimate: (position, initiative, playability, half_spr)."""
+    args = ["preflop", "--stack", str(stack_bb), "--open", ",".join(str(x) for x in open_sizes),
+            "--reraise", str(reraise), "--sb", str(small_blind), "--ante", str(ante)]
+    if not limp:
+        args.append("--no-limp")
+    if iterations:
+        args += ["--iterations", str(int(iterations))]
+    if model:
+        args += ["--model", ",".join(str(x) for x in model)]
+    return _run(args)
 
 
 def pushfold3(stacks_bb, payouts=None, others_bb=None, small_blind=0.5, ante=0.0, bb_ante=0.0, iterations=200):

@@ -206,6 +206,8 @@ export const useLockStore = defineStore("locks", {
 export const useStore = defineStore("app", {
   state: () => ({
     navView: "builder" as NavView,
+    /** a heads-up preflop line handed to Study a spot */
+    preflopLine: null as null | { stack: number; ante: number; path: string; button: string; bigBlind: string },
     /** "dark" or "light"; remembered between sessions when the browser allows it */
     theme: ((() => { try { return localStorage.getItem("pontiac-theme") || "dark"; } catch { return "dark"; } })()) as "dark" | "light",
     /** which screen holds the result of the last solve started from the builder */

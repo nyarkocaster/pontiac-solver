@@ -58,3 +58,9 @@ export interface PushFold3 {
 }
 export const pushfold3Solve = (spot: Spot3P) => call<PushFold3>("pushfold3_solve", { spot });
 export const icmValues = (stacks: number[], payouts: number[]) => call<number[]>("icm_values", { stacks, payouts });
+
+// heads-up preflop with limps and raises
+export interface PreNode { id: number; path: string; player: string; situation: string; actions: string[]; amounts_bb: number[]; freqs: number[]; reach: number; strategy: number[][]; range: number[]; next: number[] }
+export interface FlopLine { path: string; freq: number; pot_bb: number; behind_bb: number; button_range: string; big_blind_range: string; button_share: number }
+export interface Preflop { stack_bb: number; ev_button_bb: number; ev_big_blind_bb: number; max_gain_bb: number; iterations: number; nodes: PreNode[]; lines: FlopLine[]; model_note: string; classes: string[] }
+export const preflopSolve = (spec: { stack: number; open_sizes: number[]; limp: boolean; reraise: number; ante: number; small_blind: number }) => call<Preflop>("preflop_solve", { spec });

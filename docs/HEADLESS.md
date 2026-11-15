@@ -192,6 +192,29 @@ Tendencies applied across the whole tree, as in the app:
   Three sizes per street was not measured; expect more than double the two-size figures. A lock that needs a normal solve first doubles the time. Turn and river spots take seconds. Use `pontiac.estimate` to check memory before solving.
 - **Three players: yes**, with the same `solve` call (section 5). No `save`/`query` for three players yet: the result itself lists the first street's nodes.
 
+## Heads-up preflop with limps and raises
+
+```
+pontiac preflop --stack 20 [--open 2,2.5] [--no-limp] [--reraise 3] [--ante 0] [--sb 0.5] [--iterations 3000]
+```
+```python
+r = pontiac.preflop(20, open_sizes=[2.0], limp=True)
+root = r["nodes"][0]                      # the button's first decision
+dict(zip(root["actions"], root["freqs"]))  # {'Fold': .., 'Limp': .., 'Raise to 2': .., 'All-in': ..}
+r["lines"][0]                              # most common way to a flop, with both ranges
+```
+
+The small blind is the button. It may fold, limp, open to any of `open_sizes`, or move all-in; the big blind may check, call, re-raise (`reraise` times the raise it faces, or that many big blinds over a limp) or move all-in; after one re-raise the only raise left is all-in. A sized raise of 40% of the stack or more is dropped in favour of all-in.
+
+| Field | Meaning |
+|---|---|
+| `nodes[]` | Every decision. `path` (`"SB raise 2 > BB raise 6"`), `player`, `situation`, `actions`, `amounts_bb`, `freqs` (over the range that gets there), `reach` (how often the hand gets there), `strategy[action][class]`, `range[class]`, `next[action]` (id of the next decision, or -1). |
+| `lines[]` | Each way the hand reaches a flop: `path`, `freq`, `pot_bb`, `behind_bb`, `button_range`, `big_blind_range` (weighted range text the `solve` command accepts), `button_share` (the model's pot share for the button). |
+| `ev_button_bb`, `ev_big_blind_bb`, `max_gain_bb` | Average result per hand, and the most either player could gain by changing strategy inside the model. |
+| `model`, `model_note` | The flop estimate in use. |
+
+**What is exact and what is not.** Pots where all the chips go in before the flop use the exact all-in table. Pots that see a flop are estimated, not solved: each pair of hands splits the pot by all-in equity, shifted toward the button (position), the last raiser, and suited or connected hands, and the shift grows with the chips left behind (`half_spr` is the stack-to-pot ratio where half of it applies). `--model position,initiative,playability,half_spr` overrides the four numbers. To check a line, pass its two ranges, `pot_bb` and `behind_bb` (as `effective_stack_bb`) to `solve` on a few flops and compare the button's `ev_bb / pot_bb` with `button_share`.
+
 ## 5. Three players
 
 Give three names in `players` and the same `solve` / `estimate` calls use the three-player engine. Example: `examples/three_way_river.json`.

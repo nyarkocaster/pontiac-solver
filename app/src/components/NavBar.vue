@@ -58,7 +58,7 @@
           @click="store.navView = 'pushfold'"
         >
           <BoltIcon class="w-6 h-6" />
-          <span class="pl-3">Push / Fold</span>
+          <span class="pl-3">Preflop</span>
         </button>
         <button
           :class="'flex relative w-40 items-center justify-center font-semibold transition-colors hover:bg-white/10 hover:text-white ' + (store.navView === 'solver' || store.navView === 'results' ? 'nav-on text-white' : '')"
