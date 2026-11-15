@@ -672,7 +672,44 @@ fn main() {
             if let Some(t) = flag("--model") { let v = t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| "--model needs four numbers: position,initiative,playability,half_spr".to_string())).collect::<Result<Vec<_>, _>>()?; if v.len() != 4 { return Err("--model needs four numbers: position,initiative,playability,half_spr".into()); } spec["model"] = json!({"position": v[0], "initiative": v[1], "playability": v[2], "half_spr": v[3]}); }
             if spec.get("iterations").is_some() { spec["iterations"] = json!(spec["iterations"].as_f64().unwrap_or(0.0) as u64); }
             let spec: pushfold::preflop::PreSpec = serde_json::from_value(spec).map_err(|e| e.to_string())?;
-            let r = pushfold::preflop::solve(&spec)?;
+            let r = if args.iter().any(|a| a == "--accurate") {
+                // real flop solves for every common line, fed back in and repeated
+                const FLOPS: [(&str, f64); 16] = [("As7d2c", 24.0), ("Ks8s3d", 12.0), ("QhJh6c", 12.0), ("Ts9s8d", 12.0), ("7s6d5c", 24.0), ("KsKd4c", 12.0), ("8s3d2c", 24.0), ("Jh9h5h", 4.0),
+                    ("AsKdTc", 24.0), ("Qs7d2c", 24.0), ("9c6c4d", 12.0), ("7s7d4d", 12.0), ("Ah8h5c", 12.0), ("Jd7d4s", 12.0), ("Ts6d2c", 24.0), ("As5d5c", 12.0)];
+                let nflops = (num("--flops")?.unwrap_or(8.0) as usize).clamp(1, FLOPS.len());
+                let passes = (num("--passes")?.unwrap_or(3.0) as usize).clamp(1, 12);
+                let min_freq = num("--min-line")?.unwrap_or(0.02);
+                let accuracy = num("--flop-accuracy")?.unwrap_or(1.0) as f32;
+                let threads = num("--threads")?.map(|x| x as usize).unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
+                let log = flag("--log");
+                let say = |line: String| { eprintln!("{line}"); if let Some(p) = &log { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) { let _ = writeln!(f, "{line}"); } } };
+                let prog = study_core::StudyProgress::default();
+                let t0 = std::time::Instant::now();
+                let mut eval = |l: &pushfold::preflop::FlopLine, pass: usize| -> Result<pushfold::preflop::LineValues, String> {
+                    let (mut num_v, mut den_v) = ([vec![0f64; 169], vec![0f64; 169]], [vec![0f64; 169], vec![0f64; 169]]);
+                    let mut worst = 0f64;
+                    for (k, (board, ways)) in FLOPS.iter().take(nflops).enumerate() {
+                        let sp = study_core::StudySpec {
+                            oop_range: l.big_blind_range.clone(), ip_range: l.button_range.clone(),
+                            board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
+                            oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
+                            allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0 };
+                        let t = std::time::Instant::now();
+                        let (vals, acc) = study_core::class_values(&sp, &prog)?;
+                        worst = worst.max(acc);
+                        // vals[0] is the big blind (first to act after the flop), vals[1] the button; chips are tenths of a big blind
+                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; if x.is_finite() { num_v[mine][c] += ways * x / 10.0; den_v[mine][c] += ways; } } }
+                        say(format!("pass {pass} | {} | flop {} of {nflops} ({board}) | {:.0}s, within {:.2}% of the pot | {:.0} min so far", l.path, k + 1, t.elapsed().as_secs_f64(), acc, t0.elapsed().as_secs_f64() / 60.0));
+                    }
+                    let out = [0, 1].map(|p| (0..169).map(|c| if den_v[p][c] > 0.0 { num_v[p][c] / den_v[p][c] } else { f64::NAN }).collect::<Vec<f64>>());
+                    Ok((out, nflops, worst))
+                };
+                let mut report = |i: &pushfold::preflop::PassInfo| {
+                    say(format!("== after pass {}: {} ==", i.pass, i.root_actions.iter().zip(&i.root_freqs).map(|(a, f)| format!("{a} {:.1}%", f * 100.0)).collect::<Vec<_>>().join(", ")));
+                    for l in &i.lines { say(format!("   {} ({:.1}% of hands): button's share was {:.1}%, flop solves gave {:.1}%", l.path, l.freq * 100.0, l.share_before * 100.0, l.share_solved * 100.0)); }
+                };
+                pushfold::preflop::solve_accurate(&spec, passes, min_freq, &mut eval, &mut report)?
+            } else { pushfold::preflop::solve(&spec)? };
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
             let m = v.as_object_mut().unwrap();
             m.insert("ok".into(), json!(true)); m.insert("version".into(), json!(version_string()));

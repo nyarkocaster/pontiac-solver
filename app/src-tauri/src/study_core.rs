@@ -1048,3 +1048,24 @@ impl StudyState {
         Ok(e)
     }
 }
+
+
+/// Solves one spot and returns, per hand class (AA, AKs ... 22 chart order), the chips each
+/// player wins from the pot on average at the start: [out of position, in position], plus the
+/// accuracy reached as a percent of the pot. Classes with no hands possible come back as NaN.
+pub fn class_values(spec: &StudySpec, prog: &StudyProgress) -> Result<([Vec<f64>; 2], f64), String> {
+    let out = solve_inner(spec, prog)?;
+    let mut game = out.base.ok_or("no solve came back")?;
+    game.back_to_root();
+    game.cache_normalized_weights();
+    let mut vals = [vec![f64::NAN; 169], vec![f64::NAN; 169]];
+    for p in 0..2 {
+        let ev = game.expected_values(p);
+        let w = game.normalized_weights(p).to_vec();
+        let cards = game.private_cards(p).to_vec();
+        let (mut num, mut den) = (vec![0f64; 169], vec![0f64; 169]);
+        for h in 0..cards.len() { let c = grid_index(cards[h]); num[c] += w[h] as f64 * ev[h] as f64; den[c] += w[h] as f64; }
+        for c in 0..169 { if den[c] > 0.0 { vals[p][c] = num[c] / den[c]; } }
+    }
+    Ok((vals, out.summary.base_expl_pct))
+}

@@ -73,7 +73,9 @@ pub struct PreNode {
     pub next: Vec<i64>,
 }
 #[derive(Serialize, Clone, Debug)]
-pub struct FlopLine { pub path: String, pub freq: f64, pub pot_bb: f64, pub behind_bb: f64, pub button_range: String, pub big_blind_range: String, pub button_share: f64 }
+pub struct FlopLine { #[serde(skip)] pub leaf: usize, #[serde(skip)] pub reach: [Vec<f64>; 2], pub path: String, pub freq: f64, pub pot_bb: f64, pub behind_bb: f64, pub button_range: String, pub big_blind_range: String, pub button_share: f64,
+    /// true when the share comes from solved flops, false when it is the estimate
+    pub solved: bool }
 #[derive(Serialize, Clone, Debug)]
 pub struct Preflop {
     pub stack_bb: f64, pub small_blind: f64, pub ante: f64,
@@ -85,10 +87,15 @@ pub struct Preflop {
     /// every way the hand reaches a flop, with both ranges, ready for the postflop solver
     pub lines: Vec<FlopLine>,
     pub model: FlopModel, pub model_note: String,
+    /// accurate mode only: what each round of flop solves did
+    #[serde(skip_serializing_if = "Option::is_none")] pub accurate: Option<Vec<PassInfo>>,
     pub classes: Vec<String>,
 }
 
-struct Game { nodes: Vec<Node>, stack: f64, ante: f64, cp: Vec<f64>, eq: Vec<f64>, play: Vec<f64>, model: FlopModel }
+struct Game { nodes: Vec<Node>, stack: f64, ante: f64, cp: Vec<f64>, eq: Vec<f64>, play: Vec<f64>, model: FlopModel,
+    /// flop leaves fitted to solved flops: per class, a pot-share offset for the button's hand and
+    /// one for the big blind's hand (the button's share of a match-up is equity + button offset - big blind offset)
+    solved: std::collections::HashMap<usize, [Vec<f64>; 2]> }
 
 fn playability(i: usize) -> f64 {
     let (r, c) = (i / 13, i % 13);
@@ -154,6 +161,11 @@ impl Game {
         match n.kind {
             Kind::Fold { winner } => if winner == hero { pot - paid } else { -paid },
             Kind::Showdown => self.eq[i * N + j] * pot - paid,
+            Kind::Flop { .. } if self.solved.contains_key(&id) => {
+                let (b, x) = if hero == 0 { (i, j) } else { (j, i) };
+                let share = self.solved_share(id, b, x);
+                (if hero == 0 { share } else { 1.0 - share }) * pot - paid
+            }
             Kind::Flop { raiser } => {
                 let (b, x) = if hero == 0 { (i, j) } else { (j, i) }; // button's class, big blind's class
                 let share = self.button_share(n, raiser, b, x);
@@ -162,6 +174,7 @@ impl Game {
             Kind::Decision => unreachable!(),
         }
     }
+    fn solved_share(&self, id: usize, b: usize, x: usize) -> f64 { let v = &self.solved[&id]; (self.eq[b * N + x] + v[0][b] - v[1][x]).clamp(0.0, 1.0) }
     fn button_share(&self, n: &Node, raiser: Option<usize>, b: usize, x: usize) -> f64 {
         let pot = n.put[0] + n.put[1] + 2.0 * self.ante;
         let spr = (self.stack - self.ante - n.put[0].max(n.put[1])).max(0.0) / pot;
@@ -215,18 +228,111 @@ impl Game {
     fn total(&self, v: &[f64]) -> f64 { (0..N).map(|i| combos(i) * v[i]).sum::<f64>() / (1326.0 * 1225.0) }
 }
 
+/// Range text for the flop solver with at least `floor` of every hand, so each hand gets a value.
+pub fn range_with_floor(w: &[f64], floor: f64) -> String {
+    (0..N).map(|i| { let x = w[i].max(floor).min(1.0); if x > 0.995 { class_name(i) } else { format!("{}:{:.3}", class_name(i), x) } }).collect::<Vec<_>>().join(",")
+}
 fn range_text(w: &[f64]) -> String {
     (0..N).filter(|&i| w[i] >= 0.005).map(|i| if w[i] > 0.995 { class_name(i) } else { format!("{}:{:.2}", class_name(i), w[i]) }).collect::<Vec<_>>().join(",")
 }
 
-pub fn solve(spec: &PreSpec) -> Result<Preflop, String> {
+/// One round of accurate mode, for progress reports.
+#[derive(Serialize, Clone, Debug)]
+pub struct PassInfo {
+    pub pass: usize,
+    /// the button's first decision after this round's flop values went in
+    pub root_actions: Vec<String>, pub root_freqs: Vec<f64>,
+    /// per line solved this round: the button's pot share used going in, and what the flop solves gave
+    pub lines: Vec<PassLine>,
+}
+#[derive(Serialize, Clone, Debug)]
+pub struct PassLine { pub path: String, pub freq: f64, pub share_before: f64, pub share_solved: f64, pub flops: usize, pub worst_accuracy_pct: f64 }
+
+/// What a flop evaluator hands back for one line: per hand class, the big blinds each player wins
+/// from the pot on average (button first, then big blind); how many flops; the worst accuracy reached.
+pub type LineValues = ([Vec<f64>; 2], usize, f64);
+
+/// Accurate mode: after each preflop solve, every common line that reaches a flop is handed to
+/// `eval`, which solves real flops with those ranges; the values go back in as what each hand is
+/// worth at that point, and the preflop is solved again. Ranges and values chase each other, so
+/// values are averaged with the previous round's to settle. `floor` keeps a sliver of every hand
+/// in the ranges sent out so that every hand gets a value.
+pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut dyn FnMut(&FlopLine, usize) -> Result<LineValues, String>, report: &mut dyn FnMut(&PassInfo)) -> Result<Preflop, String> {
+    let mut solved: std::collections::HashMap<usize, [Vec<f64>; 2]> = Default::default();
+    let mut history = vec![];
+    let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
+    let mut out = solve_with(spec, &solved)?;
+    for pass in 1..=passes.max(1) {
+        let mut lines = vec![];
+        for l in out.lines.iter().filter(|l| l.freq >= min_freq) {
+            let (vals, flops, worst) = eval(l, pass)?;
+            let fitted = fit_offsets(&cp, &eq, &l.reach, &vals, l.pot_bb);
+            let entry = match solved.get(&l.leaf) {
+                Some(old) => [0, 1].map(|p| (0..N).map(|i| 0.5 * old[p][i] + 0.5 * fitted[p][i]).collect::<Vec<f64>>()),
+                None => fitted,
+            };
+            // the button's share these flop solves gave, over the ranges that were sent
+            let (mut num, mut den) = (0.0, 0.0);
+            for i in 0..N { let w = combos(i) * l.reach[0][i]; if vals[0][i].is_finite() { num += w * vals[0][i]; den += w; } }
+            lines.push(PassLine { path: l.path.clone(), freq: l.freq, share_before: l.button_share, share_solved: if den > 0.0 { ((num / den / l.pot_bb) * 1e4).round() / 1e4 } else { 0.0 }, flops, worst_accuracy_pct: worst });
+            solved.insert(l.leaf, entry);
+        }
+        out = solve_with(spec, &solved)?;
+        let info = PassInfo { pass, root_actions: out.nodes[0].actions.clone(), root_freqs: out.nodes[0].freqs.clone(), lines };
+        report(&info);
+        history.push(info);
+    }
+    out.accurate = Some(history);
+    out.model_note = "All-in pots are exact. Lines marked solved take their values from real flop solves of a sample of flops, fed back and repeated; rarer lines still use the estimate. The flop solves use one bet size per street and a sample of flops, so small frequency differences are not meaningful.".into();
+    Ok(out)
+}
+
+/// Turns solved per-hand values into match-up payoffs the preflop solve can use. The button's
+/// share of the pot when class `b` meets class `x` is taken to be equity(b, x) + up[b] - down[x];
+/// the offsets are chosen so that, against the ranges that were solved, every hand's average
+/// comes out at its solved value. Because the match-up equity stays in, the payoffs still move
+/// sensibly when the ranges shift in the next preflop solve. Hands that were not in the solved
+/// range get the average offset of the hands that were.
+fn fit_offsets(cp: &[f64], eq: &[f64], reach: &[Vec<f64>; 2], vals: &[Vec<f64>; 2], pot: f64) -> [Vec<f64>; 2] {
+    let have = |p: usize, i: usize| vals[p][i].is_finite() && reach[p][i] > 0.005;
+    let (mut up, mut down) = (vec![0.0; N], vec![0.0; N]);
+    for _ in 0..40 {
+        for b in 0..N {
+            if !have(0, b) { continue; }
+            let (mut w, mut e, mut d) = (0.0, 0.0, 0.0);
+            for x in 0..N { if !have(1, x) { continue; } let k = cp[b * N + x] * reach[1][x]; w += k; e += k * eq[b * N + x]; d += k * down[x]; }
+            if w > 0.0 { up[b] = vals[0][b] / pot - e / w + d / w; }
+        }
+        for x in 0..N {
+            if !have(1, x) { continue; }
+            let (mut w, mut e, mut u) = (0.0, 0.0, 0.0);
+            for b in 0..N { if !have(0, b) { continue; } let k = cp[x * N + b] * reach[0][b]; w += k; e += k * eq[b * N + x]; u += k * up[b]; }
+            if w > 0.0 { down[x] = vals[1][x] / pot - 1.0 + e / w + u / w; }
+        }
+        // only the difference matters; keep the big blind's offsets centred
+        let (mut w, mut m) = (0.0, 0.0);
+        for x in 0..N { if have(1, x) { let k = combos(x) * reach[1][x]; w += k; m += k * down[x]; } }
+        if w > 0.0 { let m = m / w; for x in 0..N { if have(1, x) { down[x] -= m; } } for b in 0..N { if have(0, b) { up[b] -= m; } } }
+    }
+    for (p, v) in [(0usize, &mut up), (1, &mut down)] {
+        let (mut w, mut m) = (0.0, 0.0);
+        for i in 0..N { if have(p, i) { let k = combos(i) * reach[p][i]; w += k; m += k * v[i]; } }
+        let mean = if w > 0.0 { m / w } else { 0.0 };
+        for i in 0..N { if !have(p, i) { v[i] = mean; } else { v[i] = v[i].clamp(-0.6, 0.6); } }
+    }
+    [up, down]
+}
+
+pub fn solve(spec: &PreSpec) -> Result<Preflop, String> { solve_with(spec, &Default::default()) }
+
+fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64>; 2]>) -> Result<Preflop, String> {
     if !(spec.stack > 1.5 && spec.stack <= 250.0) { return Err("stack must be more than 1.5 and at most 250 big blinds".into()); }
     if !(spec.small_blind > 0.0 && spec.small_blind < 1.0) { return Err("small blind must be between 0 and 1 big blind".into()); }
     if !(spec.ante >= 0.0 && spec.ante < spec.stack - 1.0) { return Err("ante must be zero or more, and leave chips behind".into()); }
     if spec.open_sizes.iter().any(|&x| !(x >= 2.0 && x <= 10.0)) { return Err("open sizes must be between 2 and 10 big blinds".into()); }
     if !(spec.reraise >= 2.0 && spec.reraise <= 6.0) { return Err("the re-raise multiple must be between 2 and 6".into()); }
     let model = spec.model.clone().unwrap_or_default();
-    let mut g = Game { nodes: vec![], stack: spec.stack, ante: spec.ante, cp: compat(), eq: (0..N * N).map(|k| equity(k / N, k % N)).collect(), play: (0..N).map(playability).collect(), model: model.clone() };
+    let mut g = Game { nodes: vec![], stack: spec.stack, ante: spec.ante, cp: compat(), eq: (0..N * N).map(|k| equity(k / N, k % N)).collect(), play: (0..N).map(playability).collect(), model: model.clone(), solved: solved.clone() };
     g.build(spec, 0, [spec.small_blind, 1.0], 0, None, false, String::new());
     let iters = if spec.iterations > 0 { spec.iterations } else { 3000 };
     let ones = vec![1.0; N];
@@ -263,8 +369,9 @@ pub fn solve(spec: &PreSpec) -> Result<Preflop, String> {
                 let freq = share_of(&rc); if freq < 0.0005 { continue; }
                 let pot = n.put[0] + n.put[1] + 2.0 * spec.ante;
                 let (mut num, mut den) = (0.0, 0.0);
-                for b in 0..N { if rc[0][b] <= 0.0 { continue; } for x in 0..N { let w = combos(b) * g.cp[b * N + x] * rc[0][b] * rc[1][x]; if w > 0.0 { num += w * g.button_share(&n, raiser, b, x); den += w; } } }
-                lines.push(FlopLine { path: n.path.clone(), freq: r(freq, 4), pot_bb: r(pot, 2), behind_bb: r(spec.stack - spec.ante - n.put[0].max(n.put[1]), 2),
+                let got = g.solved.get(&i);
+                for b in 0..N { if rc[0][b] <= 0.0 { continue; } for x in 0..N { let w = combos(b) * g.cp[b * N + x] * rc[0][b] * rc[1][x]; if w > 0.0 { num += w * match got { Some(_) => g.solved_share(i, b, x), None => g.button_share(&n, raiser, b, x) }; den += w; } } }
+                lines.push(FlopLine { leaf: i, reach: rc.clone(), solved: got.is_some(), path: n.path.clone(), freq: r(freq, 4), pot_bb: r(pot, 2), behind_bb: r(spec.stack - spec.ante - n.put[0].max(n.put[1]), 2),
                     button_range: range_text(&rc[0]), big_blind_range: range_text(&rc[1]), button_share: r(if den > 0.0 { num / den } else { 0.0 }, 4) });
             }
             _ => {}
@@ -275,6 +382,6 @@ pub fn solve(spec: &PreSpec) -> Result<Preflop, String> {
         stack_bb: spec.stack, small_blind: spec.small_blind, ante: spec.ante, ev_button_bb: r(ev[0], 4), ev_big_blind_bb: r(ev[1], 4),
         max_gain_bb: r((best[0] - ev[0]).max(best[1] - ev[1]), 4), iterations: iters, nodes, lines, model,
         model_note: "All-in pots are exact. Pots that see a flop are estimated, not solved: each hand gets its all-in share of the pot, shifted toward the button, the last raiser and hands that play well after the flop. Solve the lines that matter in the postflop solver.".into(),
-        classes: (0..N).map(class_name).collect(),
+        classes: (0..N).map(class_name).collect(), accurate: None,
     })
 }

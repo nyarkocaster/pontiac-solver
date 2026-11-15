@@ -22,10 +22,26 @@
       <label class="block"><span class="lbl">Ante, each</span><input v-model.number="ante" type="number" min="0" step="0.05" class="input w-24" /></label>
       <button class="btn-solve" :disabled="busy || !opens.length && !limp" @click="run">{{ busy ? "Solving…" : res ? "Solve again" : "Solve" }}</button>
     </div>
+    <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+      <label class="flex items-center gap-2" :class="hasSolved ? '' : 'text-muted'" :title="hasSolved ? '' : 'Ready-made accurate solutions exist for ' + SOLVED_STACKS.join(', ') + ' big blinds with the standard options (open to 2, limps allowed, 3 × re-raise, no ante)'">
+        <input v-model="useSolved" type="checkbox" class="rounded text-felt" :disabled="!hasSolved" />Use the accurate solution for this stack (flops solved, not estimated)
+      </label>
+      <label class="text-felt font-bold underline cursor-pointer">Open a result file<input type="file" accept=".json,application/json" class="hidden" @change="openFile" /></label>
+    </div>
     <p v-if="error" class="mt-3 text-sm font-bold text-danger">{{ error }}</p>
 
     <template v-if="res">
-      <div class="mt-4 rounded-xl border border-mine bg-mine-light p-3 text-sm">
+      <div v-if="res.accurate" class="mt-4 rounded-xl border border-felt bg-felt-light p-3 text-sm">
+        <b>Accurate solution.</b> All-in pots are exact, and the common lines that see a flop take their values from real flop solves
+        ({{ res.accurate[0]?.lines[0]?.flops ?? 0 }} flops per line, {{ res.accurate.length }} rounds of feeding the results back).
+        The flop solves use one bet size per street and a sample of flops, so read differences of a few points as noise.
+        <details class="mt-1"><summary class="cursor-pointer font-bold">How it settled, round by round</summary>
+          <table class="mt-1 text-xs tabular-nums"><tbody>
+            <tr v-for="p in res.accurate" :key="p.pass"><td class="pr-3 py-0.5 align-top">Round {{ p.pass }}</td><td>{{ p.root_actions.map((a, i) => `${a.toLowerCase()} ${pc(p.root_freqs[i])}`).join(", ") }}<span class="text-muted"> · {{ p.lines.map((l) => `${plain(l.path)}: button's share ${pc(l.share_before)} going in, flops gave ${pc(l.share_solved)}`).join("; ") }}</span></td></tr>
+          </tbody></table>
+        </details>
+      </div>
+      <div v-else class="mt-4 rounded-xl border border-mine bg-mine-light p-3 text-sm">
         <b>How far to trust this.</b> Pots where all the chips go in before the flop are exact. Pots that see a flop are estimated, not solved:
         each hand gets its all-in share of the pot, shifted toward the button (who acts last), the last raiser, and hands that play well after the flop.
         Use these ranges as a strong starting point, and solve the flops that matter with the buttons under "Ways to see a flop".
@@ -84,7 +100,7 @@
             <thead><tr class="text-left text-xs text-muted"><th class="font-normal py-1">Line</th><th class="font-normal text-right">How often</th><th class="font-normal text-right">Pot</th><th class="font-normal text-right">Behind</th><th class="font-normal text-right" title="The model's estimate of the button's share of the pot">Button's share</th><th></th></tr></thead>
             <tbody>
               <tr v-for="l in res.lines" :key="l.path" class="border-t border-rule">
-                <td class="py-1.5">{{ plain(l.path) }}</td><td class="text-right">{{ pc(l.freq) }}</td><td class="text-right">{{ l.pot_bb }} bb</td><td class="text-right">{{ l.behind_bb }} bb</td><td class="text-right">{{ pc(l.button_share) }}</td>
+                <td class="py-1.5">{{ plain(l.path) }} <span v-if="res.accurate" class="text-xs" :class="l.solved ? 'text-felt font-bold' : 'text-muted'">{{ l.solved ? "solved" : "estimated" }}</span></td><td class="text-right">{{ pc(l.freq) }}</td><td class="text-right">{{ l.pot_bb }} bb</td><td class="text-right">{{ l.behind_bb }} bb</td><td class="text-right">{{ pc(l.button_share) }}</td>
                 <td class="text-right whitespace-nowrap">
                   <button class="btn-quiet" @click="study(l)">Study on a flop</button>
                   <button class="text-xs text-felt font-bold underline ml-2" @click="copy(l)">{{ copied === l.path ? "Copied" : "Copy ranges" }}</button>
@@ -108,8 +124,24 @@ const stack = ref(20); const opens = ref<number[]>([2]); const limp = ref(true);
 const res = ref<Preflop | null>(null); const busy = ref(false); const error = ref("");
 const trail = ref<{ id: number; label: string }[]>([]);
 const toggleOpen = (s: number) => { opens.value = opens.value.includes(s) ? opens.value.filter((x) => x !== s) : [...opens.value, s].sort((a, b) => a - b); };
+// ready-made accurate solutions, made with `pontiac preflop --accurate` (hours of flop solves each)
+const SOLVED = import.meta.glob("../../guided/preflopSolved/*.json");
+const SOLVED_STACKS = Object.keys(SOLVED).map((k) => Number(k.match(/(\d+)\.json$/)?.[1])).filter((n) => n > 0).sort((a, b) => a - b);
+const hasSolved = computed(() => SOLVED_STACKS.includes(stack.value) && opens.value.join() === "2" && limp.value && reraise.value === 3 && !ante.value);
+const useSolved = ref(true);
+function openFile(ev: Event) {
+  const f = (ev.target as HTMLInputElement).files?.[0]; if (!f) return;
+  f.text().then((t) => { const r = JSON.parse(t) as Preflop; if (!r.nodes?.length || !r.classes) throw new Error(); res.value = r; stack.value = r.stack_bb; trail.value = []; error.value = ""; })
+    .catch(() => { error.value = "That file is not a preflop result from Pontiac."; });
+  (ev.target as HTMLInputElement).value = "";
+}
 async function run() {
   busy.value = true; error.value = "";
+  if (hasSolved.value && useSolved.value) {
+    try { const key = Object.keys(SOLVED).find((k) => k.endsWith(`/${stack.value}.json`))!; res.value = ((await SOLVED[key]()) as { default: Preflop }).default; trail.value = []; }
+    catch (e) { error.value = String((e as Error).message ?? e); }
+    busy.value = false; return;
+  }
   try { res.value = await preflopSolve({ stack: stack.value, open_sizes: opens.value, limp: limp.value, reraise: reraise.value, ante: ante.value, small_blind: 0.5 }); trail.value = []; }
   catch (e) { error.value = String((e as Error).message ?? e); }
   finally { busy.value = false; }
