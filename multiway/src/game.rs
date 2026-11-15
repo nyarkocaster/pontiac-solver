@@ -24,8 +24,13 @@ pub const NO_STREET: usize = usize::MAX;
 
 #[derive(Default)]
 pub struct NodeData {
-    pub regrets: Vec<f32>,   // actions x hands[player]
-    pub strat_sum: Vec<f32>, // actions x hands[player]
+    // Both tables are actions x hands[player], kept as 16-bit numbers with one scale per node
+    // (the real value is entry * scale / 32767). Half the memory of plain 32-bit storage, and the
+    // solver's speed is limited by how fast memory can be read.
+    pub regrets: Vec<i16>,
+    pub strat_sum: Vec<i16>,
+    pub regret_scale: f32,
+    pub sum_scale: f32,
 }
 
 pub struct Node {
@@ -169,6 +174,7 @@ thread_local! {
     /// Two zeroed card-by-card tables reused by every showdown on this thread.
     static TABLES: std::cell::RefCell<(Vec<f32>, Vec<f32>)> = std::cell::RefCell::new((vec![0f32; 52 * W], vec![0f32; 52 * W]));
     /// Spare reach vectors per player, valid for one game only (tagged with its id).
+    static BUF: std::cell::RefCell<Vec<f32>> = std::cell::RefCell::new(Vec::new());
     static POOL: std::cell::RefCell<(u64, [Vec<Vec<f32>>; 3])> = std::cell::RefCell::new((0, Default::default()));
 }
 static NEXT_GAME_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -501,7 +507,7 @@ impl Game {
         let alloc = self.allocated;
         let node = &mut self.nodes[id];
         node.actions = acts; node.children = children;
-        if alloc { *node.data.get_mut() = NodeData { regrets: vec![0.0; n], strat_sum: vec![0.0; n] }; }
+        if alloc { *node.data.get_mut() = NodeData { regrets: vec![0; n], strat_sum: vec![0; n], regret_scale: 0.0, sum_scale: 0.0 }; }
         id
     }
 
@@ -515,7 +521,7 @@ impl Game {
 
     /// Bytes of solver memory the tree needs (whether or not it has been reserved).
     pub fn memory_bytes(&self) -> usize {
-        self.nodes.iter().filter(|n| n.kind == Kind::Decision).map(|n| n.actions.len() * self.hands[n.player].len() * 8 + n.locked.as_ref().map_or(0, |l| l.len() * 4)).sum::<usize>()
+        self.nodes.iter().filter(|n| n.kind == Kind::Decision).map(|n| n.actions.len() * self.hands[n.player].len() * 4 + n.locked.as_ref().map_or(0, |l| l.len() * 4)).sum::<usize>()
             + self.nodes.len() * 160
     }
 
@@ -528,6 +534,13 @@ impl Game {
 
     /// A reach vector for player `p` from this thread's spare list. Entries outside the
     /// player's own hands are zero; the caller must overwrite every one of the player's hands.
+    /// scratch space for one node update, reused per thread
+    fn take_buf(&self, n: usize) -> Vec<f32> {
+        let mut v = BUF.with(|b| std::mem::take(&mut *b.borrow_mut()));
+        v.clear(); v.resize(n, 0.0);
+        v
+    }
+    fn give_buf(&self, v: Vec<f32>) { BUF.with(|b| { if b.borrow().capacity() < v.capacity() { *b.borrow_mut() = v; } }); }
     fn take(&self, p: usize) -> Vec<f32> {
         POOL.with(|c| {
             let mut c = c.borrow_mut();
@@ -692,7 +705,7 @@ impl Game {
         let mut s = vec![0f32; na * nh];
         for h in 0..nh {
             let mut tot = 0f32;
-            for a in 0..na { let v = src[a * nh + h].max(0.0); s[a * nh + h] = v; tot += v; }
+            for a in 0..na { let v = src[a * nh + h].max(0) as f32; s[a * nh + h] = v; tot += v; }
             if tot > 0.0 { for a in 0..na { s[a * nh + h] /= tot; } } else { for a in 0..na { s[a * nh + h] = 1.0 / na as f32; } }
         }
         // locked hands play their fixed strategy; the rest stay as solved
@@ -872,12 +885,23 @@ impl Game {
             let (pos, neg, sd) = (tf.powf(1.5) / (tf.powf(1.5) + 1.0), 0.5f32, (tf / (tf + 1.0)).powi(2));
             // SAFETY: a node is visited by one thread at a time (river subtrees are disjoint).
             let data = unsafe { &mut *node.data.get() };
+            let n = na * nhh;
+            let (rs, ss) = (data.regret_scale / 32767.0, data.sum_scale / 32767.0);
+            let mut fresh = self.take_buf(2 * n);
+            let (mut rmax, mut smax) = (0f32, 0f32);
             for a in 0..na { for i in 0..nhh {
                 let j = a * nhh + i;
-                let rg = data.regrets[j]; let rg = rg * if rg > 0.0 { pos } else { neg };
-                data.regrets[j] = rg + vals[a][i] - val[i];
-                data.strat_sum[j] = data.strat_sum[j] * sd + r[p][self.hands[p][i] as usize] * sigma[j];
+                let rg = data.regrets[j] as f32 * rs; let rg = rg * if rg > 0.0 { pos } else { neg };
+                let nr = rg + vals[a][i] - val[i];
+                let ns = data.strat_sum[j] as f32 * ss * sd + r[p][self.hands[p][i] as usize] * sigma[j];
+                fresh[j] = nr; fresh[n + j] = ns;
+                rmax = rmax.max(nr.abs()); smax = smax.max(ns);
             } }
+            let (re, se) = (if rmax > 0.0 { 32767.0 / rmax } else { 0.0 }, if smax > 0.0 { 32767.0 / smax } else { 0.0 });
+            for j in 0..n { let v = fresh[j] * re; data.regrets[j] = (v + 0.5f32.copysign(v)) as i16; }
+            for j in 0..n { data.strat_sum[j] = (fresh[n + j] * se + 0.5) as i16; }
+            data.regret_scale = rmax; data.sum_scale = smax;
+            self.give_buf(fresh);
         }
         val
     }

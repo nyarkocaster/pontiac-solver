@@ -41,6 +41,10 @@ print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 - **Which cards matter**: at each turn or river card choice, one click compares every card: how often the next player bets on it and who it helps.
 - **Flop report**: solves the same two-player preflop spot on 8, 16 or 24 representative flops and lines the answers up, with averages by kind of flop.
 - **Push / Fold**: heads-up and three-handed with prize money (ICM).
+- **Library**: save a solve from the Result page and open it again later. Two-player solves are stored whole (compressed); three-player spots are solved again when opened.
+- **Node locks in the app**: at any decision, fix what a player does (whole range or one chart square) and solve again; the normal solve is reused.
+- **Chart views**: actions, value (EV) or chance to win on the hand chart. **Blockers**: which cards in your hand make the other player fold more or less after a bet.
+- **Paste a hand history** (PokerStars text layout) to fill in the table, preflop action, stacks, flop and your cards.
 - Dark and light looks (switch in the top bar).
 
 ## Limits

@@ -46,3 +46,7 @@ strip = true
 # 41.6 vs 1.5 ms/step on a smoke-test tree). Optimize dev builds too.
 [profile.dev]
 opt-level = 3
+
+# Windows' own allocator slows down badly when many threads allocate at once
+[target.'cfg(windows)'.dependencies]
+mimalloc = { version = "0.1", default-features = false }

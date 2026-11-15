@@ -1,5 +1,9 @@
 //! Pontiac Solver command line: solve a heads-up postflop spot from a JSON file, save the solve,
 //! and query any node of a saved solve without solving again. AGPL-3.0-or-later.
+#[cfg(windows)]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[allow(dead_code)]
 #[path = "../../app/src-tauri/src/study_core.rs"]
 mod study_core;

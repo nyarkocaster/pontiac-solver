@@ -1,6 +1,6 @@
 [package]
 name = "pontiac-cli"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 description = "Headless command-line interface for Pontiac Solver"
@@ -22,3 +22,7 @@ bincode_derive = "=2.0.0-rc.3"
 [profile.release]
 opt-level = 3
 debug = false
+
+# Windows' own allocator slows down badly when many threads allocate at once
+[target.'cfg(windows)'.dependencies]
+mimalloc = { version = "0.1", default-features = false }

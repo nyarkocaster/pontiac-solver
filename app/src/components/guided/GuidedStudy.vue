@@ -292,7 +292,7 @@
 
             <section v-if="node.kind === 'player' && node.actions.some((a) => /^(Bet|Raise|All-in)/.test(a))" class="panel">
               <h3 class="font-bold">Blockers</h3>
-              <Blockers class="mt-2" :actor="actorName" :opp="node.player === 0 ? built.ipName : built.oopName" :board="node.board" :actions="node.actions" :labels="node.actions.map((_x, a) => actionLabel(a))" :freqs="node.action_freqs" :combos="node.combos" :reset-key="view + ':' + history.join(',')" :load="loadReply" />
+              <Blockers class="mt-2" :actor="actorName" :opp="node.player === 0 ? built.ipName : built.oopName" :board="node.board" :actions="node.actions" :labels="node.actions.map((_x, a) => actionLabel(a))" :freqs="node.action_freqs" :combos="node.combos" :reset-key="view + ':' + history.join(',') + ':' + node.action_freqs.map((f) => f.toFixed(2)).join()" :load="loadReply" />
             </section>
 
             <section v-if="node.kind === 'player'" class="panel">

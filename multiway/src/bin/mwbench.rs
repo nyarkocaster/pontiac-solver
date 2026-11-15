@@ -16,6 +16,7 @@ fn main() {
         if !only.is_empty() && !name.starts_with(&only) { continue; }
         let g = build_game(&spec(board, wide), true).unwrap();
         let t = Instant::now();
+        let iters = iters * std::env::var("MWB_X").ok().and_then(|x| x.parse::<u32>().ok()).unwrap_or(1);
         for i in 1..=iters { g.iterate(i); }
         let secs = t.elapsed().as_secs_f64() / iters as f64;
         let e = g.evaluate();
