@@ -89,6 +89,8 @@ pub struct Preflop {
     pub model: FlopModel, pub model_note: String,
     /// accurate mode only: what each round of flop solves did
     #[serde(skip_serializing_if = "Option::is_none")] pub accurate: Option<Vec<PassInfo>>,
+    /// the strategy at every tree node, kept so the next accurate round can move only part of the way
+    #[serde(skip)] pub sigmas: Vec<Vec<f64>>,
     pub classes: Vec<String>,
 }
 
@@ -261,23 +263,25 @@ pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut d
     let mut solved: std::collections::HashMap<usize, [Vec<f64>; 2]> = Default::default();
     let mut history = vec![];
     let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
-    let mut out = solve_with(spec, &solved)?;
+    let mut out = solve_with(spec, &solved, None)?;
+    // Each round the flops are solved for the ranges as they stand, and the strategy then moves only
+    // part of the way toward the best answer to those values. The values are only right for the
+    // ranges they were solved with; small steps keep the two in agreement, and a strategy that no
+    // longer moves is one where every hand is doing its best against real flop results.
+    let step = 0.35;
     for pass in 1..=passes.max(1) {
         let mut lines = vec![];
         for l in out.lines.iter().filter(|l| l.freq >= min_freq) {
             let (vals, flops, worst) = eval(l, pass)?;
-            let fitted = fit_offsets(&cp, &eq, &l.reach, &vals, l.pot_bb);
-            let entry = match solved.get(&l.leaf) {
-                Some(old) => [0, 1].map(|p| (0..N).map(|i| 0.5 * old[p][i] + 0.5 * fitted[p][i]).collect::<Vec<f64>>()),
-                None => fitted,
-            };
+            let entry = fit_offsets(&cp, &eq, &l.reach, &vals, l.pot_bb);
             // the button's share these flop solves gave, over the ranges that were sent
             let (mut num, mut den) = (0.0, 0.0);
             for i in 0..N { let w = combos(i) * l.reach[0][i]; if vals[0][i].is_finite() { num += w * vals[0][i]; den += w; } }
             lines.push(PassLine { path: l.path.clone(), freq: l.freq, share_before: l.button_share, share_solved: if den > 0.0 { ((num / den / l.pot_bb) * 1e4).round() / 1e4 } else { 0.0 }, flops, worst_accuracy_pct: worst });
             solved.insert(l.leaf, entry);
         }
-        out = solve_with(spec, &solved)?;
+        let prev = std::mem::take(&mut out.sigmas);
+        out = solve_with(spec, &solved, Some((&prev, step)))?;
         let info = PassInfo { pass, root_actions: out.nodes[0].actions.clone(), root_freqs: out.nodes[0].freqs.clone(), lines };
         report(&info);
         history.push(info);
@@ -323,9 +327,10 @@ fn fit_offsets(cp: &[f64], eq: &[f64], reach: &[Vec<f64>; 2], vals: &[Vec<f64>; 
     [up, down]
 }
 
-pub fn solve(spec: &PreSpec) -> Result<Preflop, String> { solve_with(spec, &Default::default()) }
+pub fn solve(spec: &PreSpec) -> Result<Preflop, String> { solve_with(spec, &Default::default(), None) }
 
-fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64>; 2]>) -> Result<Preflop, String> {
+/// `blend`: the previous strategy and how far to move from it toward the new solve (1 = all the way).
+fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64>; 2]>, blend: Option<(&[Vec<f64>], f64)>) -> Result<Preflop, String> {
     if !(spec.stack > 1.5 && spec.stack <= 250.0) { return Err("stack must be more than 1.5 and at most 250 big blinds".into()); }
     if !(spec.small_blind > 0.0 && spec.small_blind < 1.0) { return Err("small blind must be between 0 and 1 big blind".into()); }
     if !(spec.ante >= 0.0 && spec.ante < spec.stack - 1.0) { return Err("ante must be zero or more, and leave chips behind".into()); }
@@ -346,13 +351,19 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
     reach[0] = [ones.clone(), ones.clone()];
     let mut ids: Vec<i64> = vec![-1; g.nodes.len()]; let mut nodes = vec![]; let mut lines = vec![];
     let share_of = |rc: &[Vec<f64>; 2]| -> f64 { let mut t = 0.0; for i in 0..N { if rc[0][i] <= 0.0 { continue; } for j in 0..N { t += combos(i) * g.cp[i * N + j] * rc[0][i] * rc[1][j]; } } t / (1326.0 * 1225.0) };
+    let mut sigmas: Vec<Vec<f64>> = vec![vec![]; g.nodes.len()];
+    for i in 0..g.nodes.len() {
+        if !matches!(g.nodes[i].kind, Kind::Decision) { continue; }
+        let new = g.sigma(i, true);
+        sigmas[i] = match blend { Some((old, step)) if old.len() == g.nodes.len() && old[i].len() == new.len() => new.iter().zip(&old[i]).map(|(n, o)| o + step * (n - o)).collect(), _ => new };
+    }
     let decisions: Vec<usize> = (0..g.nodes.len()).filter(|&i| matches!(g.nodes[i].kind, Kind::Decision)).collect();
     for (k, &i) in decisions.iter().enumerate() { ids[i] = k as i64; }
     for i in 0..g.nodes.len() {
         let n = g.nodes[i].clone(); let rc = reach[i].clone();
         match n.kind {
             Kind::Decision => {
-                let s = g.sigma(i, true); let na = n.actions.len(); let p = n.player;
+                let s = sigmas[i].clone(); let na = n.actions.len(); let p = n.player;
                 for a in 0..na { let mut c = rc.clone(); for h in 0..N { c[p][h] *= s[a * N + h]; } reach[n.children[a]] = c; }
                 let here = share_of(&rc);
                 let freqs: Vec<f64> = (0..na).map(|a| if here > 0.0 { r(share_of(&reach[n.children[a]]) / here, 4) } else { 0.0 }).collect();
@@ -382,7 +393,7 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
         stack_bb: spec.stack, small_blind: spec.small_blind, ante: spec.ante, ev_button_bb: r(ev[0], 4), ev_big_blind_bb: r(ev[1], 4),
         max_gain_bb: r((best[0] - ev[0]).max(best[1] - ev[1]), 4), iterations: iters, nodes, lines, model,
         model_note: "All-in pots are exact. Pots that see a flop are estimated, not solved: each hand gets its all-in share of the pot, shifted toward the button, the last raiser and hands that play well after the flop. Solve the lines that matter in the postflop solver.".into(),
-        classes: (0..N).map(class_name).collect(), accurate: None,
+        classes: (0..N).map(class_name).collect(), accurate: None, sigmas,
     })
 }
 
