@@ -35,6 +35,7 @@
         <b>Accurate solution.</b> All-in pots are exact, and the common lines that see a flop take their values from real flop solves
         ({{ res.accurate[0]?.lines[0]?.flops ?? 0 }} flops per line, {{ res.accurate.length }} rounds of feeding the results back).
         The flop solves use one bet size per street and a sample of flops, so read differences of a few points as noise.
+        <b v-if="drift >= 1" class="block mt-1">Not fully settled: the first decision was still moving by {{ drift.toFixed(1) }} points in the last round, so treat the exact percentages as provisional.</b>
         <details class="mt-1"><summary class="cursor-pointer font-bold">How it settled, round by round</summary>
           <table class="mt-1 text-xs tabular-nums"><tbody>
             <tr v-for="p in res.accurate" :key="p.pass"><td class="pr-3 py-0.5 align-top">Round {{ p.pass }}</td><td>{{ p.root_actions.map((a, i) => `${a.toLowerCase()} ${pc(p.root_freqs[i])}`).join(", ") }}<span class="text-muted"> · {{ p.lines.map((l) => `${plain(l.path)}: button's share ${pc(l.share_before)} going in, flops gave ${pc(l.share_solved)}`).join("; ") }}</span></td></tr>
@@ -129,6 +130,8 @@ const SOLVED = import.meta.glob("../../guided/preflopSolved/*.json");
 const SOLVED_STACKS = Object.keys(SOLVED).map((k) => Number(k.match(/(\d+)\.json$/)?.[1])).filter((n) => n > 0).sort((a, b) => a - b);
 const hasSolved = computed(() => SOLVED_STACKS.includes(stack.value) && opens.value.join() === "2" && limp.value && reraise.value === 3 && !ante.value);
 const useSolved = ref(true);
+// how far the button's first decision moved in the final round, in percentage points
+const drift = computed(() => { const h = res.value?.accurate; if (!h || h.length < 2) return 0; const x = h[h.length - 1].root_freqs, y = h[h.length - 2].root_freqs; return Math.max(...x.map((v, i) => Math.abs(v - (y[i] ?? v)))) * 100; });
 function openFile(ev: Event) {
   const f = (ev.target as HTMLInputElement).files?.[0]; if (!f) return;
   f.text().then((t) => { const r = JSON.parse(t) as Preflop; if (!r.nodes?.length || !r.classes) throw new Error(); res.value = r; stack.value = r.stack_bb; trail.value = []; error.value = ""; })
