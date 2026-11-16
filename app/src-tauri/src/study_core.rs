@@ -1053,19 +1053,28 @@ impl StudyState {
 /// Solves one spot and returns, per hand class (AA, AKs ... 22 chart order), the chips each
 /// player wins from the pot on average at the start: [out of position, in position], plus the
 /// accuracy reached as a percent of the pot. Classes with no hands possible come back as NaN.
-pub fn class_values(spec: &StudySpec, prog: &StudyProgress) -> Result<([Vec<f64>; 2], f64), String> {
+/// The third item is how likely each class is on this board, per player (shares adding to 1):
+/// hands that share a card with the board are rarer, and they are the ones that hit it, so averages
+/// across boards must be weighted by this or strong hands get counted too often.
+pub fn class_values(spec: &StudySpec, prog: &StudyProgress) -> Result<([Vec<f64>; 2], f64, [Vec<f64>; 2]), String> {
     let out = solve_inner(spec, prog)?;
     let mut game = out.base.ok_or("no solve came back")?;
     game.back_to_root();
     game.cache_normalized_weights();
     let mut vals = [vec![f64::NAN; 169], vec![f64::NAN; 169]];
+    let mut mass = [vec![0f64; 169], vec![0f64; 169]];
     for p in 0..2 {
         let ev = game.expected_values(p);
         let w = game.normalized_weights(p).to_vec();
         let cards = game.private_cards(p).to_vec();
         let (mut num, mut den) = (vec![0f64; 169], vec![0f64; 169]);
         for h in 0..cards.len() { let c = grid_index(cards[h]); num[c] += w[h] as f64 * ev[h] as f64; den[c] += w[h] as f64; }
-        for c in 0..169 { if den[c] > 0.0 { vals[p][c] = num[c] / den[c]; } }
+        let total: f64 = den.iter().sum();
+        for c in 0..169 { if den[c] > 0.0 { vals[p][c] = num[c] / den[c]; mass[p][c] = den[c] / total; } }
+        if std::env::var("PONTIAC_FIT_DEBUG").is_ok() {
+            let tw: f64 = w.iter().map(|&x| x as f64).sum(); let te: f64 = (0..cards.len()).map(|h| w[h] as f64 * ev[h] as f64).sum();
+            eprintln!("ROOT player {p}: mean ev {:.3} of pot {} ({} hands, total weight {:.3})", te / tw, spec.pot, cards.len(), tw);
+        }
     }
-    Ok((vals, out.summary.base_expl_pct))
+    Ok((vals, out.summary.base_expl_pct, mass))
 }

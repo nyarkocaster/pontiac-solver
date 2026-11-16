@@ -272,8 +272,33 @@ pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut d
     for pass in 1..=passes.max(1) {
         let mut lines = vec![];
         for l in out.lines.iter().filter(|l| l.freq >= min_freq) {
-            let (vals, flops, worst) = eval(l, pass)?;
+            let (mut vals, flops, worst) = eval(l, pass)?;
+            // A sample of flops pairs each hand a little more often than the full deck does, so the two
+            // players' solved values add up to slightly more than the pot. Scale both back so they add up.
+            {
+                let mut share = [0.0f64; 2];
+                for p in 0..2 { let (mut num, mut den) = (0.0, 0.0);
+                    for i in 0..N { if !(vals[p][i].is_finite() && l.reach[p][i] > 0.005) { continue; }
+                        let w: f64 = (0..N).filter(|&j| vals[1 - p][j].is_finite() && l.reach[1 - p][j] > 0.005).map(|j| cp[i * N + j] * l.reach[1 - p][j]).sum();
+                        let m = combos(i) * l.reach[p][i] * w; num += m * vals[p][i]; den += m; }
+                    share[p] = if den > 0.0 { num / den / l.pot_bb } else { 0.5 }; }
+                let total = share[0] + share[1];
+                if total > 0.5 { for p in 0..2 { for v in vals[p].iter_mut() { *v /= total; } } }
+            }
             let entry = fit_offsets(&cp, &eq, &l.reach, &vals, l.pot_bb);
+            if std::env::var("PONTIAC_FIT_DEBUG").is_ok() {
+                // does the fit give back what was solved, for each side, and do the two sides' solved shares add up?
+                let mut tot = [0.0f64; 4]; let mut wsum = [0.0f64; 2];
+                for b in 0..N { if !(vals[0][b].is_finite() && l.reach[0][b] > 0.005) { continue; }
+                    let (mut w, mut sh) = (0.0, 0.0);
+                    for x in 0..N { if !(vals[1][x].is_finite() && l.reach[1][x] > 0.005) { continue; } let k = cp[b * N + x] * l.reach[1][x]; w += k; sh += k * (eq[b * N + x] + entry[0][b] - entry[1][x]); }
+                    let m = combos(b) * l.reach[0][b] * w; tot[0] += m * sh / w.max(1e-12); tot[1] += m * vals[0][b] / l.pot_bb; wsum[0] += m; }
+                for x in 0..N { if !(vals[1][x].is_finite() && l.reach[1][x] > 0.005) { continue; }
+                    let (mut w, mut sh) = (0.0, 0.0);
+                    for b in 0..N { if !(vals[0][b].is_finite() && l.reach[0][b] > 0.005) { continue; } let k = cp[x * N + b] * l.reach[0][b]; w += k; sh += k * (1.0 - eq[b * N + x] - entry[0][b] + entry[1][x]); }
+                    let m = combos(x) * l.reach[1][x] * w; tot[2] += m * sh / w.max(1e-12); tot[3] += m * vals[1][x] / l.pot_bb; wsum[1] += m; }
+                eprintln!("FIT {}: button fitted {:.4} solved {:.4} | big blind fitted {:.4} solved {:.4} | solved shares add to {:.4}", l.path, tot[0] / wsum[0], tot[1] / wsum[0], tot[2] / wsum[1], tot[3] / wsum[1], tot[1] / wsum[0] + tot[3] / wsum[1]);
+            }
             // the button's share these flop solves gave, over the ranges that were sent
             let (mut num, mut den) = (0.0, 0.0);
             for i in 0..N { let w = combos(i) * l.reach[0][i]; if vals[0][i].is_finite() { num += w * vals[0][i]; den += w; } }

@@ -695,10 +695,10 @@ fn main() {
                             oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
                             allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0 };
                         let t = std::time::Instant::now();
-                        let (vals, acc) = study_core::class_values(&sp, &prog)?;
+                        let (vals, acc, mass) = study_core::class_values(&sp, &prog)?;
                         worst = worst.max(acc);
                         // vals[0] is the big blind (first to act after the flop), vals[1] the button; chips are tenths of a big blind
-                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; if x.is_finite() { num_v[mine][c] += ways * x / 10.0; den_v[mine][c] += ways; } } }
+                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; let k = ways * mass[theirs][c]; if x.is_finite() && k > 0.0 { num_v[mine][c] += k * x / 10.0; den_v[mine][c] += k; } } }
                         say(format!("pass {pass} | {} | flop {} of {nflops} ({board}) | {:.0}s, within {:.2}% of the pot | {:.0} min so far", l.path, k + 1, t.elapsed().as_secs_f64(), acc, t0.elapsed().as_secs_f64() / 60.0));
                     }
                     let out = [0, 1].map(|p| (0..169).map(|c| if den_v[p][c] > 0.0 { num_v[p][c] / den_v[p][c] } else { f64::NAN }).collect::<Vec<f64>>());
