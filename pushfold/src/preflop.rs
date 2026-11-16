@@ -174,7 +174,7 @@ impl Game {
             Kind::Decision => unreachable!(),
         }
     }
-    fn solved_share(&self, id: usize, b: usize, x: usize) -> f64 { let v = &self.solved[&id]; (self.eq[b * N + x] + v[0][b] - v[1][x]).clamp(0.0, 1.0) }
+    fn solved_share(&self, id: usize, b: usize, x: usize) -> f64 { let v = &self.solved[&id]; (self.eq[b * N + x] + v[0][b] - v[1][x]).clamp(-0.5, 1.5) }  // loose bounds only: the fit is linear, and tight ones stop it reproducing the solved values
     fn button_share(&self, n: &Node, raiser: Option<usize>, b: usize, x: usize) -> f64 {
         let pot = n.put[0] + n.put[1] + 2.0 * self.ante;
         let spr = (self.stack - self.ante - n.put[0].max(n.put[1])).max(0.0) / pot;
@@ -318,7 +318,7 @@ fn fit_offsets(cp: &[f64], eq: &[f64], reach: &[Vec<f64>; 2], vals: &[Vec<f64>; 
         let (mut w, mut m) = (0.0, 0.0);
         for i in 0..N { if have(p, i) { let k = combos(i) * reach[p][i]; w += k; m += k * v[i]; } }
         let mean = if w > 0.0 { m / w } else { 0.0 };
-        for i in 0..N { if !have(p, i) { v[i] = mean; } else { v[i] = v[i].clamp(-0.6, 0.6); } }
+        for i in 0..N { if !have(p, i) { v[i] = mean; } else { v[i] = v[i].clamp(-2.0, 2.0); } }
     }
     [up, down]
 }
@@ -384,4 +384,33 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
         model_note: "All-in pots are exact. Pots that see a flop are estimated, not solved: each hand gets its all-in share of the pot, shifted toward the button, the last raiser and hands that play well after the flop. Solve the lines that matter in the postflop solver.".into(),
         classes: (0..N).map(class_name).collect(), accurate: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// If the "flop solver" is the estimate itself, accurate mode must land back on the plain answer
+    /// and its predictions must match what the solver then reports.
+    #[test]
+    fn accurate_mode_recovers_a_known_payoff() {
+        let spec: PreSpec = serde_json::from_str(r#"{"stack":20,"iterations":1500}"#).unwrap();
+        let plain = solve(&spec).unwrap();
+        let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
+        let play: Vec<f64> = (0..N).map(playability).collect(); let m = FlopModel::default();
+        let mut eval = |l: &FlopLine, _pass: usize| -> Result<LineValues, String> {
+            let spr = l.behind_bb / l.pot_bb; let depth = spr / (spr + m.half_spr);
+            let raiser = l.path.rsplit(" > ").find(|s| s.contains("raise")).map(|s| if s.starts_with("SB") { 1.0 } else { -1.0 }).unwrap_or(0.0);
+            let share = |b: usize, x: usize| (eq[b * N + x] + depth * (m.position + m.initiative * raiser + m.playability * (play[b] - play[x]))).clamp(0.0, 1.0);
+            let mut v = [vec![f64::NAN; N], vec![f64::NAN; N]];
+            for b in 0..N { if l.reach[0][b] < 0.005 { continue; } let (mut w, mut s) = (0.0, 0.0); for x in 0..N { if l.reach[1][x] < 0.005 { continue; } let k = cp[b * N + x] * l.reach[1][x]; w += k; s += k * share(b, x); } if w > 0.0 { v[0][b] = s / w * l.pot_bb; } }
+            for x in 0..N { if l.reach[1][x] < 0.005 { continue; } let (mut w, mut s) = (0.0, 0.0); for b in 0..N { if l.reach[0][b] < 0.005 { continue; } let k = cp[x * N + b] * l.reach[0][b]; w += k; s += k * (1.0 - share(b, x)); } if w > 0.0 { v[1][x] = s / w * l.pot_bb; } }
+            Ok((v, 1, 0.0))
+        };
+        let mut log = vec![];
+        let acc = solve_accurate(&spec, 4, 0.02, &mut eval, &mut |i: &PassInfo| log.push(i.clone())).unwrap();
+        for i in &log { println!("pass {}: {:?} {:?}", i.pass, i.root_freqs, i.lines.iter().map(|l| (l.path.clone(), l.share_before, l.share_solved)).collect::<Vec<_>>()); }
+        println!("plain {:?}", plain.nodes[0].freqs);
+        for (a, b) in acc.nodes[0].freqs.iter().zip(&plain.nodes[0].freqs) { assert!((a - b).abs() < 0.05, "{a} vs {b}"); }
+        for l in &log.last().unwrap().lines { assert!((l.share_before - l.share_solved).abs() < 0.02, "{} {} {}", l.path, l.share_before, l.share_solved); }
+    }
 }
