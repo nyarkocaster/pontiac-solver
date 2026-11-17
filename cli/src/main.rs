@@ -1,9 +1,5 @@
 //! Pontiac Solver command line: solve a heads-up postflop spot from a JSON file, save the solve,
 //! and query any node of a saved solve without solving again. AGPL-3.0-or-later.
-#[cfg(windows)]
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 #[allow(dead_code)]
 #[path = "../../app/src-tauri/src/study_core.rs"]
 mod study_core;
@@ -704,7 +700,16 @@ fn main() {
                     let out = [0, 1].map(|p| (0..169).map(|c| if den_v[p][c] > 0.0 { num_v[p][c] / den_v[p][c] } else { f64::NAN }).collect::<Vec<f64>>());
                     Ok((out, nflops, worst))
                 };
-                let mut report = |i: &pushfold::preflop::PassInfo| {
+                let save = flag("--save");
+                let mut report = |i: &pushfold::preflop::PassInfo, so_far: &pushfold::preflop::Preflop| {
+                    // the answer so far goes to disk after every round (written beside, then renamed, so the file is never half-written)
+                    if let Some(path) = &save {
+                        if let Ok(mut v) = serde_json::to_value(so_far) {
+                            if let Some(m) = v.as_object_mut() { m.insert("ok".into(), json!(true)); m.insert("version".into(), json!(version_string())); m.insert("rounds_done".into(), json!(i.pass)); m.insert("rounds_planned".into(), json!(passes)); }
+                            let tmp = format!("{path}.part");
+                            if std::fs::write(&tmp, v.to_string()).is_ok() { let _ = std::fs::rename(&tmp, path); }
+                        }
+                    }
                     say(format!("== after pass {}: {} ==", i.pass, i.root_actions.iter().zip(&i.root_freqs).map(|(a, f)| format!("{a} {:.1}%", f * 100.0)).collect::<Vec<_>>().join(", ")));
                     for l in &i.lines { say(format!("   {} ({:.1}% of hands): button's share was {:.1}%, flop solves gave {:.1}%", l.path, l.freq * 100.0, l.share_before * 100.0, l.share_solved * 100.0)); }
                 };

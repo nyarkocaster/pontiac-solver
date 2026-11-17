@@ -238,6 +238,8 @@ fn range_text(w: &[f64]) -> String {
     (0..N).filter(|&i| w[i] >= 0.005).map(|i| if w[i] > 0.995 { class_name(i) } else { format!("{}:{:.2}", class_name(i), w[i]) }).collect::<Vec<_>>().join(",")
 }
 
+const ACCURATE_NOTE: &str = "All-in pots are exact. Lines marked solved take their values from real flop solves of a sample of flops, fed back and repeated; rarer lines still use the estimate. The flop solves use one bet size per street and a sample of flops, so small frequency differences are not meaningful.";
+
 /// One round of accurate mode, for progress reports.
 #[derive(Serialize, Clone, Debug)]
 pub struct PassInfo {
@@ -259,7 +261,7 @@ pub type LineValues = ([Vec<f64>; 2], usize, f64);
 /// worth at that point, and the preflop is solved again. Ranges and values chase each other, so
 /// values are averaged with the previous round's to settle. `floor` keeps a sliver of every hand
 /// in the ranges sent out so that every hand gets a value.
-pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut dyn FnMut(&FlopLine, usize) -> Result<LineValues, String>, report: &mut dyn FnMut(&PassInfo)) -> Result<Preflop, String> {
+pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut dyn FnMut(&FlopLine, usize) -> Result<LineValues, String>, report: &mut dyn FnMut(&PassInfo, &Preflop)) -> Result<Preflop, String> {
     let mut solved: std::collections::HashMap<usize, [Vec<f64>; 2]> = Default::default();
     let mut history = vec![];
     let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
@@ -308,11 +310,14 @@ pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut d
         let prev = std::mem::take(&mut out.sigmas);
         out = solve_with(spec, &solved, Some((&prev, step)))?;
         let info = PassInfo { pass, root_actions: out.nodes[0].actions.clone(), root_freqs: out.nodes[0].freqs.clone(), lines };
-        report(&info);
-        history.push(info);
+        history.push(info.clone());
+        // hand over the whole answer as it stands, so a run that stops later loses one round, not everything
+        out.accurate = Some(history.clone());
+        out.model_note = ACCURATE_NOTE.into();
+        report(&info, &out);
     }
     out.accurate = Some(history);
-    out.model_note = "All-in pots are exact. Lines marked solved take their values from real flop solves of a sample of flops, fed back and repeated; rarer lines still use the estimate. The flop solves use one bet size per street and a sample of flops, so small frequency differences are not meaningful.".into();
+    out.model_note = ACCURATE_NOTE.into();
     Ok(out)
 }
 
@@ -443,7 +448,7 @@ mod tests {
             Ok((v, 1, 0.0))
         };
         let mut log = vec![];
-        let acc = solve_accurate(&spec, 4, 0.02, &mut eval, &mut |i: &PassInfo| log.push(i.clone())).unwrap();
+        let acc = solve_accurate(&spec, 4, 0.02, &mut eval, &mut |i: &PassInfo, _so_far: &Preflop| log.push(i.clone())).unwrap();
         for i in &log { println!("pass {}: {:?} {:?}", i.pass, i.root_freqs, i.lines.iter().map(|l| (l.path.clone(), l.share_before, l.share_solved)).collect::<Vec<_>>()); }
         println!("plain {:?}", plain.nodes[0].freqs);
         for (a, b) in acc.nodes[0].freqs.iter().zip(&plain.nodes[0].freqs) { assert!((a - b).abs() < 0.05, "{a} vs {b}"); }

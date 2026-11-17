@@ -3,10 +3,6 @@
     windows_subsystem = "windows"
 )]
 
-#[cfg(windows)]
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 mod bunching;
 mod range;
 mod solver;
