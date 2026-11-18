@@ -225,3 +225,39 @@ def test_prize_money_payoffs_in_a_two_player_pot():
     assert freqs(r["nodes"][node])["call"] < freqs(plain["nodes"][node])["call"] - 0.01
     with pytest.raises(pontiac.SolverError):
         pontiac.solve({**spot, "icm": {"payouts": [50, 30, 20], "stacks_bb": {"SB": 30, "BB": 60}}})
+
+
+def test_prize_money_three_player_engine_agrees_with_two_player_engine():
+    """The same cross-check as for chips, for prize money: a three-way pot where one player has
+    folded, against the two-player engine with that player's stack listed among the others."""
+    sb = "QQ,88,33,AQs-A9s,KQs,QJs,QTs,AQo,KQo,QJo,A8s,98s,JTs,T9s,76s,65s,55,44,KTs,K9s"
+    bb = "Q9s,Q8s,Q7s,Q9o,KQo:0.5,A8s,K8s,98s,87s,A3s,JJ:0.25,TT,99,77,66,A5s,A4s,64s,54s,KJo,J9s"
+    streets = {"river": {"bet": [0.5], "raise": [2.5]}}
+    two = pontiac.solve({
+        "players": ["SB", "BB"], "effective_stack_bb": 30, "pot_bb": 12, "board": "Qh8c3h5d2s",
+        "ranges": {"SB": sb, "BB": bb}, "bet_tree": dict(streets, allin_threshold=0),
+        "target_exploitability_pct": 0.05, "max_seconds": 120, "icm": {"payouts": [50, 30, 20], "others_bb": [25, 40, 9]}})
+    spot = {
+        "players": ["BB", "CO", "BTN"], "folded": ["BTN"], "stacks_bb": {"BB": 30, "CO": 30, "BTN": 25}, "pot_bb": 12, "board": "Qh8c3h5d2s",
+        "ranges": {"BB": bb, "CO": sb, "BTN": ALL_HANDS}, "bet_tree": dict(streets, max_raises=3, allin_spr=0.0),
+        "target_exploitability_pct": 0.05, "max_seconds": 300}
+    three = pontiac.solve({**spot, "icm": {"payouts": [50, 30, 20], "others_bb": [40, 9]}})
+    assert three["ev_bb"]["BB"] == pytest.approx(two["ev_bb"]["BB"], abs=0.02)
+    assert three["ev_bb"]["CO"] == pytest.approx(two["ev_bb"]["SB"], abs=0.02)
+    assert three["icm"]["prize_pool_share_pct"]["BB"] == pytest.approx(two["icm"]["prize_pool_share_pct"]["BB"], abs=0.02)
+    # one prize and nobody else: the same game as chips
+    chips = pontiac.solve(spot); one = pontiac.solve({**spot, "icm": {"payouts": [100]}})
+    for name in ("BB", "CO"):
+        assert one["ev_bb"][name] == pytest.approx(chips["ev_bb"][name], abs=0.02)
+
+
+def test_prize_money_three_players_at_showdown():
+    spot = json.loads((Path(__file__).parent.parent / "examples" / "three_way_river.json").read_text())
+    spot.pop("rake")
+    r = pontiac.solve({**spot, "icm": {"payouts": [50, 30, 20], "others_bb": [30, 12]}})
+    assert r["exploitability_pct"] <= spot["target_exploitability_pct"]
+    # the players outside the hand gain when these three clash
+    assert sum(r["ev_bb"].values()) < spot["pot_bb"] - 0.2
+    assert abs(sum(r["icm"]["prize_pool_share_pct"].values()) - sum(r["icm"]["if_pot_were_split_pct"].values())) < 2.0
+    with pytest.raises(pontiac.SolverError):
+        pontiac.solve({**spot, "rake": 0.05, "icm": {"payouts": [50, 30, 20]}})

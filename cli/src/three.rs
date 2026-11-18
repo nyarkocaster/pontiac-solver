@@ -60,6 +60,14 @@ pub fn spec_from(raw: &Value, players: &[String]) -> Result<(Spec3, [String; 3])
             }
         }
     }
+    // prize money: {"payouts": [50, 30, 20], "others_bb": [25, 12]}; the three players' stacks are the spot's own
+    let (mut icm_payouts, mut icm_others) = (vec![], vec![]);
+    if let Some(v) = raw.get("icm").filter(|x| !x.is_null()) {
+        let help = "icm: give {\"payouts\": [50, 30, 20], \"others_bb\": [25, 12]} (others are players not in this hand; the three players' stacks are the spot's)";
+        let list = |k: &str| -> Result<Vec<f64>, String> { match v.get(k) { None => Ok(vec![]), Some(x) => x.as_array().ok_or(help)?.iter().map(|y| y.as_f64().filter(|z| *z >= 0.0).ok_or(help.to_string())).collect() } };
+        icm_payouts = list("payouts")?; icm_others = list("others_bb")?.iter().map(|x| x * CHIPS).collect();
+        if icm_payouts.is_empty() { return Err(help.into()); }
+    }
     let (rake_rate, rake_cap) = match raw.get("rake") {
         Some(Value::Object(o)) => (o.get("rate").and_then(|x| x.as_f64()).unwrap_or(0.0), o.get("cap_bb").and_then(|x| x.as_f64()).unwrap_or(0.0) * CHIPS),
         Some(Value::Number(n)) => (n.as_f64().unwrap_or(0.0), 0.0),
@@ -101,6 +109,7 @@ pub fn spec_from(raw: &Value, players: &[String]) -> Result<(Spec3, [String; 3])
         accuracy_pct: num("target_exploitability_pct").unwrap_or(0.5), max_iter: num("max_iterations").unwrap_or([400.0, 300.0, 600.0][cards.clamp(3, 5) - 3]) as u32,
         max_seconds: num("max_seconds").unwrap_or(600.0), threads: num("threads").unwrap_or(0.0) as usize,
         turn_cards, river_cards, rake_rate, rake_cap, leaks, node_locks, names: Some(names.clone()), chips_per_bb: CHIPS,
+        icm_payouts, icm_others,
     };
     // the engine needs explicit sizes on the street the spot starts on or later; an empty street is check/call only
     Ok((spec, names))
@@ -231,6 +240,13 @@ pub fn solve(raw: &Value, players: &[String], save: Option<&str>) -> Result<Valu
     } else { summary_json(&names, s.base_iters, s.base_secs, &s.base_ev, &s.base_gain_pct, &spec, s.cancelled) };
     for (k, v) in fin.as_object().unwrap() { result.insert(k.clone(), v.clone()); }
     result.insert("locked_decisions".into(), json!(s.locked_nodes));
+    if let Some(icm) = st.base.as_ref().and_then(|g| g.icm.as_ref()) {
+        let ev = if s.locked { &s.locked_ev } else { &s.base_ev };
+        let (mut share, mut split) = (Map::new(), Map::new());
+        for p in 0..3 { share.insert(names[p].clone(), json!(round(icm.share_pct(p, ev[p]), 3))); split.insert(names[p].clone(), json!(round(icm.split_pct(p), 3))); }
+        result.insert("icm".into(), json!({"prize_pool_share_pct": share, "if_pot_were_split_pct": split,
+            "note": "Payoffs are prize money (Independent Chip Model), not chips. ev_bb, EVs in the node reports and exploitability are in chip-sized units of prize money: prize pool divided by chips in play, per chip. prize_pool_share_pct is each player's expected share of the prize pool after this spot. The three players' ev_bb add up to less than the pot when there are other players, who gain when these three clash. A player who has folded still has a stake in how the others finish, so their EV is no longer zero."}));
+    }
     result.insert("nodes".into(), nodes_of(s.locked)?);
     result.insert("total_seconds".into(), json!(round(t0.elapsed().as_secs_f64(), 2)));
     if save.is_some() { result.insert("note".into(), json!("three-player solves cannot be saved yet; list deeper nodes in \"report_nodes\" to include them in this result")); }

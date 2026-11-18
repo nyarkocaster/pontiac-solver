@@ -67,6 +67,12 @@ pub struct Spec3 {
     /// raise sizes as multiples of the bet being raised, e.g. "2.5, 3"
     #[serde(default)]
     pub raise_mults: String,
+    /// play for tournament prize money: the prizes, first place first (empty = play for chips)
+    #[serde(default)]
+    pub icm_payouts: Vec<f64>,
+    /// stacks of players still in the tournament who are not in this hand, in the spot's chips
+    #[serde(default)]
+    pub icm_others: Vec<f64>,
     /// stop after this many seconds and keep the result so far (0 = no limit)
     #[serde(default)]
     pub max_seconds: f64,
@@ -228,7 +234,8 @@ pub fn build_game(spec: &Spec3, allocate: bool) -> Result<Game, String> {
         flop_max_raises: if spec.flop_max_raises == 0 { turn_max } else { spec.flop_max_raises.clamp(1, 4) },
         turn_max_raises: turn_max, max_raises, allin_spr: spec.allin_spr.max(0.0),
         turn_cards: spec.turn_cards, river_cards: spec.river_cards,
-        extra: Extra { stacks: spec.stacks, folded: spec.folded, rake_rate: spec.rake_rate.max(0.0), rake_cap: spec.rake_cap.max(0.0), raise_mults: parse_mults(&spec.raise_mults)? },
+        extra: Extra { stacks: spec.stacks, folded: spec.folded, rake_rate: spec.rake_rate.max(0.0), rake_cap: spec.rake_cap.max(0.0), raise_mults: parse_mults(&spec.raise_mults)?,
+            icm: if spec.icm_payouts.is_empty() { None } else { Some(crate::icm3::IcmCfg { payouts: spec.icm_payouts.clone(), others: spec.icm_others.clone() }) } },
     }, allocate)
 }
 

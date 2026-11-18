@@ -280,7 +280,7 @@ Command line: `pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 
 - Prize values use the Independent Chip Model (Malmuth-Harville). A call counts as all-in for the caller's whole stack.
 - All-in results are exact: every board counted for every pair and trio of hand classes, ties as split pots (tables built by `pushfold/src/bin/gen_exact.rs`, checked count for count against direct enumeration by `check_exact.rs`). The trio table stores each result to the nearest 1/255. Card removal from the folded player is ignored in two-way all-ins. Takes about 10 seconds on 2 cores at the default 200 iterations.
 - Checked against published HoldemResources figures for 3-handed 10 bb stacks with 50/30/20 prizes (button 27%, small blind call 7.1%, overcall 1.8%): this gives 27.4%, 7.2%, 1.6%.
-- Three-player postflop solves play for chips. Two-player postflop solves can play for prize money: see below.
+- Postflop solves, two-player and three-player, can play for prize money: see below.
 
 ### Prize money after the flop (two-player pots)
 
@@ -294,6 +294,7 @@ Add an `icm` block to a two-player spot file and every result of the hand is val
 - A win, a loss and a split are each valued with the Independent Chip Model from the stacks they leave. Because the players sitting out gain when the two in the pot clash, the game is no longer zero-sum: the two players' `ev_bb` add up to less than the pot.
 - `ev_bb`, the EVs in node reports and `exploitability_pct` are then in chip-sized units of prize money (prize pool divided by chips in play, per chip), so they read like big blinds. The result gains `icm.prize_pool_share_pct` (each player's expected share of the prize pool after the spot), `icm.if_pot_were_split_pct` and `icm.if_player_gave_up_the_pot_pct` for comparison.
 - Checked: with one prize and no other players the answer equals the chip solve; on a bubble the player at risk calls an all-in less often (both in the smoke tests). `examples/icm_bubble_river.json` is a sample.
+- **Three players:** add `"icm": {"payouts": [50, 30, 20], "others_bb": [30, 12]}` to a three-player spot; the three stacks are the spot's `stacks_bb`. Every finishing order of a showdown is valued, side pots included, and a player who has folded keeps a stake in how the other two finish (someone busting moves them up). Showdown weights are exact, checked against a count of every pair of opposing hands. With one of the three folded from the start, the answer matches the two-player engine's (in the smoke tests). Prize-money steps cost about six times a chip step, so start with river and turn spots. A player folded before the spot starts is reported at their value if the pot were shared, not solved for.
 - In the app: Study a spot, Tournament, a two-player pot, then tick "Play for prize money, not chips" beside the Solve button. The stacks of the players who folded are taken from the table you set up.
 - Limits for now: no rake, no `--save` from the command line (the app's library does keep prize-money solves), and node locks and habits work but their reports are in the same prize-money units.
 

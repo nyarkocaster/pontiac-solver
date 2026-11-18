@@ -100,6 +100,8 @@ pub struct Extra {
     pub rake_cap: f64,
     /// raise sizes as multiples of the bet being raised (2.5 = raise to 2.5 times the bet)
     pub raise_mults: Vec<f64>,
+    /// play for tournament prize money instead of chips
+    pub icm: Option<crate::icm3::IcmCfg>,
 }
 
 /// Showdown ordering for one final (five-card) board.
@@ -110,6 +112,8 @@ pub struct Street {
     pub rank: Vec<u16>,
     /// each player's hands that are possible on this board, weakest first
     pub sorted: [Vec<u16>; 3],
+    /// per card: every possible hand holding it as (strength group, hand index), weakest first
+    pub by_card: Vec<Vec<(u16, u16)>>,
 }
 
 /// Row width of the card-by-card tables (52 cards padded to a multiple of 8 for vector maths).
@@ -135,6 +139,8 @@ pub struct Game {
     pub id: u64,
     /// when set, best-response checks may deviate at locked nodes too (for testing)
     pub br_ignores_locks: bool,
+    /// prize-money payoffs, when the spot is played for prizes
+    pub icm: Option<crate::icm3::Icm3>,
 }
 
 // Solver threads only ever touch disjoint river subtrees at the same time.
@@ -167,7 +173,9 @@ fn make_street(deck: &Deck, board: &[u8], card: u8, hands: &[Vec<u16>; 3]) -> St
         sorted[p] = hands[p].iter().cloned().filter(|&h| strength[h as usize] > 0).collect();
         sorted[p].sort_by_key(|&h| strength[h as usize]);
     }
-    Street { card, strength, rank, sorted }
+    let mut by_card: Vec<Vec<(u16, u16)>> = vec![vec![]; 52];
+    for &h in &order { let (a, b) = deck.cards[h as usize]; let k = rank[a as usize * W + b as usize]; by_card[a as usize].push((k, h)); by_card[b as usize].push((k, h)); }
+    Street { card, strength, rank, sorted, by_card }
 }
 
 thread_local! {
@@ -337,7 +345,7 @@ impl Game {
         let stacks = cfg.extra.stacks.unwrap_or([cfg.stack; 3]);
         if stacks.iter().any(|&x| x < 0.0) { return Err("a stack cannot be negative".into()); }
         if cfg.extra.folded.iter().filter(|&&f| !f).count() < 2 { return Err("at least two players must still be in the hand".into()); }
-        let mut g = Game { deck, cfg, stacks, nodes: vec![], streets: vec![], street_of: HashMap::new(), samples: HashMap::new(), valid, card_hands, hands, hpos, allocated: allocate, br_ignores_locks: false,
+        let mut g = Game { deck, cfg, stacks, nodes: vec![], streets: vec![], street_of: HashMap::new(), samples: HashMap::new(), valid, card_hands, hands, hpos, allocated: allocate, br_ignores_locks: false, icm: None,
             id: NEXT_GAME_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) };
         // deal structure: which turn and river cards exist in this tree
         let b0 = g.cfg.board.clone();
@@ -353,6 +361,7 @@ impl Game {
         let st = St { inv: [0.0; 3], folded: g.cfg.extra.folded, acted: [false; 3], raises: 0, last_inc: 0.0, base: 0.0 };
         let street = if b0.len() == 5 { 0 } else { NO_STREET };
         g.build(st, 0, &Ctx { board: b0, dealt: [255, 255], street });
+        if let Some(c) = g.cfg.extra.icm.clone() { g.icm = Some(crate::icm3::Icm3::new(&g, c)?); }
         Ok(g)
     }
 
@@ -796,6 +805,7 @@ impl Game {
         let _pot = self.cfg.pot + inv.iter().sum::<f64>();
         let nhh = self.hands[hero].len();
         match node.kind {
+            Kind::FoldEnd | Kind::Showdown if self.icm.is_some() => { return self.icm_terminal(id, hero, r); }
             Kind::FoldEnd => {
                 let util = if node.player == hero { node.pots[0].0 - inv[hero] } else { -inv[hero] };
                 return self.scaled_reach(hero, r, util);
@@ -819,7 +829,8 @@ impl Game {
                 return val.unwrap_or_else(|| self.scaled_reach(hero, r, -cost));
             }
             Kind::Chance => {
-                if folded[hero] { return self.scaled_reach(hero, r, -inv[hero]); }
+                // in chips a folded player's result is settled; for prize money it still depends on how the others finish
+                if folded[hero] && self.icm.is_none() { return self.scaled_reach(hero, r, -inv[hero]); }
                 let parts: Vec<Vec<f32>> = (0..node.cards.len()).into_par_iter().map(|k| {
                     let card = node.cards[k];
                     let mut nr = [self.take(0), self.take(1), self.take(2)];
@@ -857,7 +868,7 @@ impl Game {
         // hero's decision
         let mut vals: Vec<Vec<f32>> = Vec::with_capacity(na);
         for a in 0..na {
-            if node.actions[a] == Action::Fold {
+            if node.actions[a] == Action::Fold && self.icm.is_none() {
                 // once hero folds, the rest of the hand cannot change hero's result
                 vals.push(self.scaled_reach(hero, r, -inv[hero]));
                 continue;
@@ -914,7 +925,7 @@ impl Game {
         match node.kind {
             Kind::FoldEnd | Kind::Showdown => { let v = self.walk(id, hero, r, Mode::Average); return (v.clone(), v); }
             Kind::Chance => {
-                if node.folded[hero] { let v = self.scaled_reach(hero, r, -node.invested[hero]); return (v.clone(), v); }
+                if node.folded[hero] && self.icm.is_none() { let v = self.scaled_reach(hero, r, -node.invested[hero]); return (v.clone(), v); }
                 let parts: Vec<(Vec<f32>, Vec<f32>)> = (0..node.cards.len()).into_par_iter().map(|k| {
                     let card = node.cards[k];
                     let mut nr = [self.take(0), self.take(1), self.take(2)];
@@ -950,7 +961,7 @@ impl Game {
         }
         let mut vals: Vec<(Vec<f32>, Vec<f32>)> = Vec::with_capacity(na);
         for a in 0..na {
-            if node.actions[a] == Action::Fold { let v = self.scaled_reach(hero, r, -node.invested[hero]); vals.push((v.clone(), v)); continue; }
+            if node.actions[a] == Action::Fold && self.icm.is_none() { let v = self.scaled_reach(hero, r, -node.invested[hero]); vals.push((v.clone(), v)); continue; }
             let mut nr = self.take(p);
             for (k, &h) in self.hands[p].iter().enumerate() { nr[h as usize] = r[p][h as usize] * sigma[a * nhp + k]; }
             let mut rr = r; rr[p] = &nr;
