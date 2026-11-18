@@ -713,7 +713,25 @@ fn main() {
                     say(format!("== after pass {}: {} ==", i.pass, i.root_actions.iter().zip(&i.root_freqs).map(|(a, f)| format!("{a} {:.1}%", f * 100.0)).collect::<Vec<_>>().join(", ")));
                     for l in &i.lines { say(format!("   {} ({:.1}% of hands): button's share was {:.1}%, flop solves gave {:.1}%", l.path, l.freq * 100.0, l.share_before * 100.0, l.share_solved * 100.0)); }
                 };
-                pushfold::preflop::solve_accurate(&spec, passes, min_freq, &mut eval, &mut report)?
+                // --resume: carry on from the round a stopped run last finished (kept beside the --save file)
+                let want_resume = args.iter().any(|a| a == "--resume");
+                if want_resume && save.is_none() { return Err("--resume needs --save <file>: the run's progress is kept beside that file".into()); }
+                let cp_path = save.as_ref().map(|p| format!("{p}.resume"));
+                let settings = json!({"spec": serde_json::to_value(&spec).map_err(|e| e.to_string())?, "flops": nflops, "min_line": min_freq, "flop_accuracy": accuracy});
+                let mut start: Option<pushfold::preflop::Checkpoint> = None;
+                if want_resume {
+                    if let Some(text) = cp_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+                        let v: Value = serde_json::from_str(&text).map_err(|_| "the .resume file beside the --save file could not be read; delete it to start again".to_string())?;
+                        if v["settings"] != settings { return Err("the saved progress was made with different settings (stack, sizes, ante, flops, min line or flop accuracy); use the same settings, or delete the .resume file to start again".into()); }
+                        let c: pushfold::preflop::Checkpoint = serde_json::from_value(v["checkpoint"].clone()).map_err(|_| "the .resume file beside the --save file could not be read; delete it to start again".to_string())?;
+                        say(format!("== resuming after round {} of {passes} ==", c.rounds_done));
+                        start = Some(c);
+                    } else { say("== no saved progress found; starting from round 1 ==".to_string()); }
+                }
+                let mut keep = |c: &pushfold::preflop::Checkpoint| {
+                    if let Some(p) = &cp_path { let tmp = format!("{p}.part"); if std::fs::write(&tmp, json!({"settings": settings, "checkpoint": c}).to_string()).is_ok() { let _ = std::fs::rename(&tmp, p); } }
+                };
+                pushfold::preflop::solve_accurate_from(&spec, passes, min_freq, &mut eval, &mut report, start, &mut keep)?
             } else { pushfold::preflop::solve(&spec)? };
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
             let m = v.as_object_mut().unwrap();

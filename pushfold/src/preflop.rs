@@ -34,7 +34,7 @@ pub struct FlopModel {
 }
 impl Default for FlopModel { fn default() -> Self { FlopModel { position: 0.16, initiative: 0.04, playability: 0.02, half_spr: 7.0 } } }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PreSpec {
     /// the shorter stack, in big blinds, before blinds and antes go in
     pub stack: f64,
@@ -57,7 +57,7 @@ enum Kind { Decision, Fold { winner: usize }, Showdown, Flop { raiser: Option<us
 #[derive(Clone, Debug)]
 struct Node { kind: Kind, player: usize, put: [f64; 2], actions: Vec<(String, f64)>, children: Vec<usize>, path: String, regret: Vec<f64>, sum: Vec<f64> }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PreNode {
     pub id: usize, pub path: String, pub player: String, pub situation: String,
     pub actions: Vec<String>, pub amounts_bb: Vec<f64>,
@@ -72,11 +72,11 @@ pub struct PreNode {
     /// where each action leads: a decision id, or -1 when the betting ends
     pub next: Vec<i64>,
 }
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FlopLine { #[serde(skip)] pub leaf: usize, #[serde(skip)] pub reach: [Vec<f64>; 2], pub path: String, pub freq: f64, pub pot_bb: f64, pub behind_bb: f64, pub button_range: String, pub big_blind_range: String, pub button_share: f64,
     /// true when the share comes from solved flops, false when it is the estimate
     pub solved: bool }
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Preflop {
     pub stack_bb: f64, pub small_blind: f64, pub ante: f64,
     pub ev_button_bb: f64, pub ev_big_blind_bb: f64,
@@ -241,7 +241,7 @@ fn range_text(w: &[f64]) -> String {
 const ACCURATE_NOTE: &str = "All-in pots are exact. Lines marked solved take their values from real flop solves of a sample of flops, fed back and repeated; rarer lines still use the estimate. The flop solves use one bet size per street and a sample of flops, so small frequency differences are not meaningful.";
 
 /// One round of accurate mode, for progress reports.
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PassInfo {
     pub pass: usize,
     /// the button's first decision after this round's flop values went in
@@ -249,7 +249,7 @@ pub struct PassInfo {
     /// per line solved this round: the button's pot share used going in, and what the flop solves gave
     pub lines: Vec<PassLine>,
 }
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PassLine { pub path: String, pub freq: f64, pub share_before: f64, pub share_solved: f64, pub flops: usize, pub worst_accuracy_pct: f64 }
 
 /// What a flop evaluator hands back for one line: per hand class, the big blinds each player wins
@@ -261,17 +261,42 @@ pub type LineValues = ([Vec<f64>; 2], usize, f64);
 /// worth at that point, and the preflop is solved again. Ranges and values chase each other, so
 /// values are averaged with the previous round's to settle. `floor` keeps a sliver of every hand
 /// in the ranges sent out so that every hand gets a value.
+/// Everything an accurate run needs to carry on after the round it has just finished.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Checkpoint {
+    pub rounds_done: usize,
+    /// fitted flop values by line (leaf id), as used for the last preflop solve
+    pub solved: Vec<(usize, [Vec<f64>; 2])>,
+    /// the strategy the last preflop solve stepped away from
+    pub prev: Vec<Vec<f64>>,
+    pub history: Vec<PassInfo>,
+}
+
 pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut dyn FnMut(&FlopLine, usize) -> Result<LineValues, String>, report: &mut dyn FnMut(&PassInfo, &Preflop)) -> Result<Preflop, String> {
+    solve_accurate_from(spec, passes, min_freq, eval, report, None, &mut |_| {})
+}
+
+/// As `solve_accurate`, but can start from a checkpoint and hands one out after every round.
+/// The preflop solve is deterministic, so a resumed run gives the same answer as an unbroken one.
+pub fn solve_accurate_from(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut dyn FnMut(&FlopLine, usize) -> Result<LineValues, String>, report: &mut dyn FnMut(&PassInfo, &Preflop), resume: Option<Checkpoint>, checkpoint: &mut dyn FnMut(&Checkpoint)) -> Result<Preflop, String> {
     let mut solved: std::collections::HashMap<usize, [Vec<f64>; 2]> = Default::default();
     let mut history = vec![];
+    let mut first = 1;
+    let mut resumed: Option<Preflop> = None;
+    if let Some(c) = resume {
+        solved = c.solved.into_iter().collect(); history = c.history; first = c.rounds_done + 1;
+        let mut o = solve_with(spec, &solved, Some((&c.prev, 0.35)))?;
+        o.accurate = Some(history.clone()); o.model_note = ACCURATE_NOTE.into();
+        resumed = Some(o);
+    }
     let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
-    let mut out = solve_with(spec, &solved, None)?;
+    let mut out = match resumed { Some(o) => o, None => solve_with(spec, &solved, None)? };
     // Each round the flops are solved for the ranges as they stand, and the strategy then moves only
     // part of the way toward the best answer to those values. The values are only right for the
     // ranges they were solved with; small steps keep the two in agreement, and a strategy that no
     // longer moves is one where every hand is doing its best against real flop results.
     let step = 0.35;
-    for pass in 1..=passes.max(1) {
+    for pass in first..=passes.max(1) {
         let mut lines = vec![];
         for l in out.lines.iter().filter(|l| l.freq >= min_freq) {
             let (mut vals, flops, worst) = eval(l, pass)?;
@@ -315,6 +340,8 @@ pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut d
         out.accurate = Some(history.clone());
         out.model_note = ACCURATE_NOTE.into();
         report(&info, &out);
+        let mut sv: Vec<(usize, [Vec<f64>; 2])> = solved.iter().map(|(k, v)| (*k, v.clone())).collect(); sv.sort_by_key(|x| x.0);
+        checkpoint(&Checkpoint { rounds_done: pass, solved: sv, prev, history: history.clone() });
     }
     out.accurate = Some(history);
     out.model_note = ACCURATE_NOTE.into();
@@ -453,5 +480,29 @@ mod tests {
         println!("plain {:?}", plain.nodes[0].freqs);
         for (a, b) in acc.nodes[0].freqs.iter().zip(&plain.nodes[0].freqs) { assert!((a - b).abs() < 0.05, "{a} vs {b}"); }
         for l in &log.last().unwrap().lines { assert!((l.share_before - l.share_solved).abs() < 0.02, "{} {} {}", l.path, l.share_before, l.share_solved); }
+    }
+
+    /// A run stopped after two rounds and resumed must end exactly where an unbroken run ends.
+    #[test]
+    fn accurate_mode_resumes_exactly() {
+        let spec: PreSpec = serde_json::from_str(r#"{"stack":15,"iterations":600}"#).unwrap();
+        let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
+        let mut eval = |l: &FlopLine, _pass: usize| -> Result<LineValues, String> {
+            let share = |b: usize, x: usize| (eq[b * N + x] + 0.08).clamp(0.0, 1.0);
+            let mut v = [vec![f64::NAN; N], vec![f64::NAN; N]];
+            for b in 0..N { if l.reach[0][b] < 0.005 { continue; } let (mut w, mut s) = (0.0, 0.0); for x in 0..N { if l.reach[1][x] < 0.005 { continue; } let k = cp[b * N + x] * l.reach[1][x]; w += k; s += k * share(b, x); } if w > 0.0 { v[0][b] = s / w * l.pot_bb; } }
+            for x in 0..N { if l.reach[1][x] < 0.005 { continue; } let (mut w, mut s) = (0.0, 0.0); for b in 0..N { if l.reach[0][b] < 0.005 { continue; } let k = cp[x * N + b] * l.reach[0][b]; w += k; s += k * (1.0 - share(b, x)); } if w > 0.0 { v[1][x] = s / w * l.pot_bb; } }
+            Ok((v, 1, 0.0))
+        };
+        let whole = solve_accurate(&spec, 4, 0.02, &mut eval, &mut |_, _| {}).unwrap();
+        let mut saved: Option<String> = None;
+        solve_accurate_from(&spec, 2, 0.02, &mut eval, &mut |_, _| {}, None, &mut |c| saved = Some(serde_json::to_string(c).unwrap())).unwrap();
+        let c: Checkpoint = serde_json::from_str(&saved.unwrap()).unwrap();
+        assert_eq!(c.rounds_done, 2);
+        let mut rounds = vec![];
+        let rest = solve_accurate_from(&spec, 4, 0.02, &mut eval, &mut |i, _| rounds.push(i.pass), Some(c), &mut |_| {}).unwrap();
+        assert_eq!(rounds, vec![3, 4]);
+        assert_eq!(rest.accurate.as_ref().unwrap().len(), 4);
+        for (a, b) in rest.nodes.iter().zip(&whole.nodes) { for (x, y) in a.freqs.iter().zip(&b.freqs) { assert!((x - y).abs() < 1e-9, "{x} vs {y}"); } }
     }
 }

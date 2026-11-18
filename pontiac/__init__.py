@@ -14,7 +14,7 @@ import tempfile
 
 from ._binary import binary
 
-__version__ = "0.12.5"
+__version__ = "0.12.6"
 __all__ = ["solve", "query", "estimate", "pushfold", "pushfold3", "preflop", "icm", "version", "SolverError", "binary"]
 
 
