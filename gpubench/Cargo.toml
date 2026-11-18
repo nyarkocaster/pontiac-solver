@@ -1,0 +1,16 @@
+[package]
+name = "gpubench"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Experiment: three-way showdown values on a graphics card versus the processor"
+
+[dependencies]
+multiway = { path = "../multiway" }
+wgpu = "0.19"
+pollster = "0.3"
+bytemuck = "1"
+rayon = "1.8"
+
+[profile.release]
+opt-level = 3
