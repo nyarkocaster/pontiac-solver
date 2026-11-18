@@ -906,6 +906,69 @@ impl Game {
         val
     }
 
+    /// One pass that returns both the value of the average strategies and the best-response value
+    /// for `hero` below node `id`. The two only differ at hero's own decisions, so every showdown
+    /// and fold below is worked out once instead of twice.
+    pub fn walk_both(&self, id: usize, hero: usize, r: [&[f32]; 3]) -> (Vec<f32>, Vec<f32>) {
+        let node = &self.nodes[id];
+        match node.kind {
+            Kind::FoldEnd | Kind::Showdown => { let v = self.walk(id, hero, r, Mode::Average); return (v.clone(), v); }
+            Kind::Chance => {
+                if node.folded[hero] { let v = self.scaled_reach(hero, r, -node.invested[hero]); return (v.clone(), v); }
+                let parts: Vec<(Vec<f32>, Vec<f32>)> = (0..node.cards.len()).into_par_iter().map(|k| {
+                    let card = node.cards[k];
+                    let mut nr = [self.take(0), self.take(1), self.take(2)];
+                    for p in 0..3 { for &h in &self.hands[p] { nr[p][h as usize] = r[p][h as usize]; } }
+                    for &h in &self.card_hands[card as usize] { for p in 0..3 { nr[p][h as usize] = 0.0; } }
+                    let (mut v, mut b) = self.walk_both(node.children[k], hero, [&nr[0], &nr[1], &nr[2]]);
+                    for &h in &self.card_hands[card as usize] { let pos = self.hpos[hero][h as usize]; if pos != u32::MAX { v[pos as usize] = 0.0; b[pos as usize] = 0.0; } }
+                    let [n0, n1, n2] = nr; self.give(0, n0); self.give(1, n1); self.give(2, n2);
+                    (v, b)
+                }).collect();
+                let (pa, pb): (Vec<Vec<f32>>, Vec<Vec<f32>>) = parts.into_iter().unzip();
+                let board = self.board_at(node.dealt);
+                return (self.combine(hero, &board, &node.cards, &pa), self.combine(hero, &board, &node.cards, &pb));
+            }
+            Kind::Decision => {}
+        }
+        let p = node.player; let na = node.actions.len();
+        let nhh = self.hands[hero].len(); let nhp = self.hands[p].len();
+        let sigma = self.strategy(id, true);
+        if p != hero {
+            let (mut va, mut vb) = (vec![0f32; nhh], vec![0f32; nhh]);
+            for a in 0..na {
+                let mut nr = self.take(p); let mut any = false;
+                for (k, &h) in self.hands[p].iter().enumerate() { let v = r[p][h as usize] * sigma[a * nhp + k]; nr[h as usize] = v; if v > 0.0 { any = true; } }
+                if any {
+                    let mut rr = r; rr[p] = &nr;
+                    let (x, y) = self.walk_both(node.children[a], hero, rr);
+                    for i in 0..nhh { va[i] += x[i]; vb[i] += y[i]; }
+                }
+                self.give(p, nr);
+            }
+            return (va, vb);
+        }
+        let mut vals: Vec<(Vec<f32>, Vec<f32>)> = Vec::with_capacity(na);
+        for a in 0..na {
+            if node.actions[a] == Action::Fold { let v = self.scaled_reach(hero, r, -node.invested[hero]); vals.push((v.clone(), v)); continue; }
+            let mut nr = self.take(p);
+            for (k, &h) in self.hands[p].iter().enumerate() { nr[h as usize] = r[p][h as usize] * sigma[a * nhp + k]; }
+            let mut rr = r; rr[p] = &nr;
+            vals.push(self.walk_both(node.children[a], hero, rr));
+            self.give(p, nr);
+        }
+        let (mut va, mut vb) = (vec![0f32; nhh], vec![0f32; nhh]);
+        for a in 0..na { for i in 0..nhh { va[i] += sigma[a * nhh + i] * vals[a].0[i]; } }
+        if !node.full_lock || self.br_ignores_locks {
+            for i in 0..nhh {
+                let fixed = !self.br_ignores_locks && node.locked.as_ref().map_or(false, |l| (0..na).any(|a| l[a * nhh + i] > 0.0));
+                if fixed { for a in 0..na { vb[i] += sigma[a * nhh + i] * vals[a].1[i]; } }
+                else { let mut m = f32::MIN; for a in 0..na { m = m.max(vals[a].1[i]); } vb[i] = m; }
+            }
+        } else { for a in 0..na { for i in 0..nhh { vb[i] += sigma[a * nhh + i] * vals[a].1[i]; } } }
+        (va, vb)
+    }
+
     /// Unnormalised showdown share for hero, averaged over the cards still to come.
     fn equity_raw(&self, dealt: [u8; 2], hero: usize, r: [&[f32]; 3], folded: [bool; 3]) -> Vec<f32> {
         let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
@@ -953,8 +1016,7 @@ impl Game {
         for hero in 0..3 {
             if self.cfg.extra.folded[hero] { continue; }
             let z = self.reach_sum(hero, &rg[(hero + 1) % 3], &rg[(hero + 2) % 3]);
-            let ev = self.walk(0, hero, [&rg[0], &rg[1], &rg[2]], Mode::Average);
-            let br = self.walk(0, hero, [&rg[0], &rg[1], &rg[2]], Mode::BestResponse);
+            let (ev, br) = self.walk_both(0, hero, [&rg[0], &rg[1], &rg[2]]);
             let (mut zs, mut e, mut b) = (0f64, 0f64, 0f64);
             for (i, &h) in self.hands[hero].iter().enumerate() {
                 let w = rg[hero][h as usize] as f64;
