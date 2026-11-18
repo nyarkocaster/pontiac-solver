@@ -12,3 +12,5 @@ cargo build --release -Zbuild-std=std,panic_abort --target x86_64-pc-windows-gnu
 cd "$ROOT/cli"
 cargo build --release -Zbuild-std=std,panic_abort --target x86_64-pc-windows-gnu --config 'target.x86_64-pc-windows-gnu.linker="x86_64-w64-mingw32-gcc"'
 ls -la "$ROOT"/app/src-tauri/target/x86_64-pc-windows-gnu/release/*.exe "$ROOT"/cli/target/x86_64-pc-windows-gnu/release/*.exe
+# the Python package ships a Linux copy of the command-line program; keep it in step
+bash "$ROOT/scripts/build_cli.sh"

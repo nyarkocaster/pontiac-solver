@@ -42,6 +42,12 @@ pub struct PostFlopGame {
     removed_lines: Vec<Vec<Action>>,
     action_root: Box<MutexLike<ActionTreeNode>>,
 
+    // optional payoffs that replace chip payoffs (tournament prize-money pressure):
+    // sorted by the amount each player has bet in the tree; per player [win, tie, lose],
+    // measured the same way as chip payoffs (relative to getting half the starting pot back).
+    // Not saved with the game.
+    custom_payoffs: Vec<(i32, [[f64; 3]; 2])>,
+
     // computed from configurations
     num_combinations: f64,
     initial_weights: [Vec<f32>; 2],

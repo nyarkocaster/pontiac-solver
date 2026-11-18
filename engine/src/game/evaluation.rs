@@ -22,8 +22,17 @@ impl PostFlopGame {
         let pot = (self.tree_config.starting_pot + 2 * node.amount) as f64;
         let half_pot = 0.5 * pot;
         let rake = min(pot * self.tree_config.rake_rate, self.tree_config.rake_cap);
-        let amount_win = (half_pot - rake) / self.num_combinations;
-        let amount_lose = -half_pot / self.num_combinations;
+        let mut amount_win = (half_pot - rake) / self.num_combinations;
+        let mut amount_lose = -half_pot / self.num_combinations;
+        let mut custom_tie = None;
+        if !self.custom_payoffs.is_empty() {
+            if let Ok(k) = self.custom_payoffs.binary_search_by_key(&node.amount, |x| x.0) {
+                let t = self.custom_payoffs[k].1[player];
+                amount_win = t[0] / self.num_combinations;
+                amount_lose = t[2] / self.num_combinations;
+                custom_tie = Some(t[1] / self.num_combinations);
+            }
+        }
 
         let player_cards = &self.private_cards[player];
         let opponent_cards = &self.private_cards[player ^ 1];
@@ -92,7 +101,7 @@ impl PostFlopGame {
             }
         }
         // showdown (optimized for no rake; 2-pass)
-        else if rake == 0.0 {
+        else if rake == 0.0 && custom_tie.is_none() {
             let pair_index = card_pair_to_index(node.turn, node.river);
             let hand_strength = &self.hand_strength[pair_index];
             let player_strength = &hand_strength[player];
@@ -151,7 +160,7 @@ impl PostFlopGame {
         }
         // showdown (raked; 3-pass)
         else {
-            let amount_tie = -0.5 * rake / self.num_combinations;
+            let amount_tie = custom_tie.unwrap_or(-0.5 * rake / self.num_combinations);
             let same_hand_index = &self.same_hand_index[player];
 
             let pair_index = card_pair_to_index(node.turn, node.river);

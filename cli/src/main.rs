@@ -144,7 +144,70 @@ fn parse_spot(raw: &Value) -> Result<Spot, String> {
 
 fn build(spot: &Spot) -> Result<PostFlopGame, String> {
     let tree = ActionTree::new(spot.tree.clone())?;
-    PostFlopGame::with_config(spot.card.clone(), tree)
+    let mut game = PostFlopGame::with_config(spot.card.clone(), tree)?;
+    if let Some(icm) = icm_setup(spot)? { game.set_custom_payoffs(icm.table(&game.terminal_amounts()))?; }
+    Ok(game)
+}
+
+/// Tournament prize-money pressure for a two-player pot: what each result of the hand is worth
+/// in prize money (the Independent Chip Model), for the two players in the pot and the other
+/// players at the table who are not in the hand.
+struct Icm {
+    /// stacks behind at the start of the spot, in solver chips: [out of position, in position]
+    behind: [f64; 2],
+    others: Vec<f64>,
+    payouts: Vec<f64>,
+    pot: f64,
+    /// prize money per solver chip, so payoffs keep the scale of chips
+    per_chip: f64,
+    /// each player's prize-money value if the pot at the start of the spot were split
+    split_value: [f64; 2],
+}
+impl Icm {
+    /// Prize-money value for both players given their final stacks.
+    fn value(&self, stacks: [f64; 2]) -> [f64; 2] {
+        let mut all = vec![stacks[0].max(0.0), stacks[1].max(0.0)]; all.extend(self.others.iter().cloned());
+        let e = pushfold::icm::icm(&all, &self.payouts);
+        [e[0], e[1]]
+    }
+    /// Per amount bet in the tree: [win, tie, lose] for each player, in chip-sized units,
+    /// where zero means getting half the starting pot back.
+    fn table(&self, amounts: &[i32]) -> Vec<(i32, [[f64; 3]; 2])> {
+        amounts.iter().map(|&a| {
+            let a_f = a as f64;
+            let mut row = [[0.0; 3]; 2];
+            for p in 0..2 {
+                let q = 1 - p;
+                let mut win = [0.0; 2]; win[p] = self.behind[p] + self.pot + a_f; win[q] = self.behind[q] - a_f;
+                let mut lose = [0.0; 2]; lose[p] = self.behind[p] - a_f; lose[q] = self.behind[q] + self.pot + a_f;
+                row[p] = [(self.value(win)[p] - self.split_value[p]) / self.per_chip, 0.0, (self.value(lose)[p] - self.split_value[p]) / self.per_chip];
+            }
+            (a, row)
+        }).collect()
+    }
+}
+
+fn icm_setup(spot: &Spot) -> Result<Option<Icm>, String> {
+    let Some(v) = spot.raw.get("icm") else { return Ok(None) };
+    if v.is_null() { return Ok(None); }
+    let help = "icm: give {\"payouts\": [50, 30, 20], \"stacks_bb\": {\"SB\": 18, \"BB\": 40}, \"others_bb\": [25, 12]} (stacks behind at the start of the spot; others are players not in the hand)";
+    let list = |k: &str| -> Result<Vec<f64>, String> { match v.get(k) { None => Ok(vec![]), Some(x) => x.as_array().ok_or(help)?.iter().map(|y| y.as_f64().filter(|z| *z >= 0.0).ok_or(help.to_string())).collect() } };
+    let payouts = list("payouts")?; let others: Vec<f64> = list("others_bb")?.iter().map(|x| x * CHIPS).collect();
+    if payouts.is_empty() || payouts.iter().sum::<f64>() <= 0.0 { return Err(help.into()); }
+    if others.len() > 7 { return Err("icm: at most 7 other players".into()); }
+    let eff = spot.tree.effective_stack as f64;
+    let mut behind = [eff; 2];
+    if let Some(st) = v.get("stacks_bb") {
+        for p in 0..2 { behind[p] = st.get(&spot.names[p]).and_then(|x| x.as_f64()).ok_or(format!("icm.stacks_bb needs both players: {} and {}", spot.names[0], spot.names[1]))? * CHIPS; }
+    }
+    if (behind[0].min(behind[1]) - eff).abs() > 0.5 { return Err("icm.stacks_bb: the smaller of the two stacks must equal effective_stack_bb".into()); }
+    if spot.tree.rake_rate > 0.0 { return Err("icm cannot be combined with rake".into()); }
+    let pot = spot.tree.starting_pot as f64;
+    let total: f64 = behind[0] + behind[1] + pot + others.iter().sum::<f64>();
+    let prize: f64 = payouts.iter().take(2 + others.len()).sum();
+    let mut icm = Icm { behind, others, payouts, pot, per_chip: prize / total, split_value: [0.0; 2] };
+    icm.split_value = icm.value([behind[0] + pot / 2.0, behind[1] + pot / 2.0]);
+    Ok(Some(icm))
 }
 
 // ------------------------------------------------------------------ node paths
@@ -527,6 +590,8 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
     let t_all = Instant::now();
     let locks: Vec<Value> = raw.get("node_locks").and_then(|x| x.as_array()).cloned().unwrap_or_default();
     let habits: Vec<Value> = raw.get("habits").and_then(|x| x.as_array()).cloned().unwrap_or_default();
+    let icm = icm_setup(&spot)?;
+    if icm.is_some() && save_path.is_some() { return Err("--save is not available with icm yet (the prize-money payoffs are not stored in the file)".into()); }
     let mut game = build(&spot)?;
     let (mem_full, mem_small) = game.memory_usage();
     // 16-bit storage halves memory for a small loss of precision; used automatically for big trees
@@ -598,6 +663,23 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
         let mut sum = summary(&spot, &mut game, &s);
         sum["locked_decisions"] = json!(locks.len());
         for (k, v) in sum.as_object().unwrap() { result.insert(k.clone(), v.clone()); }
+    }
+    if let Some(icm) = &icm {
+        // ev_bb is in chip-sized units; turn it back into prize money
+        let prize: f64 = icm.payouts.iter().take(2 + icm.others.len()).sum();
+        let ev = result.get("ev_bb").cloned().unwrap_or(json!({}));
+        let mut solved = Map::new(); let mut split = Map::new(); let mut fold_now = Map::new();
+        for p in 0..2 {
+            let units = ev.get(&spot.names[p]).and_then(|x| x.as_f64()).unwrap_or(0.0) * CHIPS - icm.pot / 2.0;
+            solved.insert(spot.names[p].clone(), json!(round((icm.split_value[p] + units * icm.per_chip) / prize * 100.0, 3)));
+            split.insert(spot.names[p].clone(), json!(round(icm.split_value[p] / prize * 100.0, 3)));
+            let mut st = icm.behind; st[1 - p] += icm.pot;
+            fold_now.insert(spot.names[p].clone(), json!(round(icm.value(st)[p] / prize * 100.0, 3)));
+        }
+        result.insert("icm".into(), json!({
+            "prize_pool_share_pct": solved, "if_pot_were_split_pct": split, "if_player_gave_up_the_pot_pct": fold_now,
+            "note": "Payoffs are prize money (Independent Chip Model), not chips. ev_bb, EVs in the node reports and exploitability are in chip-sized units of prize money: prize pool divided by chips in play, per chip. prize_pool_share_pct is each player's expected share of the prize pool after this spot. The two players' ev_bb no longer add up to the pot."
+        }));
     }
     result.insert("nodes".into(), nodes_report(&spot, &mut game)?);
     result.insert("total_seconds".into(), json!(round(t_all.elapsed().as_secs_f64(), 2)));

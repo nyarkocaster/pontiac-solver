@@ -78,7 +78,8 @@ impl Game for PostFlopGame {
 
     #[inline]
     fn is_raked(&self) -> bool {
-        self.tree_config.rake_rate > 0.0 && self.tree_config.rake_cap > 0.0
+        // custom payoffs are not zero-sum either, so they take the same paths as a raked game
+        (self.tree_config.rake_rate > 0.0 && self.tree_config.rake_cap > 0.0) || !self.custom_payoffs.is_empty()
     }
 
     #[inline]
@@ -127,6 +128,38 @@ impl Game for PostFlopGame {
 }
 
 impl PostFlopGame {
+    /// Every distinct amount a player can have bet when the hand ends (fold or showdown).
+    pub fn terminal_amounts(&self) -> Vec<i32> {
+        let mut out = vec![];
+        for node in self.node_arena.iter() {
+            let n = node.lock();
+            if n.is_terminal() { out.push(n.amount); }
+        }
+        out.sort_unstable(); out.dedup();
+        out
+    }
+
+    /// Replaces chip payoffs with the given ones (for tournament prize-money pressure).
+    /// `table` maps the amount each player has bet in the tree to per-player [win, tie, lose]
+    /// payoffs, on the same footing as chips: zero means getting half the starting pot back.
+    /// Every amount from `terminal_amounts()` must be present. An empty table restores chips.
+    /// Call after the tree is built and before solving. Not compatible with bunching or rake.
+    pub fn set_custom_payoffs(&mut self, mut table: Vec<(i32, [[f64; 3]; 2])>) -> Result<(), String> {
+        if !table.is_empty() {
+            if self.bunching_num_dead_cards > 0 { return Err("custom payoffs cannot be combined with bunching".to_string()); }
+            if self.tree_config.rake_rate > 0.0 && self.tree_config.rake_cap > 0.0 { return Err("custom payoffs cannot be combined with rake".to_string()); }
+            table.sort_by_key(|x| x.0);
+            for a in self.terminal_amounts() {
+                if table.binary_search_by_key(&a, |x| x.0).is_err() { return Err(format!("no payoff given for a hand that ends with {a} bet")); }
+            }
+        }
+        self.custom_payoffs = table;
+        Ok(())
+    }
+
+    /// True when custom payoffs are in force.
+    pub fn has_custom_payoffs(&self) -> bool { !self.custom_payoffs.is_empty() }
+
     /// Creates a new empty [`PostFlopGame`].
     ///
     /// Use of this method is strongly discouraged because an instance created by this method is

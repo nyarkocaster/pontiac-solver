@@ -15,7 +15,8 @@ def freqs(node):
 
 
 def test_version():
-    assert pontiac.version().startswith("pontiac ")
+    # the bundled program must be the same version as the package, so the tests never run a stale build
+    assert pontiac.version().startswith(f"pontiac {pontiac.__version__} ")
 
 
 def test_solve_reaches_target_and_evs_add_up(tmp_path):
@@ -202,3 +203,25 @@ def test_heads_up_preflop():
     tiny = pontiac.preflop(3, limp=False, open_sizes=[2.0], iterations=3000)
     jam = tiny["nodes"][0]["freqs"][tiny["nodes"][0]["actions"].index("All-in")]
     assert abs(jam - pontiac.pushfold(3)["jam_pct"]) < 0.03
+
+
+def test_prize_money_payoffs_in_a_two_player_pot():
+    spot = json.loads((Path(__file__).parent.parent / "examples" / "icm_bubble_river.json").read_text())
+    chips = dict(spot); chips.pop("icm")
+    plain = pontiac.solve(chips)
+    # winner-take-all between the two players is the same game as playing for chips
+    same = pontiac.solve({**chips, "icm": {"payouts": [100]}})
+    for name in ("SB", "BB"):
+        assert abs(same["ev_bb"][name] - plain["ev_bb"][name]) < 0.02
+    assert abs(sum(same["icm"]["prize_pool_share_pct"].values()) - 100) < 0.05
+    # on the bubble with a big stack behind, the two players in the pot lose value to those sitting out,
+    # and the player who can be knocked out calls an all-in less often
+    r = pontiac.solve(spot)
+    assert r["exploitability_pct"] <= spot["target_exploitability_pct"]
+    assert sum(r["ev_bb"].values()) < spot["pot_bb"] - 0.1
+    share, split = r["icm"]["prize_pool_share_pct"], r["icm"]["if_pot_were_split_pct"]
+    assert share["BB"] > share["SB"] and abs(sum(share.values()) - sum(split.values())) < 1.0
+    node = "river/BB_allin"
+    assert freqs(r["nodes"][node])["call"] < freqs(plain["nodes"][node])["call"] - 0.01
+    with pytest.raises(pontiac.SolverError):
+        pontiac.solve({**spot, "icm": {"payouts": [50, 30, 20], "stacks_bb": {"SB": 30, "BB": 60}}})

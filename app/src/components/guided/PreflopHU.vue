@@ -23,18 +23,15 @@
       <button class="btn-solve" :disabled="busy || !opens.length && !limp" @click="run">{{ busy ? "Solving…" : res ? "Solve again" : "Solve" }}</button>
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-      <label class="flex items-center gap-2" :class="hasSolved ? '' : 'text-muted'" :title="hasSolved ? '' : 'Ready-made accurate solutions exist for ' + SOLVED_STACKS.join(', ') + ' big blinds with the standard options (open to 2, limps allowed, 3 × re-raise, no ante)'">
-        <input v-model="useSolved" type="checkbox" class="rounded text-felt" :disabled="!hasSolved" />Use the accurate solution for this stack (flops solved, not estimated)
-      </label>
       <label class="text-felt font-bold underline cursor-pointer">Open a result file<input type="file" accept=".json,application/json" class="hidden" @change="openFile" /></label>
     </div>
     <p v-if="error" class="mt-3 text-sm font-bold text-danger">{{ error }}</p>
 
     <template v-if="res">
-      <div v-if="res.accurate" class="mt-4 rounded-xl border border-felt bg-felt-light p-3 text-sm">
-        <b>Accurate solution.</b> All-in pots are exact, and the common lines that see a flop take their values from real flop solves
-        ({{ res.accurate[0]?.lines[0]?.flops ?? 0 }} flops per line, {{ res.accurate.length }} rounds of feeding the results back).
-        The flop solves use one bet size per street and a sample of flops, so read differences of a few points as noise.
+      <div v-if="res.accurate" class="mt-4 rounded-xl border border-danger p-3 text-sm">
+        <b>Experimental result from the command line's flop-solving mode. Do not study from it.</b> It values each hand on a small sample of flops
+        ({{ res.accurate[0]?.lines[0]?.flops ?? 0 }} per line), and hands that happen to connect with that sample come out too strong (72o limping while 93o folds, for example).
+        The overall percentages are less affected but are not reliable either.
         <b v-if="drift >= 1" class="block mt-1">Not fully settled: the first decision was still moving by {{ drift.toFixed(1) }} points in the last round, so treat the exact percentages as provisional.</b>
         <details class="mt-1"><summary class="cursor-pointer font-bold">How it settled, round by round</summary>
           <table class="mt-1 text-xs tabular-nums"><tbody>
@@ -43,9 +40,9 @@
         </details>
       </div>
       <div v-else class="mt-4 rounded-xl border border-mine bg-mine-light p-3 text-sm">
-        <b>How far to trust this.</b> Pots where all the chips go in before the flop are exact. Pots that see a flop are estimated, not solved:
+        <b>This is an estimate, not a solution.</b> Pots where all the chips go in before the flop are exact. Pots that see a flop are estimated, not solved:
         each hand gets its all-in share of the pot, shifted toward the button (who acts last), the last raiser, and hands that play well after the flop.
-        Use these ranges as a strong starting point, and solve the flops that matter with the buttons under "Ways to see a flop".
+        Treat these ranges as a rough starting point, check them against a published chart if the exact hands matter, and solve the flops that matter with the buttons under "Ways to see a flop".
       </div>
       <p class="text-sm text-muted mt-3">
         Button averages <b class="text-ink">{{ signed(res.ev_button_bb) }} bb</b> a hand, big blind <b class="text-ink">{{ signed(res.ev_big_blind_bb) }} bb</b>.
@@ -125,11 +122,6 @@ const stack = ref(20); const opens = ref<number[]>([2]); const limp = ref(true);
 const res = ref<Preflop | null>(null); const busy = ref(false); const error = ref("");
 const trail = ref<{ id: number; label: string }[]>([]);
 const toggleOpen = (s: number) => { opens.value = opens.value.includes(s) ? opens.value.filter((x) => x !== s) : [...opens.value, s].sort((a, b) => a - b); };
-// ready-made accurate solutions, made with `pontiac preflop --accurate` (hours of flop solves each)
-const SOLVED = import.meta.glob("../../guided/preflopSolved/*.json");
-const SOLVED_STACKS = Object.keys(SOLVED).map((k) => Number(k.match(/(\d+)\.json$/)?.[1])).filter((n) => n > 0).sort((a, b) => a - b);
-const hasSolved = computed(() => SOLVED_STACKS.includes(stack.value) && opens.value.join() === "2" && limp.value && reraise.value === 3 && !ante.value);
-const useSolved = ref(true);
 // how far the button's first decision moved in the final round, in percentage points
 const drift = computed(() => { const h = res.value?.accurate; if (!h || h.length < 2) return 0; const x = h[h.length - 1].root_freqs, y = h[h.length - 2].root_freqs; return Math.max(...x.map((v, i) => Math.abs(v - (y[i] ?? v)))) * 100; });
 function openFile(ev: Event) {
@@ -140,11 +132,6 @@ function openFile(ev: Event) {
 }
 async function run() {
   busy.value = true; error.value = "";
-  if (hasSolved.value && useSolved.value) {
-    try { const key = Object.keys(SOLVED).find((k) => k.endsWith(`/${stack.value}.json`))!; res.value = ((await SOLVED[key]()) as { default: Preflop }).default; trail.value = []; }
-    catch (e) { error.value = String((e as Error).message ?? e); }
-    busy.value = false; return;
-  }
   try { res.value = await preflopSolve({ stack: stack.value, open_sizes: opens.value, limp: limp.value, reraise: reraise.value, ante: ante.value, small_blind: 0.5 }); trail.value = []; }
   catch (e) { error.value = String((e as Error).message ?? e); }
   finally { busy.value = false; }
