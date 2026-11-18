@@ -294,7 +294,8 @@ Add an `icm` block to a two-player spot file and every result of the hand is val
 - A win, a loss and a split are each valued with the Independent Chip Model from the stacks they leave. Because the players sitting out gain when the two in the pot clash, the game is no longer zero-sum: the two players' `ev_bb` add up to less than the pot.
 - `ev_bb`, the EVs in node reports and `exploitability_pct` are then in chip-sized units of prize money (prize pool divided by chips in play, per chip), so they read like big blinds. The result gains `icm.prize_pool_share_pct` (each player's expected share of the prize pool after the spot), `icm.if_pot_were_split_pct` and `icm.if_player_gave_up_the_pot_pct` for comparison.
 - Checked: with one prize and no other players the answer equals the chip solve; on a bubble the player at risk calls an all-in less often (both in the smoke tests). `examples/icm_bubble_river.json` is a sample.
-- Limits for now: no rake, no `--save`, command line and Python only (not in the app), and node locks and habits work but their reports are in the same prize-money units.
+- In the app: Study a spot, Tournament, a two-player pot, then tick "Play for prize money, not chips" beside the Solve button. The stacks of the players who folded are taken from the table you set up.
+- Limits for now: no rake, no `--save` from the command line (the app's library does keep prize-money solves), and node locks and habits work but their reports are in the same prize-money units.
 
 ## 7. Extras
 

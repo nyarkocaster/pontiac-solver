@@ -67,6 +67,13 @@
           <button class="btn-quiet self-start shrink-0" @click="dismissIntro">Got it</button>
         </div>
 
+        <div v-if="summary?.icm" class="rounded-xl border border-felt bg-felt-light p-3 text-sm mb-3">
+          <b>Solved for prize money.</b>
+          After this spot you hold <b>{{ summary.icm.base_share[heroIdx].toFixed(2) }}%</b> of the prize pool on average<template v-if="summary.locked"> (<b>{{ summary.icm.locked_share[heroIdx].toFixed(2) }}%</b> {{ manualLocks.length ? "with the locks in place" : "against this player" }})</template>,
+          against {{ summary.icm.split[heroIdx].toFixed(2) }}% if the pot were split and {{ summary.icm.give_up[heroIdx].toFixed(2) }}% if you gave it up now.
+          Amounts won and lost on this screen are prize money in chip-sized units, so the two players' shares of the pot add up to less than the pot: the players sitting out gain when you two clash.
+        </div>
+
         <!-- exploit bar -->
         <div v-if="summary?.locked" class="mt-4 rounded-xl border border-mine bg-mine-light p-4">
           <div class="flex flex-wrap items-center gap-3">

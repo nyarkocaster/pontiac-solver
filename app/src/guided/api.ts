@@ -14,6 +14,8 @@ async function call<T>(cmd: string, args: Record<string, unknown> = {}): Promise
 }
 
 export interface Leak { player: number; street: string; effect: string; strength: number }
+/** Prize-money setup, in the same chip units as the spot's pot and stack. */
+export interface IcmSpec { payouts: number[]; oop_stack: number; ip_stack: number; others: number[] }
 export interface StudySpec {
   oop_range: string; ip_range: string; board: string; pot: number; stack: number;
   oop_flop_bet: string; ip_flop_bet: string; turn_bet: string; river_bet: string; raise: string;
@@ -23,6 +25,8 @@ export interface StudySummary {
   base_ev: [number, number]; base_expl_pct: number; base_secs: number;
   locked: boolean; locked_ev: [number, number]; locked_expl_pct: number; locked_secs: number;
   locked_nodes: number; memory_mb: number; swap_mode: boolean; error: string | null;
+  /** set when the solve played for prize money: shares of the prize pool in percent, [out of position, in position] */
+  icm?: { base_share: [number, number]; locked_share: [number, number]; split: [number, number]; give_up: [number, number] } | null;
 }
 export interface Cell { full?: number; reach?: number; weight: number; freqs: number[]; equity: number; ev: number }
 export interface Bucket { name: string; share: number; freqs: number[] }

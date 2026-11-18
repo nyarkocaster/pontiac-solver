@@ -118,6 +118,8 @@ impl StudyState {
             }
             let (mut g, _): (PostFlopGame, String) =
                 load_data_from_file(&file, None).map_err(|e| format!("Could not reload a solve from disk: {e}"))?;
+            // prize-money payoffs are not saved to disk either
+            if let Some(p) = self.summary.as_ref().filter(|x| !x.payoffs.is_empty()) { g.set_custom_payoffs(p.payoffs.clone())?; }
             if locked {
                 // soft-lock weights are not saved to disk; restore them
                 g.set_all_locking_weights(if self.confidence > 0.0 { self.confidence } else { 1.0 });
@@ -179,6 +181,41 @@ pub struct StudySpec {
     /// let them play well part of the time, giving a more robust "restricted Nash response").
     #[serde(default = "default_one")]
     pub confidence: f32,
+    /// Play for tournament prize money instead of chips (two-player pot, other players sitting out).
+    #[serde(default)]
+    pub icm: Option<IcmSpec>,
+}
+
+/// Prize-money setup, in the same chip units as `pot` and `stack`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct IcmSpec {
+    /// prizes, first place first (any unit)
+    pub payouts: Vec<f64>,
+    /// stacks behind at the start of the spot; 0 means the effective stack
+    #[serde(default)]
+    pub oop_stack: f64,
+    #[serde(default)]
+    pub ip_stack: f64,
+    /// stacks of players still in the tournament who are not in this hand
+    #[serde(default)]
+    pub others: Vec<f64>,
+}
+
+/// What the solve means in prize money: shares of the prize pool, in percent, [out of position, in position].
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct IcmView {
+    pub base_share: [f64; 2],
+    pub locked_share: [f64; 2],
+    pub split: [f64; 2],
+    pub give_up: [f64; 2],
+}
+
+pub fn pot_icm(spec: &StudySpec) -> Result<Option<pushfold::icm::PotIcm>, String> {
+    let Some(i) = &spec.icm else { return Ok(None) };
+    let eff = spec.stack as f64;
+    let behind = [if i.oop_stack > 0.0 { i.oop_stack } else { eff }, if i.ip_stack > 0.0 { i.ip_stack } else { eff }];
+    if (behind[0].min(behind[1]) - eff).abs() > 0.5 { return Err("Prize money: the smaller of the two players' stacks must equal the stack behind set for the spot.".into()); }
+    pushfold::icm::PotIcm::new(behind, i.others.clone(), i.payouts.clone(), spec.pot as f64).map(Some)
 }
 
 fn default_one() -> f32 {
@@ -202,6 +239,11 @@ pub struct StudySummary {
     pub memory_mb: f64,
     pub swap_mode: bool,
     pub error: Option<String>,
+    /// prize-money payoffs in force (empty when playing for chips); kept so a reloaded game gets them back
+    #[serde(default)]
+    pub payoffs: Vec<(i32, [[f64; 3]; 2])>,
+    #[serde(default)]
+    pub icm: Option<IcmView>,
 }
 
 #[derive(Serialize, Default, Clone)]
@@ -282,7 +324,9 @@ pub fn build_game(spec: &StudySpec) -> Result<PostFlopGame, String> {
         merging_threshold: 0.1,
     };
     let tree = ActionTree::new(tree_config)?;
-    PostFlopGame::with_config(card_config, tree)
+    let mut game = PostFlopGame::with_config(card_config, tree)?;
+    if let Some(icm) = pot_icm(spec)? { game.set_custom_payoffs(icm.table(&game.terminal_amounts()))?; }
+    Ok(game)
 }
 
 fn run_solve(game: &PostFlopGame, spec: &StudySpec, prog: &StudyProgress) -> f32 {
@@ -557,6 +601,11 @@ pub fn solve_inner(spec: &StudySpec, prog: &StudyProgress) -> Result<SolveOutcom
         summary.base_secs = t.elapsed().as_secs_f64();
         summary.base_expl_pct = (expl / spec.pot as f32 * 100.0) as f64;
         summary.base_ev = root_ev(&mut base);
+        if let Some(icm) = pot_icm(spec)? {
+            summary.payoffs = icm.table(&base.terminal_amounts());
+            let sh = [icm.share_pct(0, summary.base_ev[0]), icm.share_pct(1, summary.base_ev[1])];
+            summary.icm = Some(IcmView { base_share: sh, locked_share: sh, split: [icm.split_pct(0), icm.split_pct(1)], give_up: [icm.give_up_pct(0), icm.give_up_pct(1)] });
+        }
 
         if spec.leaks.is_empty() {
             return Ok(SolveOutcome { confidence: 1.0, base: Some(base), locked: None, base_file: None, summary });
@@ -620,6 +669,7 @@ pub fn solve_inner(spec: &StudySpec, prog: &StudyProgress) -> Result<SolveOutcom
         summary.locked_secs = t.elapsed().as_secs_f64();
         summary.locked_expl_pct = (expl / spec.pot as f32 * 100.0) as f64;
         summary.locked_ev = root_ev(&mut g);
+        if let (Some(icm), Some(v)) = (pot_icm(spec)?, summary.icm.as_mut()) { v.locked_share = [icm.share_pct(0, summary.locked_ev[0]), icm.share_pct(1, summary.locked_ev[1])]; }
         Ok(SolveOutcome { confidence: spec.confidence, base: base_slot, locked: Some(g), base_file, summary })
     })
 }
@@ -909,6 +959,7 @@ pub fn relock(mut base: PostFlopGame, spec: &StudySpec, locks: &[ManualLock], pr
         summary.locked_secs = t.elapsed().as_secs_f64();
         summary.locked_expl_pct = (expl / spec.pot as f32 * 100.0) as f64;
         summary.locked_ev = root_ev(&mut g);
+        if let (Some(icm), Some(v)) = (pot_icm(spec)?, summary.icm.as_mut()) { v.locked_share = [icm.share_pct(0, summary.locked_ev[0]), icm.share_pct(1, summary.locked_ev[1])]; }
         summary.locked_nodes = n;
         summary.swap_mode = false;
         Ok((g, summary, weight))

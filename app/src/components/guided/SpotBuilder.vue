@@ -271,6 +271,19 @@
           <p v-if="spot.players.length" class="hint mt-1">Listed in the order they act after the flop.</p>
           <div class="mt-3 text-sm font-bold">{{ engineText }}</div>
           <p v-if="stackNote" class="hint mt-1">{{ stackNote }}</p>
+          <div v-if="table.game === 'tourney' && spot.players.length === 2" class="mt-3 rounded-xl border border-rule p-3 text-sm">
+            <label class="flex items-center gap-2 font-bold"><input v-model="icmOn" type="checkbox" class="accent-current" /> Play for prize money, not chips</label>
+            <template v-if="icmOn">
+              <label class="field mt-2"><span>Prizes, first place first</span><input v-model="icmPayouts" class="input w-full" placeholder="50, 30, 20" aria-label="Prizes, first place first" /></label>
+              <label class="field mt-2"><span>Stacks at other tables (bb), if any</span><input v-model="icmExtra" class="input w-full" placeholder="e.g. 35, 22" aria-label="Stacks at other tables in big blinds" /></label>
+              <p class="hint mt-2">
+                Sitting out of this hand: {{ icmOthers.length ? icmOthers.map((x) => `${x} bb`).join(", ") : "nobody" }}.
+                Each result of the hand is valued by what the stacks it leaves are worth in prizes (the Independent Chip Model), so a player who can be knocked out plays tighter.
+                Stacks at this table come from step 1.
+              </p>
+              <p v-if="icmProblem" class="mt-1 font-bold text-danger">{{ icmProblem }}</p>
+            </template>
+          </div>
           <p v-if="!problem && estimate.text && !solving" class="hint mt-2">{{ estimate.text }}</p>
           <div v-if="solving" class="mt-4" role="status">
             <div class="flex justify-between text-sm font-bold">
@@ -438,6 +451,19 @@ const touched3 = ref(false);
 watch(() => board.value.length, (n) => { if (touched3.value) return; sizing3.value = n <= 3 ? "simple" : "std"; later3.value = n <= 3 ? "fast" : "exact"; }, { immediate: true });
 const rakePct = ref(0); const rakeCap = ref(0);
 
+// tournament prize money (two-player pots): prizes, plus every stack not in the hand
+const icmOn = ref(false); const icmPayouts = ref("50, 30, 20"); const icmExtra = ref("");
+const numList = (t: string) => t.split(/[,\s]+/).map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+const icmOthers = computed(() => [...pre.value.out.map((x) => x.behind), ...spot.value.left.map((x) => x.behind), ...numList(icmExtra.value)].filter((x) => x > 0));
+const icmActive = computed(() => icmOn.value && table.game === "tourney" && spot.value.players.length === 2);
+const icmProblem = computed(() => {
+  if (!icmActive.value) return "";
+  if (!numList(icmPayouts.value).length) return "Enter at least one prize.";
+  if (icmOthers.value.length > 7) return "Prize money works with up to 7 players outside the hand. Combine or drop the smallest stacks.";
+  if (!icmOthers.value.length) return "With nobody else left in the tournament, prize money and chips are the same game.";
+  return "";
+});
+
 const sprText = computed(() => {
   const b = spot.value.players.map((p) => p.behind); if (!b.length || !(pre.value.pot > 0)) return "–";
   const lo = Math.min(...b) / pre.value.pot, hi = Math.max(...b) / pre.value.pot;
@@ -456,6 +482,7 @@ const problem = computed(() => {
   if (route.value.kind === "none") return route.value.text[0];
   if (ps.length > 3) return "Choose at most two opponents to keep in step 3.";
   if (ps.length < 2) return "Keep at least one opponent in step 3.";
+  if (icmActive.value && icmProblem.value && icmOthers.value.length) return icmProblem.value;
   if (ps.some((p) => !(pctOf(p.seat) > 0))) return "Every player needs at least one hand in their range.";
   if (ps.length === 2 && board.value.length !== 3) return "Pick the three flop cards in step 4.";
   if (ps.length === 3 && board.value.length < 3) return "Pick at least three board cards in step 4.";
@@ -477,7 +504,8 @@ function payload(): { two?: Solve2; three?: Solve3 } {
         description: pre.value.story + left, oopName: oop.name, ipName: ip.name,
       },
       format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value,
-      overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value },
+      overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value,
+        ...(icmActive.value && icmOthers.value.length && numList(icmPayouts.value).length ? { icm: { payouts: numList(icmPayouts.value), oop_stack: Math.round(oop.behind * k), ip_stack: Math.round(ip.behind * k), others: icmOthers.value.map((x) => Math.round(x * k)) } } : {}) },
     } };
   }
   return { three: {

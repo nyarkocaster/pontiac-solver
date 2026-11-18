@@ -44,6 +44,8 @@ export interface Preflop {
   story: string;
   players: FlopPlayer[];   // in the order they act after the flop
   pot: number; dead: number; raises: number; lastBet: number;
+  /** seats that folded before the flop, with the stack each has left (for prize-money solves) */
+  out: { seat: string; name: string; behind: number }[];
   /** per seat: what the seat may do now, and whether it has to answer a later raise */
   options: Record<string, { acts: Act[]; needsReply: boolean; minRaise: number; facing: number }>;
   errors: string[];
@@ -182,7 +184,11 @@ export function buildPreflop(table: TableSetup, inputs: SeatInput[], hero: strin
     else if (p.rangePct < 9) { sc += 0.5; bits.push("holds a narrow, strong range"); }
     p.score = r2(sc); p.why = bits.join("; ");
   });
-  return { story: story.length ? story.join(". ") + "." : "Nobody has entered the pot yet.", players, pot, dead, raises, lastBet: bet, options, errors };
+  const out = order.filter((s) => !inHand[s]).map((s) => {
+    const st = seats.find((x) => x.seat === s)!;
+    return { seat: s, name: SEAT_NAME[s] ?? s, behind: Math.max(0, r2(st.stack - put[s] - perAnte - (s === "BB" && table.ante === "bb" ? bb : 0))) };
+  });
+  return { story: story.length ? story.join(". ") + "." : "Nobody has entered the pot yet.", players, pot, dead, raises, lastBet: bet, options, errors, out };
 }
 
 export const fmtAmt = (t: { game: Game }, x: number) => (t.game === "tourney" ? `${r2(x)} bb` : `$${r2(x)}`);

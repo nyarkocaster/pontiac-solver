@@ -149,43 +149,7 @@ fn build(spot: &Spot) -> Result<PostFlopGame, String> {
     Ok(game)
 }
 
-/// Tournament prize-money pressure for a two-player pot: what each result of the hand is worth
-/// in prize money (the Independent Chip Model), for the two players in the pot and the other
-/// players at the table who are not in the hand.
-struct Icm {
-    /// stacks behind at the start of the spot, in solver chips: [out of position, in position]
-    behind: [f64; 2],
-    others: Vec<f64>,
-    payouts: Vec<f64>,
-    pot: f64,
-    /// prize money per solver chip, so payoffs keep the scale of chips
-    per_chip: f64,
-    /// each player's prize-money value if the pot at the start of the spot were split
-    split_value: [f64; 2],
-}
-impl Icm {
-    /// Prize-money value for both players given their final stacks.
-    fn value(&self, stacks: [f64; 2]) -> [f64; 2] {
-        let mut all = vec![stacks[0].max(0.0), stacks[1].max(0.0)]; all.extend(self.others.iter().cloned());
-        let e = pushfold::icm::icm(&all, &self.payouts);
-        [e[0], e[1]]
-    }
-    /// Per amount bet in the tree: [win, tie, lose] for each player, in chip-sized units,
-    /// where zero means getting half the starting pot back.
-    fn table(&self, amounts: &[i32]) -> Vec<(i32, [[f64; 3]; 2])> {
-        amounts.iter().map(|&a| {
-            let a_f = a as f64;
-            let mut row = [[0.0; 3]; 2];
-            for p in 0..2 {
-                let q = 1 - p;
-                let mut win = [0.0; 2]; win[p] = self.behind[p] + self.pot + a_f; win[q] = self.behind[q] - a_f;
-                let mut lose = [0.0; 2]; lose[p] = self.behind[p] - a_f; lose[q] = self.behind[q] + self.pot + a_f;
-                row[p] = [(self.value(win)[p] - self.split_value[p]) / self.per_chip, 0.0, (self.value(lose)[p] - self.split_value[p]) / self.per_chip];
-            }
-            (a, row)
-        }).collect()
-    }
-}
+use pushfold::icm::PotIcm as Icm;
 
 fn icm_setup(spot: &Spot) -> Result<Option<Icm>, String> {
     let Some(v) = spot.raw.get("icm") else { return Ok(None) };
@@ -202,11 +166,7 @@ fn icm_setup(spot: &Spot) -> Result<Option<Icm>, String> {
     }
     if (behind[0].min(behind[1]) - eff).abs() > 0.5 { return Err("icm.stacks_bb: the smaller of the two stacks must equal effective_stack_bb".into()); }
     if spot.tree.rake_rate > 0.0 { return Err("icm cannot be combined with rake".into()); }
-    let pot = spot.tree.starting_pot as f64;
-    let total: f64 = behind[0] + behind[1] + pot + others.iter().sum::<f64>();
-    let prize: f64 = payouts.iter().take(2 + others.len()).sum();
-    let mut icm = Icm { behind, others, payouts, pot, per_chip: prize / total, split_value: [0.0; 2] };
-    icm.split_value = icm.value([behind[0] + pot / 2.0, behind[1] + pot / 2.0]);
+    let icm = Icm::new(behind, others, payouts, spot.tree.starting_pot as f64)?;
     Ok(Some(icm))
 }
 
@@ -666,15 +626,13 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
     }
     if let Some(icm) = &icm {
         // ev_bb is in chip-sized units; turn it back into prize money
-        let prize: f64 = icm.payouts.iter().take(2 + icm.others.len()).sum();
         let ev = result.get("ev_bb").cloned().unwrap_or(json!({}));
         let mut solved = Map::new(); let mut split = Map::new(); let mut fold_now = Map::new();
         for p in 0..2 {
-            let units = ev.get(&spot.names[p]).and_then(|x| x.as_f64()).unwrap_or(0.0) * CHIPS - icm.pot / 2.0;
-            solved.insert(spot.names[p].clone(), json!(round((icm.split_value[p] + units * icm.per_chip) / prize * 100.0, 3)));
-            split.insert(spot.names[p].clone(), json!(round(icm.split_value[p] / prize * 100.0, 3)));
-            let mut st = icm.behind; st[1 - p] += icm.pot;
-            fold_now.insert(spot.names[p].clone(), json!(round(icm.value(st)[p] / prize * 100.0, 3)));
+            let e = ev.get(&spot.names[p]).and_then(|x| x.as_f64()).unwrap_or(0.0) * CHIPS;
+            solved.insert(spot.names[p].clone(), json!(round(icm.share_pct(p, e), 3)));
+            split.insert(spot.names[p].clone(), json!(round(icm.split_pct(p), 3)));
+            fold_now.insert(spot.names[p].clone(), json!(round(icm.give_up_pct(p), 3)));
         }
         result.insert("icm".into(), json!({
             "prize_pool_share_pct": solved, "if_pot_were_split_pct": split, "if_player_gave_up_the_pot_pct": fold_now,
@@ -771,7 +729,7 @@ fn main() {
                             oop_range: l.big_blind_range.clone(), ip_range: l.button_range.clone(),
                             board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
                             oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
-                            allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0 };
+                            allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None };
                         let t = std::time::Instant::now();
                         let (vals, acc, mass) = study_core::class_values(&sp, &prog)?;
                         worst = worst.max(acc);

@@ -10,7 +10,7 @@ fn main() {
         ip_range: "22+,A2s+,A9o+,K8s+,KJo+,Q9s+,QJo,J9s+,T8s+,97s+,87s,76s".into(),
         board, pot: 31, stack: 185,
         oop_flop_bet: "33%".into(), ip_flop_bet: "33%, 66%".into(), turn_bet: "75%".into(), river_bet: "75%".into(),
-        raise: "100%".into(), allin_threshold: 0.0, accuracy_pct: 0.5, max_iter: 1000, leaks, threads: 2, low_memory: false, freeze_rest: true, confidence: 1.0,
+        raise: "100%".into(), allin_threshold: 0.0, accuracy_pct: 0.5, max_iter: 1000, leaks, threads: 2, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None,
     };
     println!("estimate MB: {:?}", memory_estimate(&spec).unwrap());
     // HU_MODE
