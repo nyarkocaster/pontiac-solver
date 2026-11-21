@@ -4,16 +4,19 @@ For running the solver with nobody at the keyboard: a JSON spot file goes in, a 
 
 ## 1. Access
 
-- **Environment:** Linux x86-64 container with Python 3.9+. No GPU, no downloads beyond pip.
-- **Install and smoke-test:**
+- **Environment:** Linux x86-64 with Python 3.9+ and glibc 2.34 or newer (Ubuntu 22.04 and later). No GPU. Nothing is downloaded when it runs.
+- **Install** (no clone needed):
 
   ```
-  pip install -e ".[test]" && pytest
+  pip install "git+https://github.com/nyarkocaster/pontiac-solver"
+  python -m pontiac selftest          # about ten seconds; add --full for three players and prize money
   ```
 
-  Sixteen tests, about 30 seconds. They solve a river spot, query the saved solve, exercise full locks, partial locks, habits and error messages, solve three-player spots, check push/fold ranges, and compare the two engines on the same spots.
-- **What gets installed:** a small Python package, `pontiac`, plus a prebuilt solver program for Linux x86-64 at `pontiac/bin/pontiac-linux-x86_64` (3 MB, no dependencies beyond glibc). If that program will not run on a machine, the package falls back to building it with `cargo build --release` in `cli/` (needs Rust; crates come from crates.io). `PONTIAC_BIN` overrides the choice.
+  `selftest` solves a river spot and compares it with a stored answer, saves and queries it, and checks push/fold and prize-money values. It prints JSON with `"ok": true` when the solver is working on this machine. From Python: `pontiac.selftest()`.
+- **What gets installed:** a small Python package, `pontiac`, with a prebuilt solver program for Linux x86-64 (3 MB, no dependencies beyond glibc), the sample spots (`pontiac.examples()`, `pontiac.example("hu_sng_flop_20bb")` returns one as a dict to edit) and this guide (`pontiac.guide()`). On Windows or a Mac, download the command-line program for your machine from the project's Releases page and set the environment variable `PONTIAC_BIN` to its path; with Rust installed and a clone of the repository, the package builds it instead.
+- **Working on the code:** clone the repository, then `pip install -e ".[test]" && pytest` (20 tests, about a minute).
 - **Where the code lives:** `github.com/nyarkocaster/pontiac-solver` (public). Saved solves (`*.pontiac`) are large and are git-ignored.
+- **How far to trust it** (details in the project notes for 2026-11-20): on a heads-up flop spot, range EVs matched GTO Wizard to the third decimal and responses to a bet within one or two points, with and without a node lock and with prize money; three-handed all-in-or-fold with prize money matched within about one point on all six decisions. Three players after the flop has only internal checks (a full count of showdowns, and agreement between the two engines when one player has folded). Preflop beyond all-in-or-fold is an estimate, not a solution.
 
 ## 2. Headless interface
 
@@ -28,7 +31,19 @@ size   = pontiac.estimate(spot_dict)   # memory needed, without solving
 pontiac.version()
 ```
 
-`solve` and `estimate` take a dict or a file path. Problems raise `pontiac.SolverError` with a message that says what to change.
+`solve` and `estimate` take a dict or a file path. Problems raise `pontiac.SolverError` with a message that says what to change. `solve(..., timeout=seconds)` stops waiting after that long (prefer `max_seconds` in the spot, which keeps the result so far); `progress=True` lets the solver's progress lines through to stderr.
+
+A typical coaching call:
+
+```python
+spot = pontiac.example("hu_sng_flop_20bb")          # 18 bb behind, 4 bb pot, both ranges, two sizes per street
+spot["board"] = "Ts7s2d"
+spot["max_seconds"] = 300                            # keep what it has after five minutes
+r = pontiac.solve(spot, save="t72.pontiac")
+r["exploitability_pct"], r["stopped_because"], r["ev_bb"]
+r["nodes"]["flop/BB_check"]["actions"]               # what the small blind does when checked to
+pontiac.query("t72.pontiac", "flop/BB_check/SB_bet0.33/BB_call/turn=Ah", hand="QsJs")
+```
 
 ### Command line
 
@@ -75,7 +90,7 @@ pontiac version
 | `pot_bb` | Pot at the start of the spot. |
 | `board` | 3 cards (flop, turn and river are solved), 4 (turn and river) or 5 (river only). |
 | `ranges` | Per player. `AA`, `TT+`, `99-66`, `AKs`, `A5s+`, `KJo`, exact hands `AhKd`, and weights `QQ:0.5`. |
-| `bet_tree` | Per street: `bet` as shares of the pot, `raise` as multiples of the bet being raised (strings such as `"60%"` or `"a"` for all-in pass straight to the engine). Optional `donk` on turn and river. `allin_threshold`: all-in is added when a bet would leave less than this share of the pot behind (default 0.67). For different trees per player, nest them: `{"SB": {"flop": ...}, "BB": {"flop": ...}}`. A street with no sizes is check/call only. |
+| `bet_tree` | Per street: `bet` as shares of the pot, `raise` as multiples of the bet being raised (strings such as `"60%"` or `"a"` for all-in pass straight to the engine). Optional `donk` on turn and river (the ordinary bet sizes are used when it is left out). Also optional in `bet_tree`: `force_allin_threshold` (default 0.15: a bet becomes all-in when calling it would leave less than this share of the pot behind) and `merging_threshold` (default 0.1: sizes within 10% of each other are merged). `allin_threshold`: all-in is added when a bet would leave less than this share of the pot behind (default 0.67). For different trees per player, nest them: `{"SB": {"flop": ...}, "BB": {"flop": ...}}`. A street with no sizes is check/call only. |
 | `rake` | `0`, or `{"rate": 0.05, "cap_bb": 3}`. |
 | `target_exploitability_pct` | Stop when the solution is this close, as a percent of the starting pot (default 0.5). |
 | `max_seconds` | Time limit (default 600). The result reached so far is kept and `stopped_because` says `max_seconds`. With locks that need two solves, the limit covers both. |
@@ -180,7 +195,7 @@ Tendencies applied across the whole tree, as in the app:
 
 ## 4. Scope
 
-- **Preflop: push/fold only.** The solver starts on the flop, turn or river, so supply preflop ranges. Heads-up push/fold ranges for any stack depth come from `pontiac.pushfold` (section 6). Limps and small raises preflop are not solved.
+- **Preflop: all-in or fold is solved; the rest is an estimate.** The solver starts on the flop, turn or river, so supply preflop ranges. Heads-up and three-handed push/fold ranges come from `pontiac.pushfold` and `pontiac.pushfold3` (section 6) and are exact. `pontiac.preflop` (limps and small raises, next section) gives a rough starting point only: do not present its charts as solved, and check exact hands against a published chart.
 - **Depth: yes.** A full flop-through-river tree at 15 to 30 bb is supported heads-up, with every turn and river card solved exactly.
 - **Performance**, measured on a 2-core cloud container (8 GB RAM), the example spot `examples/hu_sng_flop_20bb.json`: 18 bb behind, 4 bb pot, wide ranges (SB opens about 80% of hands), raises at 2.5x, all-in available.
 
@@ -190,6 +205,8 @@ Tendencies applied across the whole tree, as in the app:
   | One per street | 0.8 GB (16-bit storage; 1.6 GB without) | 1.5 minutes, 80 iterations |
 
   Three sizes per street was not measured; expect more than double the two-size figures. A lock that needs a normal solve first doubles the time. Turn and river spots take seconds. Use `pontiac.estimate` to check memory before solving.
+
+  Accuracy does not always fall smoothly: a two-size flop solve can sit near 0.5% for several minutes and briefly rise before settling. For coaching answers 0.5% is enough (range EVs are already right to about 0.01 bb); set `max_seconds` rather than chasing 0.3%. A long solve started in the background of a chat can be stopped when the reply ends, so run it and wait for it within one turn.
 - **Three players: yes**, with the same `solve` call (section 5). No `save`/`query` for three players yet: the result itself lists the first street's nodes.
 
 ## Heads-up preflop with limps and raises
@@ -300,6 +317,7 @@ Add an `icm` block to a two-player spot file and every result of the hand is val
 
 ## 7. Extras
 
-- **Samples:** `examples/river_quick.json` (solves in milliseconds) with its expected output in `examples/expected/`, `examples/hu_sng_flop_20bb.json`, and `examples/three_way_river.json`.
+- **Samples** (in `examples/` and inside the package, see `pontiac.examples()`): `river_quick` (solves in milliseconds; expected output in `examples/expected/`), `hu_sng_flop_20bb`, `three_way_river`, `speed_three_way_flop`, `icm_bubble_river`.
+- **Self-test:** `python -m pontiac selftest [--full]` or `pontiac.selftest(full=False)`.
 - **Version string:** in every result, every saved solve and every query answer.
 - **Reproducibility:** the solver uses no random numbers. The same spot file, program version and thread count give the same result; the smoke tests check this. Different thread counts can differ in the last decimals.

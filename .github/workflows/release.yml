@@ -1,0 +1,153 @@
+# Builds the desktop app and the command-line program for Windows, macOS and Linux,
+# checks each command-line build with the package's self-test, and publishes a release.
+#
+#   - push a tag like v0.13.0  -> builds, tests, and publishes a GitHub release with the files
+#   - "Run workflow" by hand, or a push to the branch release-test
+#                              -> builds and tests only; the files are kept as run artifacts
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+    branches: ["release-test"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # the two-player engine's allocator uses a Rust feature that is still marked unstable;
+  # this lets the stable compiler accept it (the same setting the project is developed with)
+  RUSTC_BOOTSTRAP: "1"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            cli: cli/target/release/pontiac.exe
+            cli_out: pontiac-windows-x64.exe
+            tauri_args: ""
+          - os: macos-latest
+            name: macos-universal
+            cli: cli/target/universal/pontiac
+            cli_out: pontiac-macos-universal
+            tauri_args: "--target universal-apple-darwin"
+          - os: ubuntu-22.04
+            name: linux-x64
+            cli: cli/target/release/pontiac
+            cli_out: pontiac-linux-x64
+            tauri_args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            cli
+            app/src-tauri
+
+      - name: Linux packages for the app
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      # ---- command-line program ----
+      - name: Build the command-line program
+        if: runner.os != 'macOS'
+        working-directory: cli
+        run: cargo build --release
+
+      - name: Build the command-line program (macOS, both chip families in one file)
+        if: runner.os == 'macOS'
+        working-directory: cli
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          mkdir -p target/universal
+          lipo -create -output target/universal/pontiac target/aarch64-apple-darwin/release/pontiac target/x86_64-apple-darwin/release/pontiac
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Self-test the command-line program on this system
+        shell: bash
+        run: |
+          export PONTIAC_BIN="$PWD/${{ matrix.cli }}"
+          python -m pip install --quiet . pytest
+          python -m pontiac version
+          python -m pontiac selftest --full
+
+      - name: Full test suite (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          export PONTIAC_BIN="$PWD/${{ matrix.cli }}"
+          python -m pytest -q tests
+
+      - name: Engine checks (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          (cd multiway && cargo test --release && cargo run --release --bin mwcheck)
+          (cd pushfold && cargo test --release accurate_mode_resumes_exactly)
+
+      # ---- desktop app ----
+      - name: Build the desktop app
+        working-directory: app
+        shell: bash
+        run: |
+          npm ci
+          npm run tauri build -- ${{ matrix.tauri_args }}
+
+      - name: Collect the files
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "${{ matrix.cli }}" "out/${{ matrix.cli_out }}"
+          b=app/src-tauri/target
+          for f in $b/release/bundle/msi/*.msi $b/release/bundle/nsis/*.exe \
+                   $b/universal-apple-darwin/release/bundle/dmg/*.dmg \
+                   $b/release/bundle/deb/*.deb $b/release/bundle/appimage/*.AppImage; do
+            [ -f "$f" ] && cp "$f" out/ || true
+          done
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pontiac-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        run: cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          body_path: docs/RELEASE_NOTES.md
+          draft: false

@@ -261,3 +261,16 @@ def test_prize_money_three_players_at_showdown():
     assert abs(sum(r["icm"]["prize_pool_share_pct"].values()) - sum(r["icm"]["if_pot_were_split_pct"].values())) < 2.0
     with pytest.raises(pontiac.SolverError):
         pontiac.solve({**spot, "rake": 0.05, "icm": {"payouts": [50, 30, 20]}})
+
+
+def test_package_carries_examples_guide_and_selftest():
+    root = Path(__file__).parent.parent
+    # the copies inside the package must be the same as the originals (scripts/build_cli.sh refreshes them)
+    for f in (root / "examples").glob("*.json"):
+        assert pontiac.example(f.stem) == json.loads(f.read_text()), f.name
+    assert pontiac.guide() == (root / "docs" / "HEADLESS.md").read_text()
+    assert "river_quick" in pontiac.examples()
+    with pytest.raises(pontiac.SolverError):
+        pontiac.example("no_such_spot")
+    r = pontiac.selftest()
+    assert r["ok"], r

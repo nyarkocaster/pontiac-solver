@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Pontiac Solver",
-    "version": "0.2.7"
+    "version": "0.13.0"
   },
   "tauri": {
     "allowlist": {
@@ -19,7 +19,7 @@
     "bundle": {
       "active": true,
       "category": "Utility",
-      "copyright": "Copyright (C) 2022 Wataru Inariba",
+      "copyright": "Copyright (C) 2022 Wataru Inariba (desktop-postflop, postflop-solver); 2026 Pontiac Solver contributors. AGPL-3.0-or-later",
       "deb": {
         "depends": []
       },
@@ -31,7 +31,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "b-inary.desktop-postflop",
+      "identifier": "io.github.nyarkocaster.pontiac-solver",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
@@ -42,7 +42,7 @@
         "minimumSystemVersion": "11.7"
       },
       "resources": [],
-      "shortDescription": "",
+      "shortDescription": "Free no-limit hold'em solver with node locking",
       "targets": "all",
       "windows": {
         "certificateThumbprint": null,

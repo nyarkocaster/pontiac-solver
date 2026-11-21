@@ -1,0 +1,15 @@
+{
+  "players": ["BB", "CO", "BTN"],
+  "stacks_bb": {"BB": 40, "CO": 100, "BTN": 65},
+  "pot_bb": 15,
+  "board": "Kh9s6d4c2s",
+  "ranges": {
+    "BB": "99-22,A9s-A2s,K9s-K2s,Q9s+,J9s+,T8s+,97s+,86s+,75s+,65s,54s,ATo-A8o,KTo+,QTo+,JTo",
+    "CO": "TT-22,AJs-A2s,KTs+,QTs+,JTs,T9s,98s,87s,76s,AQo-ATo,KQo,KJo",
+    "BTN": "AA-22,AKs-A2s,K9s+,Q9s+,J9s+,T8s+,98s,87s,76s,65s,AKo-ATo,KJo+,QJo"
+  },
+  "bet_tree": {"river": {"bet": [0.33, 0.75], "raise": [2.5]}, "max_raises": 3, "allin_spr": 1.0},
+  "rake": {"rate": 0.05, "cap_bb": 1.5},
+  "target_exploitability_pct": 0.2,
+  "max_seconds": 120
+}

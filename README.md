@@ -2,21 +2,33 @@
 
 A free, open-source no-limit hold'em postflop solver with node locking, built for study.
 
-- **Desktop app (Windows):** guided heads-up study with opponent habits, three-way pots from the flop, turn or river (different stacks, side pots and rake), push/fold calculators (heads-up, and three-handed for chips or prize money), tournament setup in big blinds with antes, range sliders, and the original advanced solver screens.
+- **Desktop app (Windows, macOS, Linux):** guided heads-up study with opponent habits, three-way pots from the flop, turn or river (different stacks, side pots and rake), push/fold calculators (heads-up, and three-handed for chips or prize money), tournament setup in big blinds with antes, range sliders, and the original advanced solver screens.
 - **Headless (Linux, Python or command line):** JSON spot in, JSON result out, for two or three players, plus push/fold ranges. See [docs/HEADLESS.md](docs/HEADLESS.md).
+
+## Download
+
+Ready-made builds for Windows, macOS and Linux are on the [Releases page](https://github.com/nyarkocaster/pontiac-solver/releases): the desktop app, and the command-line program on its own.
+
+- **Windows:** run the installer (`.msi` or `-setup.exe`). Windows may warn that the publisher is unknown: choose "More info", then "Run anyway".
+- **macOS:** open the `.dmg` and drag the app to Applications. The app is not signed with an Apple developer certificate, so the first time, right-click the app and choose Open, or allow it under System Settings, Privacy & Security.
+- **Linux:** the `.AppImage` runs as is (`chmod +x` first); there is also a `.deb`.
 
 ## Quick start, headless
 
 ```
-pip install -e ".[test]" && pytest
+pip install "git+https://github.com/nyarkocaster/pontiac-solver"
+python -m pontiac selftest
 ```
 
 ```python
 import pontiac
-result = pontiac.solve("examples/river_quick.json", save="spot.pontiac")
+spot = pontiac.example("river_quick")
+result = pontiac.solve(spot, save="spot.pontiac")
 print(result["exploitability_pct"], result["ev_bb"])
 print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 ```
+
+The bundled solver program is for Linux x86-64. On Windows or a Mac, download the command-line program from the Releases page and set `PONTIAC_BIN` to its path.
 
 ## What is in this repository
 
@@ -49,10 +61,11 @@ print(pontiac.query("spot.pontiac", "river/BB_check/SB_bet0.5", hand="Qc9c"))
 
 ## Limits
 
-- Preflop is limited to push/fold (heads-up and three-handed); limps and small raises are not solved.
-- Prize-money (ICM) payoffs apply to push/fold only; postflop solves play for chips.
+- Preflop: all-in or fold is solved exactly (heads-up and three-handed). Limps and small raises are an estimate, not a solution.
+- Prize-money (ICM) payoffs: push/fold, two-player postflop spots (app and headless) and three-player postflop spots (headless only). No rake with prize money.
 - Three-player solves cannot be saved and queried later yet; the result lists the first street.
 - Three-player flop spots deal a sample of turn and river cards by default. The app can then solve any single turn card exactly.
+- Checked against GTO Wizard on a heads-up flop spot (chips, a node lock, prize money) and on three-handed push/fold. Three players after the flop has internal checks only.
 
 ## Licence and credits
 

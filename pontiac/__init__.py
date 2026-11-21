@@ -11,11 +11,14 @@ import json
 import os
 import subprocess
 import tempfile
+import time
+from pathlib import Path
 
 from ._binary import binary
 
-__version__ = "0.12.10"
-__all__ = ["solve", "query", "estimate", "pushfold", "pushfold3", "preflop", "icm", "version", "SolverError", "binary"]
+__version__ = "0.13.0"
+__all__ = ["solve", "query", "estimate", "pushfold", "pushfold3", "preflop", "icm", "version", "SolverError", "binary",
+           "example", "examples", "guide", "selftest"]
 
 
 class SolverError(RuntimeError):
@@ -135,3 +138,100 @@ def icm(stacks, payouts):
 def version():
     """Version string of the solver program; the same string is in every result."""
     return subprocess.run([binary(), "version"], capture_output=True, text=True).stdout.strip()
+
+
+# ---- shipped with the package: sample spots, the interface guide, a self-test ----
+
+_DATA = Path(__file__).resolve().parent
+
+
+def examples():
+    """Names of the sample spots shipped with the package."""
+    return sorted(p.stem for p in (_DATA / "examples").glob("*.json") if not p.stem.endswith(".expected"))
+
+
+def example(name):
+    """A sample spot as a dict, ready to edit and pass to `solve`. See `examples()` for the names."""
+    path = _DATA / "examples" / f"{name}.json"
+    if not path.exists():
+        raise SolverError(f"no example called {name!r}; choose from {', '.join(examples())}")
+    return json.loads(path.read_text())
+
+
+def guide():
+    """The interface reference (docs/HEADLESS.md) as text."""
+    return (_DATA / "HEADLESS.md").read_text()
+
+
+def selftest(full=False):
+    """Checks that the solver runs correctly on this machine. Takes a few seconds; `full=True`
+    adds a three-player solve and prize-money solves (under a minute on two cores).
+    Returns {"ok": bool, "version": str, "checks": [{"name", "ok", "seconds", "detail"}]}."""
+    checks = []
+
+    def run(name, fn):
+        t = time.time()
+        try:
+            detail = fn()
+            checks.append({"name": name, "ok": True, "seconds": round(time.time() - t, 2), "detail": detail})
+        except Exception as e:  # report every failure, never raise
+            checks.append({"name": name, "ok": False, "seconds": round(time.time() - t, 2), "detail": f"{type(e).__name__}: {e}"})
+
+    def near(a, b, tol, what):
+        if abs(a - b) > tol:
+            raise AssertionError(f"{what}: got {a}, expected {b}")
+
+    def river():
+        r = solve(example("river_quick"))
+        want = json.loads((_DATA / "examples" / "river_quick.expected.json").read_text())
+        for name, ev in want["ev_bb"].items():
+            near(r["ev_bb"][name], ev, 0.02, f"EV of {name}")
+        return f"EVs {r['ev_bb']}, {r['exploitability_pct']}% of the pot"
+
+    def save_and_query():
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "spot.pontiac")
+            r = solve(example("river_quick"), save=path)
+            first = next(iter(r["nodes"]))
+            q = query(path, first)
+            near(q["range_ev_bb"], r["nodes"][first]["range_ev_bb"], 0.001, "queried EV")
+        return f"node {first!r} read back from the saved solve"
+
+    def push_fold():
+        r = pushfold(10)
+        near(r["jam_pct"], 0.583, 0.01, "10 bb heads-up all-in share")
+        return "10 bb heads-up: 58% all-in"
+
+    def prizes():
+        v = icm([5000, 3000, 2000], [50, 30, 20])
+        near(float(v["prize_value"][0]), 38.39, 0.02, "ICM value of the big stack")
+        r = pushfold3([10, 10, 10], payouts=[50, 30, 20])
+        near(r["decisions"][0]["pct"], 0.271, 0.01, "three-handed button all-in share")
+        return "ICM 38.39 / 32.75 / 28.86; three-handed button all-in 27%"
+
+    def three_players():
+        spot = example("three_way_river")
+        r = solve(spot)
+        if r["exploitability_pct"] > spot["target_exploitability_pct"]:
+            raise AssertionError(f"reached only {r['exploitability_pct']}%")
+        return f"EVs {r['ev_bb']}"
+
+    def prize_money_postflop():
+        spot = example("icm_bubble_river")
+        r = solve(spot)
+        if not sum(r["ev_bb"].values()) < spot["pot_bb"]:
+            raise AssertionError("prize-money EVs should add up to less than the pot")
+        return f"prize pool shares {r['icm']['prize_pool_share_pct']}"
+
+    try:
+        ver = version()
+    except Exception as e:
+        return {"ok": False, "version": None, "checks": [{"name": "program runs", "ok": False, "seconds": 0, "detail": str(e)}]}
+    run("two-player river solve matches the stored answer", river)
+    run("save and query", save_and_query)
+    run("heads-up push/fold", push_fold)
+    run("prize-money (ICM) values and three-handed push/fold", prizes)
+    if full:
+        run("three-player river solve", three_players)
+        run("prize-money postflop solve", prize_money_postflop)
+    return {"ok": all(c["ok"] for c in checks), "version": ver, "checks": checks}
