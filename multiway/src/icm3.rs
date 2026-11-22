@@ -164,7 +164,8 @@ impl Dist {
 impl Game {
     /// Value for `hero` (dense over hero's hands) of a hand that ends at terminal node `id`,
     /// in prize money. `r` are the three reaches.
-    pub fn icm_terminal(&self, id: usize, hero: usize, r: [&[f32]; 3]) -> Vec<f32> {
+    /// The first, slower way of working out `icm_terminal`; kept as a second opinion for the tests.
+    pub fn icm_terminal_slow(&self, id: usize, hero: usize, r: [&[f32]; 3]) -> Vec<f32> {
         let icm = self.icm.as_ref().unwrap();
         let node = &self.nodes[id];
         let u = &icm.util[icm.node_util[id] as usize][hero];
@@ -306,6 +307,340 @@ impl Game {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Fast showdowns. Same answers as `icm_terminal_slow` (kept as the reference the tests compare
+// against), worked out in sweeps over the hands in strength order, the way the chips engine does.
+
+thread_local! {
+    /// Scratch for `Order`: two card-by-card tables per thread.
+    static ORD: std::cell::RefCell<[Vec<f32>; 2]> = std::cell::RefCell::new([vec![0f32; 52 * W], vec![0f32; 52 * W]]);
+}
+
+/// The nine products for one card: (first opponent lower, tied, any) x (second lower, tied, any).
+struct Kern9<'a> {
+    s: u16,
+    ca1: &'a [f32; W], ca2: &'a [f32; W], cl1: &'a [f32; W], cl2: &'a [f32; W], ct1: &'a [f32; W], ct2: &'a [f32; W],
+    r1a: &'a [f32; W], r1b: &'a [f32; W], r2a: &'a [f32; W], r2b: &'a [f32; W], ka: &'a [u16; W], kb: &'a [u16; W],
+}
+impl Kern9<'_> {
+    #[inline(always)]
+    fn term(&self, c: usize) -> [f32; 9] {
+        let la = if self.ka[c] < self.s { 1.0f32 } else { 0.0 }; let lb = if self.kb[c] < self.s { 1.0f32 } else { 0.0 };
+        let ea = if self.ka[c] == self.s { 1.0f32 } else { 0.0 }; let eb = if self.kb[c] == self.s { 1.0f32 } else { 0.0 };
+        let (p1a, p1b, p2a, p2b) = (self.r1a[c], self.r1b[c], self.r2a[c], self.r2b[c]);
+        let a1 = self.ca1[c] - p1a - p1b; let a2 = self.ca2[c] - p2a - p2b;
+        let l1 = self.cl1[c] - p1a * la - p1b * lb; let t1 = self.ct1[c] - p1a * ea - p1b * eb;
+        let l2 = self.cl2[c] - p2a * la - p2b * lb; let t2 = self.ct2[c] - p2a * ea - p2b * eb;
+        [l1 * l2, l1 * t2, l1 * a2, t1 * l2, t1 * t2, t1 * a2, a1 * l2, a1 * t2, a1 * a2]
+    }
+}
+#[inline(always)]
+fn kern9_body<const M: u8>(k: &Kern9) -> [f32; 9] {
+    let mut acc = [[0f32; 8]; 9];
+    for base in (0..W).step_by(8) {
+        let (mut l1, mut t1, mut a1, mut l2, mut t2, mut a2) = ([0f32; 8], [0f32; 8], [0f32; 8], [0f32; 8], [0f32; 8], [0f32; 8]);
+        for j in 0..8 {
+            let c = base + j;
+            let la = if k.ka[c] < k.s { 1.0f32 } else { 0.0 }; let lb = if k.kb[c] < k.s { 1.0f32 } else { 0.0 };
+            let ea = if k.ka[c] == k.s { 1.0f32 } else { 0.0 }; let eb = if k.kb[c] == k.s { 1.0f32 } else { 0.0 };
+            let (p1a, p1b, p2a, p2b) = (k.r1a[c], k.r1b[c], k.r2a[c], k.r2b[c]);
+            a1[j] = k.ca1[c] - p1a - p1b; a2[j] = k.ca2[c] - p2a - p2b;
+            l1[j] = k.cl1[c] - p1a * la - p1b * lb; t1[j] = k.ct1[c] - p1a * ea - p1b * eb;
+            l2[j] = k.cl2[c] - p2a * la - p2b * lb; t2[j] = k.ct2[c] - p2a * ea - p2b * eb;
+        }
+        // with one opponent folded only that row or column of the table is read
+        if M == 1 { for j in 0..8 { acc[2][j] += l1[j] * a2[j]; acc[5][j] += t1[j] * a2[j]; acc[8][j] += a1[j] * a2[j]; } }
+        else if M == 2 { for j in 0..8 { acc[6][j] += a1[j] * l2[j]; acc[7][j] += a1[j] * t2[j]; acc[8][j] += a1[j] * a2[j]; } }
+        else {
+            for j in 0..8 { acc[0][j] += l1[j] * l2[j]; acc[1][j] += l1[j] * t2[j]; acc[2][j] += l1[j] * a2[j]; }
+            for j in 0..8 { acc[3][j] += t1[j] * l2[j]; acc[4][j] += t1[j] * t2[j]; acc[5][j] += t1[j] * a2[j]; }
+            for j in 0..8 { acc[6][j] += a1[j] * l2[j]; acc[7][j] += a1[j] * t2[j]; acc[8][j] += a1[j] * a2[j]; }
+        }
+    }
+    let mut out = [0f32; 9];
+    for i in 0..9 { out[i] = acc[i].iter().sum(); }
+    out
+}
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn kern9_avx2<const M: u8>(k: &Kern9) -> [f32; 9] { kern9_body::<M>(k) }
+#[inline(always)]
+fn kern9<const M: u8>(k: &Kern9) -> [f32; 9] {
+    #[cfg(target_arch = "x86_64")]
+    { if std::is_x86_feature_detected!("avx2") && std::is_x86_feature_detected!("fma") { return unsafe { kern9_avx2::<M>(k) }; } }
+    kern9_body::<M>(k)
+}
+
+/// For one hand (y, d) of weight `w` in strength group `g`: per card x, `w` times the other
+/// player's weight on hands holding x that come before `g` and share no card with (y, d).
+#[inline(always)]
+fn pair_body(c: &[f32; W], ry: &[f32; W], rd: &[f32; W], ky: &[u16; W], kd: &[u16; W], g: u16, desc: bool, w: f32, u: &mut [f32; W], ty: &mut [f32; W], td: &mut [f32; W]) {
+    for x in 0..W {
+        let my = if desc { ky[x] > g } else { ky[x] < g };
+        let md = if desc { kd[x] > g } else { kd[x] < g };
+        let v = w * (c[x] - if my { ry[x] } else { 0.0 } - if md { rd[x] } else { 0.0 });
+        u[x] += v; ty[x] += v; td[x] += v;
+    }
+}
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn pair_avx2(c: &[f32; W], ry: &[f32; W], rd: &[f32; W], ky: &[u16; W], kd: &[u16; W], g: u16, desc: bool, w: f32, u: &mut [f32; W], ty: &mut [f32; W], td: &mut [f32; W]) { pair_body(c, ry, rd, ky, kd, g, desc, w, u, ty, td) }
+/// Adds the result to `u` and to the two table rows `ty` and `td`.
+#[inline(always)]
+fn pair(c: &[f32; W], ry: &[f32; W], rd: &[f32; W], ky: &[u16; W], kd: &[u16; W], g: u16, desc: bool, w: f32, u: &mut [f32; W], ty: &mut [f32; W], td: &mut [f32; W]) {
+    #[cfg(target_arch = "x86_64")]
+    { if std::is_x86_feature_detected!("avx2") && std::is_x86_feature_detected!("fma") { return unsafe { pair_avx2(c, ry, rd, ky, kd, g, desc, w, u, ty, td) }; } }
+    pair_body(c, ry, rd, ky, kd, g, desc, w, u, ty, td)
+}
+
+/// Running totals for "one opponent comes before the other" while sweeping the hands in strength
+/// order. Side 0: the first opponent before the second; side 1: the second before the first.
+/// "Before" means weaker on a rising sweep and stronger on a falling one.
+struct Order<'a> {
+    /// per side and card x: weight of pairs (early hand holding x, late hand sharing no card with it)
+    u: [[f32; W]; 2],
+    /// per side, cards y and x: the same, with the late hand holding y (index y * W + x)
+    dt: &'a mut [Vec<f32>; 2],
+    /// per side: total of (late hand's weight x early weight before it), and the same by the late hand's cards
+    tz: [f64; 2], cz: [[f64; 52]; 2],
+    /// weight already swept, per player and card, and in total
+    c: [[f32; W]; 2], t: [f64; 2],
+}
+impl Order<'_> {
+    /// Weight of pairs on `side`, both hands already swept, neither holding a or b. A hand (a, b)
+    /// itself must not have been swept yet (callers add what it needs).
+    #[inline(always)]
+    fn read(&self, side: usize, a: usize, b: usize) -> f64 {
+        self.tz[side] - self.cz[side][a] - self.cz[side][b] - self.u[side][a] as f64 - self.u[side][b] as f64
+            + self.dt[side][b * W + a] as f64 + self.dt[side][a * W + b] as f64
+    }
+}
+
+impl Game {
+    /// Sweeps the two opponents' hands on a final board in strength order (rising, or falling with
+    /// `desc`), keeping `Order` up to date. `at_hero` is called for each hero hand when everything
+    /// strictly before its strength has been swept; it also gets the opponents' hands tied with it.
+    fn order_sweep(&self, sd: &Street, hero: usize, z: [&[f32]; 2], m: [&[f32]; 2], desc: bool, mut at_hero: impl FnMut(usize, &Order, &[u16], &[u16])) {
+        let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
+        let cards = &self.deck.cards;
+        let key = |h: u16| -> u16 { let (a, b) = cards[h as usize]; let k = sd.rank[a as usize * W + b as usize]; if desc { u16::MAX - k } else { k } };
+        let list = |p: usize| -> Vec<u16> { let mut v = sd.sorted[p].clone(); if desc { v.reverse(); } v };
+        let (l1, l2, lh) = (list(o1), list(o2), list(hero));
+        ORD.with(|d| {
+            let mut d = d.borrow_mut();
+            d[0].fill(0.0); d[1].fill(0.0);
+            let mut st = Order { u: [[0.0; W]; 2], dt: &mut *d, tz: [0.0; 2], cz: [[0.0; 52]; 2], c: [[0.0; W]; 2], t: [0.0; 2] };
+            let (mut i1, mut i2, mut ih) = (0usize, 0usize, 0usize);
+            loop {
+                let k = [l1.get(i1), l2.get(i2), lh.get(ih)].iter().filter_map(|x| x.map(|&h| key(h))).min();
+                let Some(k) = k else { break };
+                let g = if desc { u16::MAX - k } else { k };
+                let (mut e1, mut e2) = (i1, i2);
+                while e1 < l1.len() && key(l1[e1]) == k { e1 += 1; }
+                while e2 < l2.len() && key(l2[e2]) == k { e2 += 1; }
+                while ih < lh.len() && key(lh[ih]) == k { at_hero(lh[ih] as usize, &st, &l1[i1..e1], &l2[i2..e2]); ih += 1; }
+                // late hands of this strength against everything before it
+                for (side, late, early, range) in [(0usize, 1usize, 0usize, &l2[i2..e2]), (1, 0, 1, &l1[i1..e1])] {
+                    for &h in range {
+                        let w = z[late][h as usize]; if w == 0.0 { continue; }
+                        let (y, dd) = cards[h as usize]; let (y, dd) = (y as usize, dd as usize);
+                        let zl = w as f64 * (st.t[early] - st.c[early][y] as f64 - st.c[early][dd] as f64);
+                        st.tz[side] += zl; st.cz[side][y] += zl; st.cz[side][dd] += zl;
+                        // the hand's own two cards take no part: put back what the pass adds there
+                        let t = &mut st.dt[side];
+                        let keep = [st.u[side][y], st.u[side][dd], t[y * W + y], t[y * W + dd], t[dd * W + y], t[dd * W + dd]];
+                        let (lo, hi) = t.split_at_mut(y.max(dd) * W);
+                        let (first, second): (&mut [f32; W], &mut [f32; W]) = ((&mut lo[y.min(dd) * W..y.min(dd) * W + W]).try_into().unwrap(), (&mut hi[..W]).try_into().unwrap());
+                        pair(&st.c[early], row(m[early], y), row(m[early], dd), rowu(&sd.rank, y), rowu(&sd.rank, dd), g, desc, w, &mut st.u[side], first, second);
+                        st.u[side][y] = keep[0]; st.u[side][dd] = keep[1];
+                        let t = &mut st.dt[side];
+                        t[y * W + y] = keep[2]; t[y * W + dd] = keep[3]; t[dd * W + y] = keep[4]; t[dd * W + dd] = keep[5];
+                    }
+                }
+                for (p, range) in [(0usize, &l1[i1..e1]), (1, &l2[i2..e2])] {
+                    for &h in range {
+                        let w = z[p][h as usize]; if w == 0.0 { continue; }
+                        let (a, b) = cards[h as usize];
+                        st.c[p][a as usize] += w; st.c[p][b as usize] += w; st.t[p] += w as f64;
+                    }
+                }
+                i1 = e1; i2 = e2;
+            }
+            // one last call per side so the caller can read the finished totals
+            at_hero(usize::MAX, &st, &[], &[]);
+        });
+    }
+
+    /// For every hero hand that can reach this showdown: the weight of (first opponent lower /
+    /// tied / anything) x (second opponent lower / tied / anything), all three hands sharing no
+    /// card. `shows`: 0 both opponents show down, 1 only the first, 2 only the second (then only
+    /// the "anything" column or row is filled). `out(position in hero's hand list, table)`.
+    fn nine_sweep(&self, sd: &Street, hero: usize, z: [&[f32]; 2], m: [&[f32]; 2], shows: u8, mut out: impl FnMut(usize, [[f64; 3]; 3])) {
+        let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
+        let (l1, l2, lh) = (&sd.sorted[o1], &sd.sorted[o2], &sd.sorted[hero]);
+        let (r1, r2) = (z[0], z[1]);
+        let cards = &self.deck.cards;
+        let rk = |h: u16| -> u16 { let (a, b) = cards[h as usize]; sd.rank[a as usize * W + b as usize] };
+        let mut ca = [[0f32; W]; 2];
+        let (mut ta, mut caq) = ([0f64; 3], [0f64; 52]);
+        for &h in l1 {
+            let h = h as usize; let x = r1[h]; if x == 0.0 { continue; }
+            let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            let q = x as f64 * r2[h] as f64;
+            ta[0] += x as f64; ta[2] += q; ca[0][a] += x; ca[0][b] += x; caq[a] += q; caq[b] += q;
+        }
+        for &h in l2 {
+            let h = h as usize; let y = r2[h]; if y == 0.0 { continue; }
+            let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            ta[1] += y as f64; ca[1][a] += y; ca[1][b] += y;
+        }
+        let mut cl = [[0f32; W]; 2]; let (mut tl, mut clq) = ([0f64; 3], [0f64; 52]);
+        let (mut i1, mut i2, mut ih) = (0usize, 0usize, 0usize);
+        while ih < lh.len() {
+            let s = rk(lh[ih]);
+            while i1 < l1.len() && rk(l1[i1]) < s {
+                let h = l1[i1] as usize; i1 += 1; let x = r1[h]; if x == 0.0 { continue; }
+                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                let q = x as f64 * r2[h] as f64;
+                tl[0] += x as f64; tl[2] += q; cl[0][a] += x; cl[0][b] += x; clq[a] += q; clq[b] += q;
+            }
+            while i2 < l2.len() && rk(l2[i2]) < s {
+                let h = l2[i2] as usize; i2 += 1; let y = r2[h]; if y == 0.0 { continue; }
+                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                tl[1] += y as f64; cl[1][a] += y; cl[1][b] += y;
+            }
+            let mut ct = [[0f32; W]; 2]; let (mut tt, mut ctq) = ([0f64; 3], [0f64; 52]);
+            let mut j = i1;
+            while j < l1.len() && rk(l1[j]) == s {
+                let h = l1[j] as usize; j += 1; let x = r1[h]; if x == 0.0 { continue; }
+                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                let q = x as f64 * r2[h] as f64;
+                tt[0] += x as f64; tt[2] += q; ct[0][a] += x; ct[0][b] += x; ctq[a] += q; ctq[b] += q;
+            }
+            let mut j = i2;
+            while j < l2.len() && rk(l2[j]) == s {
+                let h = l2[j] as usize; j += 1; let y = r2[h]; if y == 0.0 { continue; }
+                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                tt[1] += y as f64; ct[1][a] += y; ct[1][b] += y;
+            }
+            while ih < lh.len() && rk(lh[ih]) == s {
+                let h = lh[ih] as usize; ih += 1;
+                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                let me = [r1[h] as f64, r2[h] as f64, r1[h] as f64 * r2[h] as f64];
+                let xa = |k: usize| ta[k] - if k < 2 { ca[k][a] as f64 + ca[k][b] as f64 } else { caq[a] + caq[b] } + me[k];
+                let xl = |k: usize| tl[k] - if k < 2 { cl[k][a] as f64 + cl[k][b] as f64 } else { clq[a] + clq[b] };
+                let xt = |k: usize| tt[k] - if k < 2 { ct[k][a] as f64 + ct[k][b] as f64 } else { ctq[a] + ctq[b] } + me[k];
+                let k = Kern9 { s, ca1: &ca[0], ca2: &ca[1], cl1: &cl[0], cl2: &cl[1], ct1: &ct[0], ct2: &ct[1],
+                    r1a: row(m[0], a), r1b: row(m[0], b), r2a: row(m[1], a), r2b: row(m[1], b), ka: rowu(&sd.rank, a), kb: rowu(&sd.rank, b) };
+                let mut bb = match shows { 1 => kern9::<1>(&k), 2 => kern9::<2>(&k), _ => kern9::<0>(&k) };
+                for c in [a, b] { let t = k.term(c); for i in 0..9 { bb[i] -= t[i]; } }
+                let (x1, x2, sq) = ([xl(0), xt(0), xa(0)], [xl(1), xt(1), xa(1)], [xl(2), xt(2), xa(2)]);
+                let mut g = [[0f64; 3]; 3];
+                for x in 0..3 { for y in 0..3 {
+                    let shared = if x == 2 { sq[y] } else if y == 2 || x == y { sq[x] } else { 0.0 };
+                    g[x][y] = x1[x] * x2[y] - bb[3 * x + y] as f64 + shared;
+                } }
+                out(self.hpos[hero][h] as usize, g);
+            }
+        }
+    }
+
+    /// Value for `hero` (dense over hero's hands) of a hand that ends at terminal node `id`,
+    /// in prize money. `r` are the three reaches.
+    pub fn icm_terminal(&self, id: usize, hero: usize, r: [&[f32]; 3]) -> Vec<f32> {
+        let icm = self.icm.as_ref().unwrap();
+        let node = &self.nodes[id];
+        let u = &icm.util[icm.node_util[id] as usize][hero];
+        let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
+        if node.kind == Kind::FoldEnd { return self.reach_sum(hero, r[o1], r[o2]).iter().map(|&x| (u[13] * x) as f32).collect(); }
+        let sd = &self.streets[node.street];
+        let f = node.folded;
+        let nhh = self.hands[hero].len();
+        let cls = |x: usize, y: usize, z: usize| 9 * x + 3 * y + z;
+        let total = if f[hero] { self.reach_sum(hero, r[o1], r[o2]) } else { vec![] };
+        let mut acc = vec![0f64; nhh];
+        let cards = &self.deck.cards;
+        TABLES.with(|t| {
+            let mut t = t.borrow_mut(); let (m1, m2) = &mut *t;
+            for (p, m) in [(o1, &mut *m1), (o2, &mut *m2)] {
+                for &h in &sd.sorted[p] { let x = r[p][h as usize]; if x == 0.0 { continue; } let (a, b) = cards[h as usize]; let (a, b) = (a as usize, b as usize); m[a * W + b] = x; m[b * W + a] = x; }
+            }
+            let (z, m): ([&[f32]; 2], [&[f32]; 2]) = ([r[o1], r[o2]], [&m1[..], &m2[..]]);
+            if f[hero] {
+                // hero is watching: only the order of the other two matters. `all[p]`: p's weight in total and by card.
+                let mut all = ([0f64; 2], [[0f64; 52]; 2]);
+                for (p, q) in [(0usize, o1), (1, o2)] { for &h in &sd.sorted[q] { let x = z[p][h as usize] as f64; let (a, b) = cards[h as usize]; all.0[p] += x; all.1[p][a as usize] += x; all.1[p][b as usize] += x; } }
+                // per hero hand: what its own cards as an opponent's hand add back, for each side
+                let mut extra: Vec<(usize, [f64; 2])> = Vec::with_capacity(sd.sorted[hero].len());
+                self.order_sweep(sd, hero, z, m, false, |h, st, tie1, tie2| {
+                    if h == usize::MAX {
+                        for &(h, e) in &extra {
+                            let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                            let behind = st.read(0, a, b) + e[0];
+                            let ahead = st.read(1, a, b) + e[1];
+                            let pos = self.hpos[hero][h] as usize;
+                            acc[pos] = behind * u[cls(0, 0, 0)] + (total[pos] - ahead - behind) * u[cls(0, 0, 1)] + ahead * u[cls(0, 0, 2)];
+                        }
+                        return;
+                    }
+                    let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                    let own = [z[0][h] as f64, z[1][h] as f64];
+                    let mut e = [0f64; 2];
+                    if own[0] != 0.0 || own[1] != 0.0 {
+                        // weight of player p on hands without a or b: weaker than this hand, and stronger
+                        let part = |p: usize, tie: &[u16]| -> (f64, f64) {
+                            let lower = st.t[p] - st.c[p][a] as f64 - st.c[p][b] as f64;
+                            let mut tied = 0f64;
+                            for &x in tie { let (c, d) = cards[x as usize]; let (c, d) = (c as usize, d as usize); if c != a && c != b && d != a && d != b { tied += z[p][x as usize] as f64; } }
+                            (lower, all.0[p] - all.1[p][a] - all.1[p][b] + own[p] - lower - tied)
+                        };
+                        let (p1, p2) = (part(0, tie1), part(1, tie2));
+                        // side 0 (first below second): this hand as the second's late hand, and as the first's early hand
+                        e[0] = own[1] * p1.0 + own[0] * p2.1;
+                        e[1] = own[0] * p2.0 + own[1] * p1.1;
+                    }
+                    extra.push((h, e));
+                });
+            } else if f[o1] || f[o2] {
+                // one opponent shows down; the other's cards still block hands
+                self.nine_sweep(sd, hero, z, m, if f[o2] { 1 } else { 2 }, |pos, g| {
+                    acc[pos] = if f[o2] { let (l, t, all) = (g[0][2], g[1][2], g[2][2]); l * u[cls(0, 0, 2)] + t * u[cls(1, 0, 2)] + (all - l - t) * u[cls(2, 0, 2)] }
+                        else { let (l, t, all) = (g[2][0], g[2][1], g[2][2]); l * u[cls(0, 0, 0)] + t * u[cls(0, 1, 0)] + (all - l - t) * u[cls(0, 2, 0)] };
+                });
+            } else {
+                // turn "anything" into "stronger"; the both-weaker and both-stronger corners are split by sub-order below
+                let mut corner = vec![(0f64, 0f64); nhh];
+                self.nine_sweep(sd, hero, z, m, 0, |pos, g| {
+                    let mut mm = [[0.0f64; 3]; 3];
+                    for x in 0..2 { for y in 0..2 { mm[x][y] = g[x][y]; } }
+                    for x in 0..2 { mm[x][2] = g[x][2] - g[x][0] - g[x][1]; }
+                    for y in 0..2 { mm[2][y] = g[2][y] - g[0][y] - g[1][y]; }
+                    mm[2][2] = g[2][2] - mm[0][0] - mm[0][1] - mm[1][0] - mm[1][1] - mm[0][2] - mm[1][2] - mm[2][0] - mm[2][1];
+                    corner[pos] = (mm[0][0], mm[2][2]);
+                    acc[pos] = mm[0][1] * u[cls(0, 1, 0)] + mm[0][2] * u[cls(0, 2, 0)] + mm[1][0] * u[cls(1, 0, 2)] + mm[1][1] * u[cls(1, 1, 1)]
+                        + mm[1][2] * u[cls(1, 2, 0)] + mm[2][0] * u[cls(2, 0, 2)] + mm[2][1] * u[cls(2, 1, 2)];
+                });
+                for desc in [false, true] {
+                    self.order_sweep(sd, hero, z, m, desc, |h, st, _, _| {
+                        if h == usize::MAX { return; }
+                        let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                        let pos = self.hpos[hero][h] as usize;
+                        // side 0: first opponent before the second (weaker on the way up, stronger on the way down)
+                        let (first, second) = (st.read(0, a, b), st.read(1, a, b));
+                        let (base, which) = if desc { (2, corner[pos].1) } else { (0, corner[pos].0) };
+                        let (lo, hi) = if desc { (second, first) } else { (first, second) };
+                        acc[pos] += lo * u[cls(base, base, 0)] + (which - lo - hi) * u[cls(base, base, 1)] + hi * u[cls(base, base, 2)];
+                    });
+                }
+            }
+            for (p, m) in [(o1, &mut *m1), (o2, &mut *m2)] {
+                for &h in &sd.sorted[p] { let (a, b) = cards[h as usize]; let (a, b) = (a as usize, b as usize); m[a * W + b] = 0.0; m[b * W + a] = 0.0; }
+            }
+        });
+        acc.iter().map(|&x| x as f32).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,5 +720,39 @@ mod tests {
         assert!(seen.len() >= 3);
         assert!(exact_worst < 1e-4, "{exact_worst}");
         assert!(split_worst < 1e-4, "{split_worst}");
+    }
+    /// The fast showdown code against the slower first version, on every kind of ending of a
+    /// tree that starts on the turn (several river cards), with uneven stacks and side pots.
+    #[test]
+    fn fast_showdowns_match_the_slow_ones() {
+        let spec = Spec3 {
+            ranges: ["99-22,A9s-A2s,K9s-K2s,Q9s+,J9s+,T8s+,ATo-A8o,KTo+,QTo+".into(), "TT-22,AJs-A2s,KTs+,QTs+,JTs,T9s,98s,AQo-ATo,KQo".into(), "AA-22,AKs-A2s,K9s+,Q9s+,J9s+,T8s+,98s,AKo-ATo,KJo+".into()],
+            board: "Kh9s6d4c".into(), pot: 15.0, stack: 100.0, stacks: Some([40.0, 100.0, 65.0]),
+            bet_sizes: "50%".into(), raise_sizes: "60%".into(), max_raises: 1, allin_spr: 3.0, threads: 1, turn_cards: 0, river_cards: 1,
+            icm_payouts: vec![50.0, 30.0, 20.0], icm_others: vec![30.0, 12.0], ..Default::default()
+        };
+        let g = build_game(&spec, false).unwrap();
+        let icm = g.icm.as_ref().unwrap();
+        let mut seed = 0x2545F4914F6CDD1Du64;
+        let mut rnd = || { seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17; (seed >> 40) as f32 / (1u64 << 24) as f32 };
+        let mut seen = std::collections::HashSet::new();
+        let (mut worst, mut kinds) = (0f64, [0usize; 3]);
+        for (id, node) in g.nodes.iter().enumerate() {
+            if node.kind != Kind::Showdown { continue; }
+            if !seen.insert((node.folded, icm.node_util[id], node.street % 5)) { continue; }
+            let sd = &g.streets[node.street];
+            let mut reach = [vec![0f32; NH], vec![0f32; NH], vec![0f32; NH]];
+            for p in 0..3 { for &h in &sd.sorted[p] { let x = rnd(); reach[p][h as usize] = if x < 0.25 { 0.0 } else { g.cfg.ranges[p][h as usize] * x }; } }
+            for hero in 0..3 {
+                let r = [&reach[0][..], &reach[1][..], &reach[2][..]];
+                let (fast, slow) = (g.icm_terminal(id, hero, r), g.icm_terminal_slow(id, hero, r));
+                let scale = slow.iter().fold(0f64, |m, &x| m.max(x.abs() as f64)).max(1e-9);
+                for i in 0..fast.len() { worst = worst.max((fast[i] as f64 - slow[i] as f64).abs() / scale); }
+                kinds[if node.folded[hero] { 0 } else if node.folded.iter().any(|&f| f) { 1 } else { 2 }] += 1;
+            }
+        }
+        println!("fast against slow: worst {worst:.2e}; hero watching {}, two at showdown {}, three at showdown {}", kinds[0], kinds[1], kinds[2]);
+        assert!(kinds.iter().all(|&k| k >= 10), "{kinds:?}");
+        assert!(worst < 2e-5, "{worst}");
     }
 }

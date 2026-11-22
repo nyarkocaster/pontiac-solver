@@ -180,7 +180,7 @@ fn make_street(deck: &Deck, board: &[u8], card: u8, hands: &[Vec<u16>; 3]) -> St
 
 thread_local! {
     /// Two zeroed card-by-card tables reused by every showdown on this thread.
-    static TABLES: std::cell::RefCell<(Vec<f32>, Vec<f32>)> = std::cell::RefCell::new((vec![0f32; 52 * W], vec![0f32; 52 * W]));
+    pub(crate) static TABLES: std::cell::RefCell<(Vec<f32>, Vec<f32>)> = std::cell::RefCell::new((vec![0f32; 52 * W], vec![0f32; 52 * W]));
     /// Spare reach vectors per player, valid for one game only (tagged with its id).
     static BUF: std::cell::RefCell<Vec<f32>> = std::cell::RefCell::new(Vec::new());
     static POOL: std::cell::RefCell<(u64, [Vec<Vec<f32>>; 3])> = std::cell::RefCell::new((0, Default::default()));
@@ -227,9 +227,9 @@ pub fn sample_cards(board: &[u8], per_rank: usize) -> Vec<(u8, f32)> {
 }
 
 #[inline(always)]
-fn row(m: &[f32], a: usize) -> &[f32; W] { m[a * W..a * W + W].try_into().unwrap() }
+pub(crate) fn row(m: &[f32], a: usize) -> &[f32; W] { m[a * W..a * W + W].try_into().unwrap() }
 #[inline(always)]
-fn rowu(m: &[u16], a: usize) -> &[u16; W] { m[a * W..a * W + W].try_into().unwrap() }
+pub(crate) fn rowu(m: &[u16], a: usize) -> &[u16; W] { m[a * W..a * W + W].try_into().unwrap() }
 
 /// Inputs for the per-hand sum over cards at a showdown.
 struct Kern<'a> {

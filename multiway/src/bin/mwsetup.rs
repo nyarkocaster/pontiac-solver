@@ -13,8 +13,11 @@ fn main() {
     let which = std::env::args().nth(1).unwrap_or("flop".into());
     let (board, wide) = match which.as_str() { "river" => ("Kh9s6d4c2s", true), "turn" => ("Kh9s6d4c", true), "narrow" => ("Qs8h7h", false), _ => ("Kh9s6d", true) };
     let t = Instant::now();
-    let g = build_game(&spec(board, wide), true).unwrap();
+    let mut sp = spec(board, wide);
+    if std::env::args().nth(2).as_deref() == Some("icm") { sp.icm_payouts = vec![50.0, 30.0, 20.0]; sp.icm_others = vec![60.0, 30.0]; }
+    if let Some(t) = std::env::args().nth(3).and_then(|x| x.parse().ok()) { sp.threads = t; }
+    let g = build_game(&sp, true).unwrap();
     println!("build {:.2}s, {} nodes, {} streets", t.elapsed().as_secs_f64(), g.nodes.len(), g.streets.len());
-    for i in 1..=3u32 { let t = Instant::now(); g.iterate(i); println!("step {i}: {:.2}s", t.elapsed().as_secs_f64()); }
+    for i in 1..=(std::env::var("STEPS").ok().and_then(|x| x.parse().ok()).unwrap_or(3u32)) { let t = Instant::now(); g.iterate(i); println!("step {i}: {:.2}s", t.elapsed().as_secs_f64()); }
     let t = Instant::now(); let e = g.evaluate(); println!("evaluate {:.2}s EV {:.4}/{:.4}/{:.4}", t.elapsed().as_secs_f64(), e[0].0, e[1].0, e[2].0);
 }
