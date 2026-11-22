@@ -1,9 +1,10 @@
-# Pontiac Solver 0.13.2
+# Pontiac Solver 0.13.3
 
 **New since 0.13.0 (speed):**
 
 - Three-player spots played for tournament prize money solve about four times faster, with the same answers. A prize-money solve now costs under twice a chips solve instead of seven times.
 - Three-player solves get closer to the answer in the same number of steps (the average strategy now leans harder on recent steps), and the accuracy check, which costs several steps' worth of time, is run only when it is likely to matter.
+- A time limit or Cancel now stops a three-player solve within a moment, even in the middle of a long step; everything learned up to then is kept.
 
 The first public release with ready-made downloads. Free and open source (AGPL-3.0-or-later).
 

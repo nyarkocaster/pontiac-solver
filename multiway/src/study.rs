@@ -284,16 +284,36 @@ fn run(game: &Game, spec: &Spec3, prog: &Progress3) -> (u32, [f64; 3], [f64; 3],
     prog.iter.store(0, Ordering::Relaxed);
     prog.max_iter.store(max_iter, Ordering::Relaxed);
     prog.gain_milli_pct.store(100_000, Ordering::Relaxed);
-    let mut t = 0u32;
     let started = Instant::now();
     let every = if game.start_len() == 3 { 20 } else { 10 };
+    // A step on a big spot can take a long time, so a watcher stops one part-way when the time
+    // limit passes or the solve is cancelled; what was learned before that moment is kept.
+    game.stop.store(false, Ordering::Relaxed);
+    let done = std::sync::atomic::AtomicBool::new(false);
+    let out = std::thread::scope(|sc| {
+        sc.spawn(|| {
+            while !done.load(Ordering::Relaxed) {
+                if prog.cancel.load(Ordering::Relaxed) || (spec.max_seconds > 0.0 && started.elapsed().as_secs_f64() >= spec.max_seconds) { game.stop.store(true, Ordering::Relaxed); }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        });
+        let r = run_steps(game, spec, prog, max_iter, every, started);
+        done.store(true, Ordering::Relaxed);
+        r
+    });
+    game.stop.store(false, Ordering::Relaxed);
+    out
+}
+
+fn run_steps(game: &Game, spec: &Spec3, prog: &Progress3, max_iter: u32, every: u32, started: Instant) -> (u32, [f64; 3], [f64; 3], bool) {
+    let mut t = 0u32;
     let (mut next_check, mut last): (u32, Option<(f64, f64)>) = (every, None);
     loop {
         t += 1;
         game.iterate(t);
         prog.iter.store(t, Ordering::Relaxed);
         let out_of_time = spec.max_seconds > 0.0 && started.elapsed().as_secs_f64() >= spec.max_seconds;
-        let cancelled = prog.cancel.load(Ordering::Relaxed) || out_of_time;
+        let cancelled = prog.cancel.load(Ordering::Relaxed) || out_of_time || game.stop.load(Ordering::Relaxed);
         if t >= next_check || t >= max_iter || cancelled {
             let (ev, g) = gains(game);
             let worst = g.iter().cloned().fold(0.0, f64::max);

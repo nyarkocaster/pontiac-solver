@@ -420,11 +420,10 @@ impl Game {
     /// Sweeps the two opponents' hands on a final board in strength order (rising, or falling with
     /// `desc`), keeping `Order` up to date. `at_hero` is called for each hero hand when everything
     /// strictly before its strength has been swept; it also gets the opponents' hands tied with it.
-    fn order_sweep(&self, sd: &Street, hero: usize, z: [&[f32]; 2], m: [&[f32]; 2], desc: bool, mut at_hero: impl FnMut(usize, &Order, &[u16], &[u16])) {
+    fn order_sweep(&self, sd: &Street, hero: usize, z: [&[f32]; 2], m: [&[f32]; 2], desc: bool, mut at_hero: impl FnMut(Option<HandInfo>, &Order, &[HandInfo], &[HandInfo])) {
         let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
-        let cards = &self.deck.cards;
-        let key = |h: u16| -> u16 { let (a, b) = cards[h as usize]; let k = sd.rank[a as usize * W + b as usize]; if desc { u16::MAX - k } else { k } };
-        let list = |p: usize| -> Vec<u16> { let mut v = sd.sorted[p].clone(); if desc { v.reverse(); } v };
+        let key = |e: &HandInfo| -> u16 { if desc { u16::MAX - e.k } else { e.k } };
+        let list = |p: usize| -> Vec<HandInfo> { let mut v = sd.info[p].clone(); if desc { v.reverse(); } v };
         let (l1, l2, lh) = (list(o1), list(o2), list(hero));
         ORD.with(|d| {
             let mut d = d.borrow_mut();
@@ -432,18 +431,18 @@ impl Game {
             let mut st = Order { u: [[0.0; W]; 2], dt: &mut *d, tz: [0.0; 2], cz: [[0.0; 52]; 2], c: [[0.0; W]; 2], t: [0.0; 2] };
             let (mut i1, mut i2, mut ih) = (0usize, 0usize, 0usize);
             loop {
-                let k = [l1.get(i1), l2.get(i2), lh.get(ih)].iter().filter_map(|x| x.map(|&h| key(h))).min();
+                let k = [l1.get(i1), l2.get(i2), lh.get(ih)].iter().filter_map(|x| x.map(|e| key(e))).min();
                 let Some(k) = k else { break };
                 let g = if desc { u16::MAX - k } else { k };
                 let (mut e1, mut e2) = (i1, i2);
-                while e1 < l1.len() && key(l1[e1]) == k { e1 += 1; }
-                while e2 < l2.len() && key(l2[e2]) == k { e2 += 1; }
-                while ih < lh.len() && key(lh[ih]) == k { at_hero(lh[ih] as usize, &st, &l1[i1..e1], &l2[i2..e2]); ih += 1; }
+                while e1 < l1.len() && key(&l1[e1]) == k { e1 += 1; }
+                while e2 < l2.len() && key(&l2[e2]) == k { e2 += 1; }
+                while ih < lh.len() && key(&lh[ih]) == k { at_hero(Some(lh[ih]), &st, &l1[i1..e1], &l2[i2..e2]); ih += 1; }
                 // late hands of this strength against everything before it
                 for (side, late, early, range) in [(0usize, 1usize, 0usize, &l2[i2..e2]), (1, 0, 1, &l1[i1..e1])] {
-                    for &h in range {
-                        let w = z[late][h as usize]; if w == 0.0 { continue; }
-                        let (y, dd) = cards[h as usize]; let (y, dd) = (y as usize, dd as usize);
+                    for e in range {
+                        let w = z[late][e.h as usize]; if w == 0.0 { continue; }
+                        let (y, dd) = (e.a as usize, e.b as usize);
                         let zl = w as f64 * (st.t[early] - st.c[early][y] as f64 - st.c[early][dd] as f64);
                         st.tz[side] += zl; st.cz[side][y] += zl; st.cz[side][dd] += zl;
                         // the hand's own two cards take no part: put back what the pass adds there
@@ -458,16 +457,15 @@ impl Game {
                     }
                 }
                 for (p, range) in [(0usize, &l1[i1..e1]), (1, &l2[i2..e2])] {
-                    for &h in range {
-                        let w = z[p][h as usize]; if w == 0.0 { continue; }
-                        let (a, b) = cards[h as usize];
-                        st.c[p][a as usize] += w; st.c[p][b as usize] += w; st.t[p] += w as f64;
+                    for e in range {
+                        let w = z[p][e.h as usize]; if w == 0.0 { continue; }
+                        st.c[p][e.a as usize] += w; st.c[p][e.b as usize] += w; st.t[p] += w as f64;
                     }
                 }
                 i1 = e1; i2 = e2;
             }
             // one last call per side so the caller can read the finished totals
-            at_hero(usize::MAX, &st, &[], &[]);
+            at_hero(None, &st, &[], &[]);
         });
     }
 
@@ -477,55 +475,53 @@ impl Game {
     /// the "anything" column or row is filled). `out(position in hero's hand list, table)`.
     fn nine_sweep(&self, sd: &Street, hero: usize, z: [&[f32]; 2], m: [&[f32]; 2], shows: u8, mut out: impl FnMut(usize, [[f64; 3]; 3])) {
         let (o1, o2) = ((hero + 1) % 3, (hero + 2) % 3);
-        let (l1, l2, lh) = (&sd.sorted[o1], &sd.sorted[o2], &sd.sorted[hero]);
+        let (l1, l2, lh) = (&sd.info[o1][..], &sd.info[o2][..], &sd.info[hero][..]);
         let (r1, r2) = (z[0], z[1]);
-        let cards = &self.deck.cards;
-        let rk = |h: u16| -> u16 { let (a, b) = cards[h as usize]; sd.rank[a as usize * W + b as usize] };
         let mut ca = [[0f32; W]; 2];
         let (mut ta, mut caq) = ([0f64; 3], [0f64; 52]);
-        for &h in l1 {
-            let h = h as usize; let x = r1[h]; if x == 0.0 { continue; }
-            let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+        for e in l1 {
+            let h = e.h as usize; let x = r1[h]; if x == 0.0 { continue; }
+            let (a, b) = (e.a as usize, e.b as usize);
             let q = x as f64 * r2[h] as f64;
             ta[0] += x as f64; ta[2] += q; ca[0][a] += x; ca[0][b] += x; caq[a] += q; caq[b] += q;
         }
-        for &h in l2 {
-            let h = h as usize; let y = r2[h]; if y == 0.0 { continue; }
-            let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+        for e in l2 {
+            let h = e.h as usize; let y = r2[h]; if y == 0.0 { continue; }
+            let (a, b) = (e.a as usize, e.b as usize);
             ta[1] += y as f64; ca[1][a] += y; ca[1][b] += y;
         }
         let mut cl = [[0f32; W]; 2]; let (mut tl, mut clq) = ([0f64; 3], [0f64; 52]);
         let (mut i1, mut i2, mut ih) = (0usize, 0usize, 0usize);
         while ih < lh.len() {
-            let s = rk(lh[ih]);
-            while i1 < l1.len() && rk(l1[i1]) < s {
-                let h = l1[i1] as usize; i1 += 1; let x = r1[h]; if x == 0.0 { continue; }
-                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            let s = lh[ih].k;
+            while i1 < l1.len() && l1[i1].k < s {
+                let e = l1[i1]; let h = e.h as usize; i1 += 1; let x = r1[h]; if x == 0.0 { continue; }
+                let (a, b) = (e.a as usize, e.b as usize);
                 let q = x as f64 * r2[h] as f64;
                 tl[0] += x as f64; tl[2] += q; cl[0][a] += x; cl[0][b] += x; clq[a] += q; clq[b] += q;
             }
-            while i2 < l2.len() && rk(l2[i2]) < s {
-                let h = l2[i2] as usize; i2 += 1; let y = r2[h]; if y == 0.0 { continue; }
-                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            while i2 < l2.len() && l2[i2].k < s {
+                let e = l2[i2]; let h = e.h as usize; i2 += 1; let y = r2[h]; if y == 0.0 { continue; }
+                let (a, b) = (e.a as usize, e.b as usize);
                 tl[1] += y as f64; cl[1][a] += y; cl[1][b] += y;
             }
             let mut ct = [[0f32; W]; 2]; let (mut tt, mut ctq) = ([0f64; 3], [0f64; 52]);
             let mut j = i1;
-            while j < l1.len() && rk(l1[j]) == s {
-                let h = l1[j] as usize; j += 1; let x = r1[h]; if x == 0.0 { continue; }
-                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            while j < l1.len() && l1[j].k == s {
+                let e = l1[j]; let h = e.h as usize; j += 1; let x = r1[h]; if x == 0.0 { continue; }
+                let (a, b) = (e.a as usize, e.b as usize);
                 let q = x as f64 * r2[h] as f64;
                 tt[0] += x as f64; tt[2] += q; ct[0][a] += x; ct[0][b] += x; ctq[a] += q; ctq[b] += q;
             }
             let mut j = i2;
-            while j < l2.len() && rk(l2[j]) == s {
-                let h = l2[j] as usize; j += 1; let y = r2[h]; if y == 0.0 { continue; }
-                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            while j < l2.len() && l2[j].k == s {
+                let e = l2[j]; let h = e.h as usize; j += 1; let y = r2[h]; if y == 0.0 { continue; }
+                let (a, b) = (e.a as usize, e.b as usize);
                 tt[1] += y as f64; ct[1][a] += y; ct[1][b] += y;
             }
-            while ih < lh.len() && rk(lh[ih]) == s {
-                let h = lh[ih] as usize; ih += 1;
-                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            while ih < lh.len() && lh[ih].k == s {
+                let e = lh[ih]; let h = e.h as usize; ih += 1;
+                let (a, b) = (e.a as usize, e.b as usize);
                 let me = [r1[h] as f64, r2[h] as f64, r1[h] as f64 * r2[h] as f64];
                 let xa = |k: usize| ta[k] - if k < 2 { ca[k][a] as f64 + ca[k][b] as f64 } else { caq[a] + caq[b] } + me[k];
                 let xl = |k: usize| tl[k] - if k < 2 { cl[k][a] as f64 + cl[k][b] as f64 } else { clq[a] + clq[b] };
@@ -540,7 +536,7 @@ impl Game {
                     let shared = if x == 2 { sq[y] } else if y == 2 || x == y { sq[x] } else { 0.0 };
                     g[x][y] = x1[x] * x2[y] - bb[3 * x + y] as f64 + shared;
                 } }
-                out(self.hpos[hero][h] as usize, g);
+                out(e.pos as usize, g);
             }
         }
     }
@@ -571,35 +567,35 @@ impl Game {
                 let mut all = ([0f64; 2], [[0f64; 52]; 2]);
                 for (p, q) in [(0usize, o1), (1, o2)] { for &h in &sd.sorted[q] { let x = z[p][h as usize] as f64; let (a, b) = cards[h as usize]; all.0[p] += x; all.1[p][a as usize] += x; all.1[p][b as usize] += x; } }
                 // per hero hand: what its own cards as an opponent's hand add back, for each side
-                let mut extra: Vec<(usize, [f64; 2])> = Vec::with_capacity(sd.sorted[hero].len());
-                self.order_sweep(sd, hero, z, m, false, |h, st, tie1, tie2| {
-                    if h == usize::MAX {
-                        for &(h, e) in &extra {
-                            let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
-                            let behind = st.read(0, a, b) + e[0];
-                            let ahead = st.read(1, a, b) + e[1];
-                            let pos = self.hpos[hero][h] as usize;
+                let mut extra: Vec<(HandInfo, [f64; 2])> = Vec::with_capacity(sd.sorted[hero].len());
+                self.order_sweep(sd, hero, z, m, false, |e, st, tie1, tie2| {
+                    let Some(e) = e else {
+                        for &(e, x) in &extra {
+                            let (a, b) = (e.a as usize, e.b as usize);
+                            let behind = st.read(0, a, b) + x[0];
+                            let ahead = st.read(1, a, b) + x[1];
+                            let pos = e.pos as usize;
                             acc[pos] = behind * u[cls(0, 0, 0)] + (total[pos] - ahead - behind) * u[cls(0, 0, 1)] + ahead * u[cls(0, 0, 2)];
                         }
                         return;
-                    }
-                    let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                    };
+                    let (a, b, h) = (e.a as usize, e.b as usize, e.h as usize);
                     let own = [z[0][h] as f64, z[1][h] as f64];
-                    let mut e = [0f64; 2];
+                    let mut x = [0f64; 2];
                     if own[0] != 0.0 || own[1] != 0.0 {
                         // weight of player p on hands without a or b: weaker than this hand, and stronger
-                        let part = |p: usize, tie: &[u16]| -> (f64, f64) {
+                        let part = |p: usize, tie: &[HandInfo]| -> (f64, f64) {
                             let lower = st.t[p] - st.c[p][a] as f64 - st.c[p][b] as f64;
                             let mut tied = 0f64;
-                            for &x in tie { let (c, d) = cards[x as usize]; let (c, d) = (c as usize, d as usize); if c != a && c != b && d != a && d != b { tied += z[p][x as usize] as f64; } }
+                            for t in tie { let (c, d) = (t.a as usize, t.b as usize); if c != a && c != b && d != a && d != b { tied += z[p][t.h as usize] as f64; } }
                             (lower, all.0[p] - all.1[p][a] - all.1[p][b] + own[p] - lower - tied)
                         };
                         let (p1, p2) = (part(0, tie1), part(1, tie2));
                         // side 0 (first below second): this hand as the second's late hand, and as the first's early hand
-                        e[0] = own[1] * p1.0 + own[0] * p2.1;
-                        e[1] = own[0] * p2.0 + own[1] * p1.1;
+                        x[0] = own[1] * p1.0 + own[0] * p2.1;
+                        x[1] = own[0] * p2.0 + own[1] * p1.1;
                     }
-                    extra.push((h, e));
+                    extra.push((e, x));
                 });
             } else if f[o1] || f[o2] {
                 // one opponent shows down; the other's cards still block hands
@@ -621,10 +617,9 @@ impl Game {
                         + mm[1][2] * u[cls(1, 2, 0)] + mm[2][0] * u[cls(2, 0, 2)] + mm[2][1] * u[cls(2, 1, 2)];
                 });
                 for desc in [false, true] {
-                    self.order_sweep(sd, hero, z, m, desc, |h, st, _, _| {
-                        if h == usize::MAX { return; }
-                        let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
-                        let pos = self.hpos[hero][h] as usize;
+                    self.order_sweep(sd, hero, z, m, desc, |e, st, _, _| {
+                        let Some(e) = e else { return };
+                        let (a, b, pos) = (e.a as usize, e.b as usize, e.pos as usize);
                         // side 0: first opponent before the second (weaker on the way up, stronger on the way down)
                         let (first, second) = (st.read(0, a, b), st.read(1, a, b));
                         let (base, which) = if desc { (2, corner[pos].1) } else { (0, corner[pos].0) };

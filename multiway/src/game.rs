@@ -104,6 +104,10 @@ pub struct Extra {
     pub icm: Option<crate::icm3::IcmCfg>,
 }
 
+/// One hand in a showdown sweep: hand index, strength group, its two cards, position in the player's hand list.
+#[derive(Clone, Copy)]
+pub struct HandInfo { pub h: u16, pub k: u16, pub a: u8, pub b: u8, pub pos: u16 }
+
 /// Showdown ordering for one final (five-card) board.
 pub struct Street {
     pub card: u8,              // the river card dealt (255 when the tree starts on the river)
@@ -112,6 +116,8 @@ pub struct Street {
     pub rank: Vec<u16>,
     /// each player's hands that are possible on this board, weakest first
     pub sorted: [Vec<u16>; 3],
+    /// the same lists with each hand's cards, strength group and place in the player's hand list alongside
+    pub info: [Vec<HandInfo>; 3],
     /// per card: every possible hand holding it as (strength group, hand index), weakest first
     pub by_card: Vec<Vec<(u16, u16)>>,
 }
@@ -141,6 +147,8 @@ pub struct Game {
     pub br_ignores_locks: bool,
     /// prize-money payoffs, when the spot is played for prizes
     pub icm: Option<crate::icm3::Icm3>,
+    /// set to abandon a solver step part-way: nothing is learned after it is set
+    pub stop: std::sync::atomic::AtomicBool,
 }
 
 // Solver threads only ever touch disjoint river subtrees at the same time.
@@ -175,7 +183,13 @@ fn make_street(deck: &Deck, board: &[u8], card: u8, hands: &[Vec<u16>; 3]) -> St
     }
     let mut by_card: Vec<Vec<(u16, u16)>> = vec![vec![]; 52];
     for &h in &order { let (a, b) = deck.cards[h as usize]; let k = rank[a as usize * W + b as usize]; by_card[a as usize].push((k, h)); by_card[b as usize].push((k, h)); }
-    Street { card, strength, rank, sorted, by_card }
+    let mut info: [Vec<HandInfo>; 3] = Default::default();
+    for p in 0..3 {
+        let mut pos = vec![0u16; NH];
+        for (i, &h) in hands[p].iter().enumerate() { pos[h as usize] = i as u16; }
+        info[p] = sorted[p].iter().map(|&h| { let (a, b) = deck.cards[h as usize]; HandInfo { h, k: rank[a as usize * W + b as usize], a, b, pos: pos[h as usize] } }).collect();
+    }
+    Street { card, strength, rank, sorted, info, by_card }
 }
 
 thread_local! {
@@ -345,7 +359,7 @@ impl Game {
         let stacks = cfg.extra.stacks.unwrap_or([cfg.stack; 3]);
         if stacks.iter().any(|&x| x < 0.0) { return Err("a stack cannot be negative".into()); }
         if cfg.extra.folded.iter().filter(|&&f| !f).count() < 2 { return Err("at least two players must still be in the hand".into()); }
-        let mut g = Game { deck, cfg, stacks, nodes: vec![], streets: vec![], street_of: HashMap::new(), samples: HashMap::new(), valid, card_hands, hands, hpos, allocated: allocate, br_ignores_locks: false, icm: None,
+        let mut g = Game { deck, cfg, stacks, nodes: vec![], streets: vec![], street_of: HashMap::new(), samples: HashMap::new(), valid, card_hands, hands, hpos, allocated: allocate, br_ignores_locks: false, icm: None, stop: std::sync::atomic::AtomicBool::new(false),
             id: NEXT_GAME_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) };
         // deal structure: which turn and river cards exist in this tree
         let b0 = g.cfg.board.clone();
@@ -605,62 +619,60 @@ impl Game {
     pub fn showdown(&self, street: usize, hero: usize, p1: usize, r1: &[f32], r2: &[f32], three_way: bool, pot: f64, invested: f64) -> Vec<f32> {
         let sd = &self.streets[street];
         let p2 = 3 - hero - p1;
-        let (l1, l2, lh) = (&sd.sorted[p1], &sd.sorted[p2], &sd.sorted[hero]);
-        let cards = &self.deck.cards;
-        let rk = |h: u16| -> u16 { let (a, b) = cards[h as usize]; sd.rank[a as usize * W + b as usize] };
+        let (l1, l2, lh) = (&sd.info[p1][..], &sd.info[p2][..], &sd.info[hero][..]);
         let mut out = vec![0f32; self.hands[hero].len()];
         TABLES.with(|t| {
             let mut t = t.borrow_mut(); let (m1, m2) = &mut *t;
             // card-by-card reach tables and per-card sums over everything ("all")
             let mut ca = [[0f32; W]; 2];
             let (mut ta, mut caq) = ([0f64; 3], [0f64; 52]);
-            for &h in l1 {
-                let h = h as usize; let x = r1[h]; if x == 0.0 { continue; }
-                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            for e in l1 {
+                let h = e.h as usize; let x = r1[h]; if x == 0.0 { continue; }
+                let (a, b) = (e.a as usize, e.b as usize);
                 let q = x as f64 * r2[h] as f64;
                 ta[0] += x as f64; ta[2] += q; ca[0][a] += x; ca[0][b] += x; caq[a] += q; caq[b] += q;
                 m1[a * W + b] = x; m1[b * W + a] = x;
             }
-            for &h in l2 {
-                let h = h as usize; let y = r2[h]; if y == 0.0 { continue; }
-                let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+            for e in l2 {
+                let h = e.h as usize; let y = r2[h]; if y == 0.0 { continue; }
+                let (a, b) = (e.a as usize, e.b as usize);
                 ta[1] += y as f64; ca[1][a] += y; ca[1][b] += y;
                 m2[a * W + b] = y; m2[b * W + a] = y;
             }
             // running sums over opponent hands strictly weaker than the hero hand ("lower") and tied with it
             let mut cl = [[0f32; W]; 2]; let (mut tl, mut clq) = ([0f64; 3], [0f64; 52]);
+            // the tied tables are filled for one strength at a time and wiped again afterwards
+            let mut ct = [[0f32; W]; 2]; let mut ctq = [0f64; 52];
             let (mut i1, mut i2, mut ih) = (0usize, 0usize, 0usize);
             while ih < lh.len() {
-                let s = rk(lh[ih]);
-                while i1 < l1.len() && rk(l1[i1]) < s {
-                    let h = l1[i1] as usize; i1 += 1; let x = r1[h]; if x == 0.0 { continue; }
-                    let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                let s = lh[ih].k;
+                while i1 < l1.len() && l1[i1].k < s {
+                    let e = l1[i1]; i1 += 1; let h = e.h as usize; let x = r1[h]; if x == 0.0 { continue; }
+                    let (a, b) = (e.a as usize, e.b as usize);
                     let q = x as f64 * r2[h] as f64;
                     tl[0] += x as f64; tl[2] += q; cl[0][a] += x; cl[0][b] += x; clq[a] += q; clq[b] += q;
                 }
-                while i2 < l2.len() && rk(l2[i2]) < s {
-                    let h = l2[i2] as usize; i2 += 1; let y = r2[h]; if y == 0.0 { continue; }
-                    let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                while i2 < l2.len() && l2[i2].k < s {
+                    let e = l2[i2]; i2 += 1; let h = e.h as usize; let y = r2[h]; if y == 0.0 { continue; }
+                    let (a, b) = (e.a as usize, e.b as usize);
                     tl[1] += y as f64; cl[1][a] += y; cl[1][b] += y;
                 }
-                let mut ct = [[0f32; W]; 2]; let (mut tt, mut ctq) = ([0f64; 3], [0f64; 52]);
-                let mut j = i1;
-                while j < l1.len() && rk(l1[j]) == s {
-                    let h = l1[j] as usize; j += 1; let x = r1[h]; if x == 0.0 { continue; }
-                    let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                let mut tt = [0f64; 3];
+                let (mut e1, mut e2) = (i1, i2);
+                while e1 < l1.len() && l1[e1].k == s {
+                    let e = l1[e1]; e1 += 1; let h = e.h as usize; let x = r1[h]; if x == 0.0 { continue; }
+                    let (a, b) = (e.a as usize, e.b as usize);
                     let q = x as f64 * r2[h] as f64;
                     tt[0] += x as f64; tt[2] += q; ct[0][a] += x; ct[0][b] += x; ctq[a] += q; ctq[b] += q;
                 }
-                let mut j = i2;
-                while j < l2.len() && rk(l2[j]) == s {
-                    let h = l2[j] as usize; j += 1; let y = r2[h]; if y == 0.0 { continue; }
-                    let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                while e2 < l2.len() && l2[e2].k == s {
+                    let e = l2[e2]; e2 += 1; let h = e.h as usize; let y = r2[h]; if y == 0.0 { continue; }
+                    let (a, b) = (e.a as usize, e.b as usize);
                     tt[1] += y as f64; ct[1][a] += y; ct[1][b] += y;
                 }
-                while ih < lh.len() && rk(lh[ih]) == s {
-                    let h = lh[ih] as usize; ih += 1;
-                    let pos = self.hpos[hero][h];
-                    let (a, b) = cards[h]; let (a, b) = (a as usize, b as usize);
+                while ih < lh.len() && lh[ih].k == s {
+                    let e = lh[ih]; ih += 1; let h = e.h as usize;
+                    let (a, b) = (e.a as usize, e.b as usize);
                     let me = [r1[h] as f64, r2[h] as f64, r1[h] as f64 * r2[h] as f64];
                     let xa = |k: usize| ta[k] - if k < 2 { ca[k][a] as f64 + ca[k][b] as f64 } else { caq[a] + caq[b] } + me[k];
                     let xl = |k: usize| tl[k] - if k < 2 { cl[k][a] as f64 + cl[k][b] as f64 } else { clq[a] + clq[b] };
@@ -692,11 +704,13 @@ impl Game {
                         let g_ta = xt(0) * xa(1) - b(2) + xt(2);
                         g_la + 0.5 * g_ta
                     };
-                    out[pos as usize] = (pot * share - invested * g_aa) as f32;
+                    out[e.pos as usize] = (pot * share - invested * g_aa) as f32;
                 }
+                for e in &l1[i1..e1] { let (a, b) = (e.a as usize, e.b as usize); ct[0][a] = 0.0; ct[0][b] = 0.0; ctq[a] = 0.0; ctq[b] = 0.0; }
+                for e in &l2[i2..e2] { ct[1][e.a as usize] = 0.0; ct[1][e.b as usize] = 0.0; }
             }
-            for &h in l1 { let (a, b) = cards[h as usize]; let (a, b) = (a as usize, b as usize); m1[a * W + b] = 0.0; m1[b * W + a] = 0.0; }
-            for &h in l2 { let (a, b) = cards[h as usize]; let (a, b) = (a as usize, b as usize); m2[a * W + b] = 0.0; m2[b * W + a] = 0.0; }
+            for e in l1 { let (a, b) = (e.a as usize, e.b as usize); m1[a * W + b] = 0.0; m1[b * W + a] = 0.0; }
+            for e in l2 { let (a, b) = (e.a as usize, e.b as usize); m2[a * W + b] = 0.0; m2[b * W + a] = 0.0; }
         });
         out
     }
@@ -804,6 +818,8 @@ impl Game {
         let inv = node.invested; let folded = node.folded;
         let _pot = self.cfg.pot + inv.iter().sum::<f64>();
         let nhh = self.hands[hero].len();
+        let stopped = matches!(mode, Mode::Train(_)) && self.stop.load(std::sync::atomic::Ordering::Relaxed);
+        if stopped { return vec![0f32; nhh]; }
         match node.kind {
             Kind::FoldEnd | Kind::Showdown if self.icm.is_some() => { return self.icm_terminal(id, hero, r); }
             Kind::FoldEnd => {
@@ -891,7 +907,8 @@ impl Game {
             }
             _ => { for a in 0..na { for i in 0..nhh { val[i] += sigma[a * nhh + i] * vals[a][i]; } } }
         }
-        if let (Mode::Train(t), true) = (mode, !node.full_lock) {
+        // a step abandoned part-way has holes in the values coming back up: learn nothing from them
+        if let (Mode::Train(t), true) = (mode, !node.full_lock && !self.stop.load(std::sync::atomic::Ordering::Relaxed)) {
             let tf = t as f32;
             // Discounting: positive regrets by t^1.5 / (t^1.5 + 1), negative ones halved, and the
             // average strategy by (t / (t + 1))^4. The fourth power closes the gap 25-30% further
