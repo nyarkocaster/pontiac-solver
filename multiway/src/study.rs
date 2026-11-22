@@ -286,18 +286,29 @@ fn run(game: &Game, spec: &Spec3, prog: &Progress3) -> (u32, [f64; 3], [f64; 3],
     prog.gain_milli_pct.store(100_000, Ordering::Relaxed);
     let mut t = 0u32;
     let started = Instant::now();
+    let every = if game.start_len() == 3 { 20 } else { 10 };
+    let (mut next_check, mut last): (u32, Option<(f64, f64)>) = (every, None);
     loop {
         t += 1;
         game.iterate(t);
         prog.iter.store(t, Ordering::Relaxed);
         let out_of_time = spec.max_seconds > 0.0 && started.elapsed().as_secs_f64() >= spec.max_seconds;
         let cancelled = prog.cancel.load(Ordering::Relaxed) || out_of_time;
-        let every = if game.start_len() == 3 { 20 } else { 10 };
-        if t % every == 0 || t >= max_iter || cancelled {
+        if t >= next_check || t >= max_iter || cancelled {
             let (ev, g) = gains(game);
             let worst = g.iter().cloned().fold(0.0, f64::max);
             prog.gain_milli_pct.store((worst * 1000.0).clamp(0.0, 1e9) as u32, Ordering::Relaxed);
             if (worst <= spec.accuracy_pct && t >= 20) || t >= max_iter || cancelled { return (t, ev, g, cancelled); }
+            // The check costs several steps' worth of time, so the next one is placed where the
+            // target should be reached if the gap keeps closing at the pace seen so far (never
+            // sooner than the usual spacing, never later than twice the steps done).
+            let mut guess = 2.0 * t as f64;
+            if let Some((t0, w0)) = last {
+                let slope = (worst.max(1e-9) / w0).ln() / (t as f64 / t0).ln();
+                if slope < -0.05 && spec.accuracy_pct > 0.0 { guess = guess.min(t as f64 * (spec.accuracy_pct / worst.max(1e-9)).powf(1.0 / slope)); }
+            }
+            last = Some((t as f64, worst.max(1e-9)));
+            next_check = ((guess / every as f64).ceil() as u32 * every).clamp(t + every, 2 * t);
         }
     }
 }
