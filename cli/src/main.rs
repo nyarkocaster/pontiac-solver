@@ -800,6 +800,7 @@ fn main() {
                 let log = flag("--log");
                 let say = |line: String| { eprintln!("{line}"); if let Some(p) = &log { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) { let _ = writeln!(f, "{line}"); } } };
                 let prog = study_core::StudyProgress::default();
+                let flop_parallel = num("--flop-parallel")?.map(|x| x as usize).unwrap_or(1).clamp(1, 8);
                 let t0 = std::time::Instant::now();
                 // --flop-detail <file>: every round, the value of every hand class on each flop of each line goes to
                 // <file>.round<N>.json (big blinds; null where the hand is not in the range), with the flop weights used
@@ -832,13 +833,34 @@ fn main() {
                     let mut detail_flops: Vec<Value> = vec![];
                     // by_flop[player][flop][class] in big blinds, button first
                     let mut by_flop: [Vec<Vec<f64>>; 2] = [vec![], vec![]];
-                    for (k, board) in flop_names.iter().enumerate() {
-                        let sp = study_core::StudySpec {
+                    let make_spec = |board: &str, th: usize| study_core::StudySpec {
                             oop_range: if floor > 0.0 { pushfold::preflop::range_with_floor(&l.reach[1], floor) } else { l.big_blind_range.clone() },
                             ip_range: if floor > 0.0 { pushfold::preflop::range_with_floor(&l.reach[0], floor) } else { l.button_range.clone() },
                             board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
                             oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
-                            allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None };
+                            allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads: th, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None };
+                    // --flop-parallel K: solve K flops at once, each with a share of the threads
+                    type FlopOut = ([Vec<f64>; 2], f64, [Vec<f64>; 2]);
+                    let mut pre: Vec<Option<(Result<FlopOut, String>, f64)>> = (0..flop_names.len()).map(|_| None).collect();
+                    if flop_parallel > 1 && replay.is_none() {
+                        let th = (threads / flop_parallel).max(1);
+                        let next = std::sync::atomic::AtomicUsize::new(0);
+                        let done = std::sync::Mutex::new(Vec::<(usize, Result<FlopOut, String>, f64)>::new());
+                        let stop = save_path.as_ref().map(|p| format!("{p}.stop"));
+                        std::thread::scope(|sc| { for _ in 0..flop_parallel { sc.spawn(|| loop {
+                            let k = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            if k >= flop_names.len() { break; }
+                            if let Some(p) = &stop { if std::path::Path::new(p).exists() { break; } }
+                            let t = std::time::Instant::now();
+                            let r = study_core::class_values(&make_spec(&flop_names[k].to_string(), th), &prog);
+                            let secs = t.elapsed().as_secs_f64();
+                            eprintln!("pass {pass} | {} | flop {} of {} ({}) solved in {secs:.0}s", l.path, k + 1, flop_names.len(), flop_names[k]);
+                            done.lock().unwrap().push((k, r, secs));
+                        }); } });
+                        for (k, r, secs) in done.into_inner().unwrap() { pre[k] = Some((r, secs)); }
+                    }
+                    for (k, board) in flop_names.iter().enumerate() {
+                        let sp = make_spec(&board.to_string(), threads);
                         let t = std::time::Instant::now();
                         if let Some(p) = &save_path { if std::path::Path::new(&format!("{p}.stop")).exists() { return Err(format!("stopped because the file {p}.stop exists; remove it and run again with --resume to carry on")); } }
                         // --flop-values <detail file>: replay the per-flop values a run recorded with --flop-detail instead of solving
@@ -849,7 +871,7 @@ fn main() {
                                 let row = |k: &str| -> Vec<f64> { (0..169).map(|c| f[k][c].as_f64().map(|x| x * 10.0).unwrap_or(f64::NAN)).collect() };
                                 ([row("big_blind"), row("button")], f["accuracy_pct"].as_f64().unwrap_or(0.0), [vec![0.0; 169], vec![0.0; 169]])
                             }
-                            None => study_core::class_values(&sp, &prog)?,
+                            None => match pre[k].take() { Some((r, _)) => r?, None => study_core::class_values(&sp, &prog)? },
                         };
                         worst = worst.max(acc);
                         for (mine, theirs) in [(0usize, 1usize), (1, 0)] { by_flop[mine].push(vals[theirs].iter().map(|x| x / 10.0).collect()); }
