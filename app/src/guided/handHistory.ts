@@ -1,7 +1,7 @@
 // Reads a pasted hand history and turns it into the spot builder's inputs: table, each seat's
 // preflop action, the board, and the hero's cards. handFormats.ts first rewrites whatever layout
 // was pasted into the PokerStars text layout, which is what this file reads.
-import { toStarsLayout } from "./handFormats";
+import { splitHands, toStarsLayout } from "./handFormats";
 import { seatsFor, type Act, type SeatInput, type TableSetup } from "./preflop";
 
 export interface ParsedHand {
@@ -142,4 +142,56 @@ export function parseHandHistory(pasted: string): ParsedHand {
     notes.push(`The study starts on the flop. The hand went on to ${shown}: with two players, the result page reviews each of your decisions; otherwise click the actions that were taken and deal ${board.length > 4 ? "those cards" : "that card"} to follow it.`);
   }
   return { table, seats: all, hero: seatOf.get(heroName)!, heroHand, board: board.slice(0, 3), site: norm.site, notes, later };
+}
+
+/** One hand of a session, summarised for the list of hands worth studying. */
+export interface SessionHand {
+  /** position in the file, from 1 */
+  no: number;
+  /** the hand's own text, to load it into the setup */
+  text: string;
+  site: string; hero: string; heroHand: string;
+  /** the board as far as it was dealt, e.g. "Ks 7d 2c 9h" */
+  board: string;
+  reached: "flop" | "turn" | "river";
+  /** players who acted after the flop */
+  players: number;
+  /** what the hero put in after the flop, in big blinds */
+  heroPut: number;
+  /** "review": two players, so the decision-by-decision review applies. "study": three players, the spot can be solved but not reviewed. */
+  kind: "review" | "study";
+}
+export interface Session { hands: SessionHand[]; total: number; left: { why: string; count: number }[] }
+
+/** Reads a whole session (many hands in one paste or file) and lists the hands that can be studied, biggest first. */
+export function readSession(text: string): Session {
+  const parts = splitHands(text);
+  const hands: SessionHand[] = []; const left = new Map<string, number>();
+  const skip = (why: string) => left.set(why, (left.get(why) ?? 0) + 1);
+  parts.forEach((part, i) => {
+    let p: ParsedHand;
+    try { p = parseHandHistory(part); } catch (e) {
+      const m = String((e as Error).message ?? e);
+      skip(/ended before the flop/.test(m) ? "ended before the flop" : /not no-limit hold'em/.test(m) ? "not no-limit hold'em" : /more than nine/.test(m) ? "more than nine players" : "could not be read");
+      return;
+    }
+    const acts = p.later.filter((s): s is Extract<LaterStep, { kind: "action" }> => s.kind === "action");
+    const seats = new Set(acts.map((a) => a.seat));
+    if (!p.heroHand) return skip("your cards are not shown");
+    if (!seats.size) return skip("everyone was all-in before the flop");
+    if (!seats.has(p.hero)) return skip("you folded before the flop");
+    if (seats.size > 3) return skip("more than three players saw the flop");
+    // what the hero put in: on each street, the last total they reached
+    let put = 0, street = 0;
+    for (const s of p.later) { if (s.kind === "card") { put += street; street = 0; } else if (s.seat === p.hero && s.verb !== "fold" && s.verb !== "check") street = s.to; }
+    put += street;
+    const cards = [...p.board.map((c) => RANKS[c >> 2] + "cdhs"[c & 3]), ...p.later.filter((s): s is Extract<LaterStep, { kind: "card" }> => s.kind === "card").map((s) => s.card)];
+    hands.push({
+      no: i + 1, text: part, site: p.site, hero: p.hero, heroHand: p.heroHand, board: cards.join(" "),
+      reached: cards.length >= 5 ? "river" : cards.length === 4 ? "turn" : "flop", players: seats.size,
+      heroPut: Math.round((put / (p.table.game === "cash" ? p.table.bb : 1)) * 10) / 10, kind: seats.size === 2 ? "review" : "study",
+    });
+  });
+  hands.sort((a, b) => (a.kind === b.kind ? b.heroPut - a.heroPut || a.no - b.no : a.kind === "review" ? -1 : 1));
+  return { hands, total: parts.length, left: [...left].map(([why, count]) => ({ why, count })).sort((a, b) => b.count - a.count) };
 }

@@ -560,7 +560,7 @@ dependencies = [
 
 [[package]]
 name = "desktop-postflop"
-version = "0.13.7"
+version = "0.13.8"
 dependencies = [
  "indexmap 1.9.3",
  "multiway",

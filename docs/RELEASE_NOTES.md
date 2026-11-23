@@ -1,9 +1,16 @@
-# Pontiac Solver 0.13.7
+# Pontiac Solver 0.13.8
 
-**New since 0.13.0, the solver can pick the bet sizes:**
+**New since 0.13.0, load a whole session:**
+
+- Paste a whole session of hands into the hand-history box, or use "Open a file", and you get a list of the hands that can be studied: your cards, seat, board, how many players saw the flop, and how much you put in after the flop, biggest first. Click "Study" on a row to load that hand. Hands that ended before the flop, that you folded, or that the solvers do not cover are counted and left out, with the reason.
+- Works for every layout the box reads. In a PokerNow log, one hand where you showed your cards is enough to find your seat in all the others.
+- Each hand is still solved when you study it; the list is for finding the hands worth the time. A 2,000-hand session is listed in well under a second.
+
+**The solver can pick the bet sizes:**
 
 - Tick "Pick the bet sizes for me" in Study a spot (two-player pots). A rough first solve tries 33, 50, 75, 100 and 150% of the pot on the street the spot starts on and keeps the two sizes each player uses most; the real solve then uses those. The result page says which sizes were kept and which were left out. Sizes on later streets stay as typed.
 - From the command line and Python: add `"auto_sizes": true` to a spot (or `{"candidates": [...], "keep": 2}`). The result reports what was offered, how often each size was used, and what was kept.
+- Checked on a 20 bb flop on the laptop: with the picked pair, neither player gave up anything measurable against having all five sizes, and the solve was faster and smaller.
 - Measured on eight heads-up turn spots: with five sizes offered, the two kept sizes gave up at most 0.3% of the pot against having all five, and under 0.05% on five of the eight. The rough first solve is small, because it uses one size on later streets: on a 20 bb flop it needed half the memory of the normal two-size solve.
 
 **Hand histories from more sites:**

@@ -275,7 +275,7 @@ function ipoker(text: string): Hand {
 }
 
 /** PokerNow game logs: the downloaded CSV (newest line first) or the same lines copied from the log window */
-function pokerNow(text: string): Hand {
+function pokerNowRows(text: string): string[] {
   let rows = text.replace(/\r/g, "").split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
     const m = l.match(/^"((?:[^"]|"")*)"\s*,[^"]*$/); // a line of the downloaded file: "entry",time,order
     return (m ? m[1].replace(/""/g, '"') : l).trim();
@@ -285,6 +285,10 @@ function pokerNow(text: string): Hand {
   const n = (rows[firstStart]?.match(/#(\d+)/) ?? [])[1] ?? "";
   const endAt = rows.findIndex((r) => new RegExp(`ending hand #${n}\\b`).test(r));
   if ((endAt >= 0 && endAt < firstStart) || (firstStart > 0 && /^Player stacks:/i.test(rows[firstStart - 1]))) rows = rows.reverse();
+  return rows;
+}
+function pokerNow(text: string): Hand {
+  const rows = pokerNowRows(text);
   const hands: string[][] = [];
   for (const r of rows) { if (/starting hand #/.test(r)) hands.push([]); if (hands.length) hands[hands.length - 1].push(r); }
   const flop = (hd: string[]) => hd.some((r) => /^flop\b/i.test(r));
@@ -294,7 +298,7 @@ function pokerNow(text: string): Hand {
   if (hands.length > 1) h.notes.push(`The log has ${hands.length} hands; this is hand #${(pick[0].match(/#(\d+)/) ?? [])[1] ?? "?"}, the first that reached a flop${pick.some((r) => /^Your hand is/i.test(r)) ? " with your cards shown" : ""}. To study another, paste only that hand's lines.`);
   const nm = (raw: string) => raw.replace(/^"|"$/g, "").replace(/\s*@\s*\S+$/, "").trim();
   h.button = nm((pick[0].match(/dealer:\s*"([^"]*)"/) ?? [])[1] ?? "");
-  let street = 0, mine: string[] = [], bb = 0;
+  let street = 0, mine: string[] = [], bb = 0, told = "";
   for (const r of pick) {
     let m = r.match(/^Player stacks:\s*(.*)$/i);
     if (m) {
@@ -305,6 +309,8 @@ function pokerNow(text: string): Hand {
     }
     m = r.match(/^Your hand is (.*)$/i);
     if (m) { mine = readCards(m[1].replace(/\.$/, "")); continue; }
+    m = r.match(/^You are "([^"]*)"$/); // added by splitHands when another hand of the log gave the player away
+    if (m) { told = nm(m[1]); continue; }
     if (/second run|\(second\)/i.test(r)) continue;
     m = r.match(/^(flop|turn|river)\b[^:]*:\s*(.*)$/i);
     if (m) {
@@ -329,6 +335,7 @@ function pokerNow(text: string): Hand {
     else if (/^raises/i.test(body)) h.streets[street].push({ name, kind: "raise", amt: a, mode: "to" });
     else if (mine.length === 2 && /^shows a /i.test(body) && readCards(body.replace(/^shows a /i, "").replace(/\.$/, "")).sort().join() === [...mine].sort().join()) { h.hero = name; h.heroCards = mine; }
   }
+  if (mine.length === 2 && !h.hero && told && who(h, told)) { h.hero = who(h, told); h.heroCards = mine; }
   if (mine.length === 2 && !h.hero) h.notes.push(`The log shows your cards (${mine.join(" ")}) but not which player you are, so the big blind is treated as you and your hand is not tracked. Pick your seat in step 2.`);
   return h;
 }
@@ -353,6 +360,46 @@ function firstHand(lines: string[], isStart: (l: string) => boolean): { lines: s
   const a = lines.findIndex(isStart);
   const b = lines.findIndex((l, i) => i > a && isStart(l));
   return a >= 0 && b > a ? { lines: lines.slice(a, b), more: true } : { lines: a > 0 ? lines.slice(a) : lines, more: false };
+}
+
+const START = {
+  ignition: (l: string) => /^(Ignition|Bovada|Bodog) Hand #/i.test(l),
+  party: (l: string) => /Hand History for Game/i.test(l),
+  winning: (l: string) => /^Game started at:/i.test(l),
+  stars: (l: string) => /^(PokerStars|Poker|Winamax|GGPoker|Full Tilt)\b.*(Hand|HandId:?|Game)\s*#/i.test(l),
+};
+
+/** Cuts a paste or a file holding many hands into one text per hand, each readable by `toStarsLayout`. */
+export function splitHands(raw: string): string[] {
+  const text = raw.replace(/^\uFEFF/, "").replace(/\r/g, "");
+  if (/<game\b/i.test(text) && /<round\b/i.test(text)) {
+    const head = text.slice(0, text.search(/<game\b/i));
+    return (text.match(/<game\b[\s\S]*?<\/game>/gi) ?? []).map((g) => `${head}${g}\n</session>`);
+  }
+  let lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  let isStart: (l: string) => boolean;
+  if (lines.some(START.ignition)) isStart = START.ignition;
+  else if (lines.some(START.party)) {
+    // 888 puts a "#Game No" line above each title; keep it with its hand
+    const titled = lines.some((l) => /^#Game No/i.test(l));
+    isStart = titled ? (l) => /^#Game No/i.test(l) : START.party;
+  } else if (lines.some(START.winning) && lines.some((l) => /^Game ID:/i.test(l))) isStart = START.winning;
+  else if (lines.some((l) => /starting hand #\d+/i.test(l))) { lines = pokerNowRows(text); isStart = (l) => /starting hand #\d+/i.test(l); }
+  else isStart = START.stars;
+  const out: string[][] = [];
+  for (const l of lines) { if (isStart(l)) out.push([]); if (out.length) out[out.length - 1].push(l); }
+  if (out.length > 1 && out[0].some((l) => /starting hand #\d+/i.test(l))) {
+    // A PokerNow log never names "you", but a hand where you showed your cards gives it away for the whole log.
+    let you = "";
+    for (const h of out) {
+      const mine = readCards((h.find((l) => /^Your hand is /i.test(l)) ?? "").replace(/^Your hand is /i, "").replace(/\.$/, "")).sort().join();
+      if (!mine) continue;
+      for (const l of h) { const m = l.match(/^"([^"]*)"\s+shows a (.*?)\.?$/i); if (m && readCards(m[2]).sort().join() === mine) you = m[1]; }
+      if (you) break;
+    }
+    if (you) for (const h of out) h.splice(1, 0, `You are "${you}"`);
+  }
+  return out.length ? out.map((h) => h.join("\n")) : [text];
 }
 
 export function toStarsLayout(raw: string): Normalised {

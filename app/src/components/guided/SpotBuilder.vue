@@ -15,14 +15,35 @@
       </div>
       <p v-if="fromPreflop" class="mt-3 rounded-lg border border-mine bg-mine-light px-3 py-2 text-sm">Loaded from the heads-up preflop solver: both ranges in step 3 are its ranges for this line. Pick a flop in step 4 and solve. <button class="underline font-bold" @click="fromPreflop = ''">Dismiss</button></p>
       <section v-if="hhOpen" class="panel mt-4">
-        <h2 class="font-bold">Load a hand you played</h2>
-        <p class="hint mt-1">Paste the hand's text as the site saved it. PokerStars, GGPoker, Winamax, 888poker, partypoker, Americas Cardroom, Ignition and Bovada, iPoker sites and PokerNow logs are read. The table, each player's preflop action, the stacks, the flop and your cards are filled in below for you to check.</p>
-        <textarea v-model="hhText" rows="7" class="input w-full mt-2 font-mono text-xs" placeholder="Paste one hand here, from its first line to its last" aria-label="Hand history text"></textarea>
-        <div class="mt-2 flex items-center gap-3">
-          <button class="btn-quiet" :disabled="!hhText.trim()" @click="loadHistory">Load this hand</button>
+        <h2 class="font-bold">Load a hand you played, or a whole session</h2>
+        <p class="hint mt-1">Paste the hand's text as the site saved it. PokerStars, GGPoker, Winamax, 888poker, partypoker, Americas Cardroom, Ignition and Bovada, iPoker sites and PokerNow logs are read. The table, each player's preflop action, the stacks, the flop and your cards are filled in below for you to check. Paste or open a whole session and you get a list of the hands worth studying, biggest first.</p>
+        <textarea v-model="hhText" rows="7" class="input w-full mt-2 font-mono text-xs" placeholder="Paste one hand, or a whole session, here" aria-label="Hand history text" @input="hhFile = ''; hhFileText = ''"></textarea>
+        <div class="mt-2 flex items-center gap-3 flex-wrap">
+          <button class="btn-quiet" :disabled="!hhSource.trim()" @click="loadPasted">Load</button>
+          <label class="btn-quiet cursor-pointer">Open a file<input type="file" accept=".txt,.xml,.csv,.log,text/plain" class="hidden" @change="openFile" /></label>
+          <span v-if="hhFile" class="text-sm">{{ hhFile }}</span>
           <span v-if="hhDone" class="text-sm font-bold text-felt">Loaded{{ hhSite ? ` (${hhSite} hand)` : "" }}. Check steps 1 to 4 below{{ heroHand ? `; your hand ${heroHand} will be tracked on the result` : "" }}.</span>
         </div>
         <p v-if="hhError" class="mt-2 text-sm font-bold text-danger">{{ hhError }}</p>
+        <div v-if="session" class="mt-3">
+          <p class="text-sm"><b>{{ session.total }} hands in this session.</b>
+            {{ session.hands.length ? `${session.hands.length} can be studied` : "None can be studied" }}<template v-if="session.left.length">; left out: {{ session.left.map((l) => `${l.count} ${l.why}`).join(", ") }}</template>.
+            <template v-if="session.hands.length"> Listed by how much you put in after the flop. Each one is solved when you study it, which takes minutes, so start with the big ones.</template></p>
+          <div v-if="session.hands.length" class="mt-2 max-h-80 overflow-auto border border-rule rounded">
+            <table class="w-full text-sm">
+              <thead class="text-left text-muted sticky top-0 bg-surface"><tr><th class="px-2 py-1">Hand</th><th class="px-2">Your cards</th><th class="px-2">Seat</th><th class="px-2">Board</th><th class="px-2">Players</th><th class="px-2 text-right">You put in after the flop</th><th class="px-2"></th></tr></thead>
+              <tbody>
+                <tr v-for="h in session.hands.slice(0, sessionShown)" :key="h.no" class="border-t border-rule" :class="h.no === sessionAt ? 'bg-felt/10' : ''">
+                  <td class="px-2 py-1 tabular-nums">#{{ h.no }}</td><td class="px-2 font-mono">{{ h.heroHand }}</td><td class="px-2">{{ h.hero }}</td><td class="px-2 font-mono">{{ h.board }}</td>
+                  <td class="px-2">{{ h.players }}<span v-if="h.kind === 'study'" class="hint" title="With three players the spot can be solved, but the decision-by-decision review is for two players"> (no review)</span></td>
+                  <td class="px-2 text-right tabular-nums">{{ h.heroPut }}bb</td>
+                  <td class="px-2 text-right"><button class="btn-quiet !py-0.5" @click="studyFromSession(h)">{{ h.no === sessionAt ? "Loaded" : "Study" }}</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button v-if="session.hands.length > sessionShown" class="btn-quiet mt-2" @click="sessionShown += 100">Show more ({{ session.hands.length - sessionShown }} left)</button>
+        </div>
         <ul v-if="hhNotes.length" class="mt-2 space-y-1 text-sm">
           <li v-for="(n, i) in hhNotes" :key="i" class="flex gap-2"><span class="text-felt font-bold">•</span><span>{{ n }}</span></li>
         </ul>
@@ -310,7 +331,8 @@
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import RangeSlider from "./RangeSlider.vue";
 import FlopReport, { type FlopRow } from "./FlopReport.vue";
-import { parseHandHistory, type LaterStep } from "../../guided/handHistory";
+import { parseHandHistory, readSession, type LaterStep, type Session, type SessionHand } from "../../guided/handHistory";
+import { splitHands } from "../../guided/handFormats";
 import type { ReviewStep } from "../../guided/api";
 import { useStore } from "../../store";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
@@ -566,10 +588,28 @@ function reviewLine(oopSeat: string, ipSeat: string, k: number): ReviewStep[] | 
   }
   return out;
 }
-async function loadHistory() {
+// a whole session: pasted, or opened from a file (kept out of the text box, which is slow with megabytes of text)
+const hhFile = ref(""); const hhFileText = ref("");
+const hhSource = computed(() => hhFileText.value || hhText.value);
+const session = ref<Session | null>(null); const sessionShown = ref(100); const sessionAt = ref(0);
+async function openFile(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0]; (e.target as HTMLInputElement).value = "";
+  if (!f) return;
+  hhFileText.value = await f.text(); hhFile.value = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`; hhText.value = "";
+  await loadPasted();
+}
+async function loadPasted() {
+  hhError.value = ""; hhNotes.value = []; hhDone.value = false; session.value = null; sessionAt.value = 0; sessionShown.value = 100;
+  let many = false;
+  try { many = splitHands(hhSource.value).length > 1; } catch { /* one hand: let the reader explain */ }
+  if (!many) return loadHistory(hhSource.value);
+  try { session.value = readSession(hhSource.value); } catch (e) { hhError.value = String((e as Error).message ?? e); }
+}
+async function studyFromSession(h: SessionHand) { await loadHistory(h.text); if (hhDone.value) sessionAt.value = h.no; }
+async function loadHistory(text: string) {
   hhError.value = ""; hhNotes.value = []; hhDone.value = false;
   try {
-    const h = parseHandHistory(hhText.value);
+    const h = parseHandHistory(text);
     Object.assign(table, h.table);
     blindId.value = table.game === "cash" ? BLINDS.find((b) => b.sb === h.table.sb && b.bb === h.table.bb)?.id ?? "custom" : blindId.value;
     seats.splice(0, seats.length, ...h.seats);
