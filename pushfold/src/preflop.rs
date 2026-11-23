@@ -46,6 +46,10 @@ pub struct PreSpec {
     #[serde(default = "yes")] pub limp: bool,
     /// a re-raise is this many times the raise it faces; a raise over a limp is this many big blinds
     #[serde(default = "three")] pub reraise: f64,
+    /// sizes the big blind may raise to over a limp, in big blinds; empty means the single size from `reraise`
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub over_limp: Vec<f64>,
+    /// sizes the big blind may re-raise to over an open, in big blinds; empty means `reraise` times the open
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub over_open: Vec<f64>,
     #[serde(default)] pub iterations: usize,
     #[serde(default)] pub model: Option<FlopModel>,
 }
@@ -139,7 +143,9 @@ impl Game {
             // sized raises: opens for the first raise, then one re-raise size, then all-in only
             let sizes: Vec<f64> = match raises {
                 0 if !limped => spec.open_sizes.clone(),
+                0 if !spec.over_limp.is_empty() => spec.over_limp.clone(),
                 0 => vec![spec.reraise.max(2.0)],
+                1 if p == 1 && !spec.over_open.is_empty() => spec.over_open.clone(),
                 1 => vec![put[o] * spec.reraise],
                 _ => vec![],
             };
@@ -498,6 +504,7 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
     if !(spec.ante >= 0.0 && spec.ante < spec.stack - 1.0) { return Err("ante must be zero or more, and leave chips behind".into()); }
     if spec.open_sizes.iter().any(|&x| !(x >= 2.0 && x <= 10.0)) { return Err("open sizes must be between 2 and 10 big blinds".into()); }
     if !(spec.reraise >= 2.0 && spec.reraise <= 6.0) { return Err("the re-raise multiple must be between 2 and 6".into()); }
+    if spec.over_limp.iter().chain(spec.over_open.iter()).any(|&x| !(x >= 2.0 && x <= 20.0)) || spec.over_limp.len() > 3 || spec.over_open.len() > 3 { return Err("the big blind's raise sizes must be between 2 and 20 big blinds, at most three each".into()); }
     let model = spec.model.clone().unwrap_or_default();
     let mut g = Game { nodes: vec![], stack: spec.stack, ante: spec.ante, cp: compat(), eq: (0..N * N).map(|k| equity(k / N, k % N)).collect(), play: (0..N).map(playability).collect(), model: model.clone(), solved: solved.clone() };
     g.build(spec, 0, [spec.small_blind, 1.0], 0, None, false, String::new());

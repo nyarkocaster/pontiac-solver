@@ -743,6 +743,7 @@ fn main() {
             }
             let mut spec = json!({"stack": match num("--stack")? { Some(x) => x, None => args.get(1).and_then(|x| x.parse::<f64>().ok()).ok_or("give the stack in big blinds, e.g. pontiac preflop --stack 20")? }});
             for (flag_name, key) in [("--sb", "small_blind"), ("--ante", "ante"), ("--reraise", "reraise"), ("--iterations", "iterations")] { if let Some(x) = num(flag_name)? { spec[key] = json!(x); } }
+            for (flag_name, key) in [("--over-limp", "over_limp"), ("--over-open", "over_open")] { if let Some(t) = flag(flag_name) { spec[key] = json!(t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("{flag_name} needs numbers separated by commas, e.g. {flag_name} 3,6.5"))).collect::<Result<Vec<f64>, String>>()?); } }
             if let Some(t) = flag("--open") { spec["open_sizes"] = json!(t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| "--open needs numbers separated by commas, e.g. --open 2,2.5".to_string())).collect::<Result<Vec<_>, _>>()?); }
             if args.iter().any(|a| a == "--no-limp") { spec["limp"] = json!(false); }
             if let Some(t) = flag("--model") { let v = t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| "--model needs four numbers: position,initiative,playability,half_spr".to_string())).collect::<Result<Vec<_>, _>>()?; if v.len() != 4 { return Err("--model needs four numbers: position,initiative,playability,half_spr".into()); } spec["model"] = json!({"position": v[0], "initiative": v[1], "playability": v[2], "half_spr": v[3]}); }

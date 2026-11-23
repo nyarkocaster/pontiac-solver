@@ -129,13 +129,31 @@ fn score(ctx: &Ctx, sample: &[usize], iterations: usize) -> Score {
         within[q] = e.iter().filter(|x| x.abs() <= 0.5).count();
         if FITTED[q] { cost += (0..NC).map(|c| ctx.combos[c] * e[c] * e[c]).sum::<f64>() / total + 0.15 * worst[q] * worst[q]; }
     }
+    // cover on purpose: every rank on a paired flop, and every two ranks together on some flop
+    let (paired_missing, pairs_missing) = coverage(ctx, sample);
+    cost += 2.0 * paired_missing as f64 + 0.5 * pairs_missing as f64;
     // how unevenly the flops are leaned on: the largest average weight over the smallest
     let use_: Vec<f64> = (0..sample.len()).map(|k| (0..NC).map(|c| ctx.combos[c] * per[c].2[k]).sum::<f64>() / total).collect();
     let spread = use_.iter().cloned().fold(0.0, f64::max) / use_.iter().cloned().fold(1.0, f64::min).max(1e-9);
     Score { cost, mean, worst, within_half: within, feature_gap: gap, errors: per.iter().map(|p| p.0).collect(), weights: per.into_iter().map(|p| p.2).collect(), spread }
 }
 
+/// How many ranks have no paired flop in the sample, and how many of the 78 pairs of different ranks never share a flop.
+fn coverage(ctx: &Ctx, sample: &[usize]) -> (usize, usize) {
+    let mut paired = [false; 13];
+    let mut together = [[false; 13]; 13];
+    for &f in sample {
+        let r: Vec<usize> = ctx.cache.flops[f].iter().map(|c| (c / 4) as usize).collect();
+        for i in 0..3 { for j in i + 1..3 { if r[i] == r[j] { paired[r[i]] = true; } else { together[r[i]][r[j]] = true; together[r[j]][r[i]] = true; } } }
+    }
+    let mut missing = 0;
+    for a in 0..13 { for b in a + 1..13 { if !together[a][b] { missing += 1; } } }
+    (paired.iter().filter(|x| !**x).count(), missing)
+}
+
 fn report(ctx: &Ctx, sample: &[usize], s: &Score) {
+    let (pm, rm) = coverage(ctx, sample);
+    println!("coverage: {} of 13 ranks have a paired flop; {} of 78 rank pairs share a flop", 13 - pm, 78 - rm);
     println!("sample of {}: {}", sample.len(), sample.iter().map(|&f| flop_name(ctx.cache.flops[f])).collect::<Vec<_>>().join(","));
     for q in 0..NR {
         println!("  equity against {}{}: error in points mean {:.2}, worst {:.2}, within 0.5: {} of 169", RANGE_NAMES[q], if FITTED[q] { "" } else { " (not used in the search)" }, s.mean[q], s.worst[q], s.within_half[q]);
