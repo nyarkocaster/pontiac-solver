@@ -457,6 +457,23 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// With limps and small raises switched off the tree is push or fold, and must give the push/fold answer.
+    #[test]
+    fn all_in_only_reproduces_push_fold() {
+        for stack in [8.0, 12.0, 20.0] {
+            let spec: PreSpec = serde_json::from_value(serde_json::json!({"stack": stack, "open_sizes": [], "limp": false, "iterations": 4000})).unwrap();
+            let p = solve(&spec).unwrap();
+            let pf = crate::solve(stack, 0.5, 0.0).unwrap();
+            let root = &p.nodes[0];
+            let jam = root.actions.iter().position(|a| a == "All-in").expect("all-in at the root");
+            assert_eq!(root.actions.len(), 2, "{:?}", root.actions);
+            assert!((root.freqs[jam] - pf.jam_pct).abs() < 0.01, "{stack} bb: jam {} vs push/fold {}", root.freqs[jam], pf.jam_pct);
+            let call = p.nodes.iter().find(|n| n.path == "SB all-in").expect("big blind's reply");
+            let c = call.actions.iter().position(|a| a == "Call").unwrap();
+            assert!((call.freqs[c] - pf.call_pct).abs() < 0.01, "{stack} bb: call {} vs push/fold {}", call.freqs[c], pf.call_pct);
+            assert!((p.ev_button_bb - pf.ev_small_blind_bb).abs() < 0.005, "{stack} bb: EV {} vs {}", p.ev_button_bb, pf.ev_small_blind_bb);
+        }
+    }
     /// If the "flop solver" is the estimate itself, accurate mode must land back on the plain answer
     /// and its predictions must match what the solver then reports.
     #[test]
