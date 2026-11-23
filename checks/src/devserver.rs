@@ -118,6 +118,12 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
             Ok(serde_json::to_value(s).unwrap())
         }
         "library_open_two" => Ok(serde_json::to_value(state.lock().unwrap().library_open(args["id"].as_str().unwrap_or(""))?).unwrap()),
+        "study_review" => {
+            let which = args["which"].as_str().unwrap_or("base").to_string();
+            let steps: Vec<ReviewStep> = serde_json::from_value(args["steps"].clone()).map_err(|e| e.to_string())?;
+            let v = state.lock().unwrap().review(which == "locked", args["hero"].as_u64().unwrap_or(0) as usize, args["hand"].as_str().unwrap_or(""), &steps)?;
+            Ok(serde_json::to_value(v).unwrap())
+        }
         "study_hand" => {
             let which = args["which"].as_str().unwrap_or("base").to_string();
             let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default();

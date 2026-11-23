@@ -103,6 +103,7 @@ fn main() {
             library_open_two,
             library_open_three,
             study_hand,
+            study_review,
             study_range_grid,
             mw_progress,
             mw_cancel,

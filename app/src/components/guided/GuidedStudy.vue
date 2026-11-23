@@ -96,6 +96,42 @@
           </p>
         </div>
 
+        <!-- a pasted hand, decision by decision -->
+        <div v-if="review || reviewError" class="mt-4 bg-surface border border-rule rounded-xl p-4">
+          <h2 class="font-display font-extrabold text-lg">Your hand, decision by decision</h2>
+          <p v-if="reviewError" class="text-sm font-bold text-danger mt-1">{{ reviewError }}</p>
+          <template v-if="review">
+            <p class="hint mt-1">
+              Each of your decisions after the flop, priced for {{ lastHeroHand }} against the normal solve. "Gave up" is how much less the action you took is worth than the best one, on average.
+              <template v-if="reviewRows.length"> In total: <b :class="review.total_loss > 0.02 * built.pot ? 'text-danger' : ''">{{ fmt(Math.round(review.total_loss * 10) / 10) }}</b>.</template>
+            </p>
+            <div class="overflow-x-auto">
+              <table v-if="reviewRows.length" class="w-full text-sm mt-3">
+                <thead><tr class="text-left text-xs text-muted border-b border-rule"><th class="py-1 pr-3 font-normal">Where</th><th class="py-1 pr-3 font-normal">You</th><th class="py-1 pr-3 font-normal">The solve with this hand</th><th class="py-1 pr-3 font-normal text-right">Gave up</th><th class="py-1 font-normal">Reading</th><th></th></tr></thead>
+                <tbody>
+                  <tr v-for="x in reviewRows" :key="x.i" class="border-b border-rule align-top">
+                    <td class="py-1.5 pr-3 whitespace-nowrap"><span class="capitalize font-bold">{{ x.r.street }}</span> <span class="text-muted">· pot {{ fmt(x.r.pot) }}</span></td>
+                    <td class="py-1.5 pr-3">
+                      <b>{{ reviewAction(x.r, x.r.chosen) }}</b>
+                      <div v-if="x.r.played_as" class="text-xs text-muted">you made it {{ fmt(Number(x.r.played_as.split(" to ")[1])) }}; this is the closest size in the solve</div>
+                    </td>
+                    <td class="py-1.5 pr-3">
+                      <span v-for="(f, a) in x.r.freqs" :key="a" class="inline-block mr-3 whitespace-nowrap" :class="a === x.r.best ? 'font-bold' : ''">{{ reviewAction(x.r, a) }} {{ pct(f) }} <span class="text-muted font-normal">({{ fmt(Math.round(x.r.evs[a] * 10) / 10) }})</span></span>
+                    </td>
+                    <td class="py-1.5 pr-3 text-right tabular-nums font-bold" :class="x.r.loss >= 0.05 * x.r.pot ? 'text-danger' : ''">{{ x.r.loss <= 0.005 * x.r.pot ? "–" : fmt(Math.round(x.r.loss * 10) / 10) }}</td>
+                    <td class="py-1.5 pr-3">{{ reviewVerdict(x.r) }}</td>
+                    <td class="py-1.5 text-right"><button class="text-xs text-felt underline font-bold whitespace-nowrap" @click="showReviewRow(x.r)">Show</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-for="(n, i) in reviewSizeNotes" :key="'n' + i" class="hint mt-2">{{ n }}</p>
+            <p v-if="!reviewRows.length && !review.stopped" class="text-sm mt-2">You had no decisions after the flop in this hand.</p>
+            <p v-if="review.stopped" class="text-sm mt-2"><b>The review stops {{ reviewRows.length ? "there" : "before your first decision" }}.</b> {{ review.stopped }}</p>
+            <p class="hint mt-2">Figures in brackets are what each action is worth with this exact hand. A mixed strategy means the actions are worth about the same, so "fine" covers anything the solve does a fair share of the time.</p>
+          </template>
+        </div>
+
         <!-- line -->
         <ActionBar class="mt-4" start="Flop" :board="displayBoard" :steps="steps" :now="nowText" :pot="node ? fmt(node.pot) : ''" @goto="goTo" />
 
@@ -428,7 +464,7 @@ const built = computed(() => custom.value?.res ?? scenario.value.build(seat.valu
 const emit = defineEmits<{ (e: "new"): void }>();
 const newSpot = () => { step.value = "setup"; };
 watch(step, (v) => { if (v === "setup" && custom.value) emit("new"); });
-type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown>; heroHand?: string };
+type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown>; heroHand?: string; line?: api.ReviewStep[] };
 /** Memory a spot from the spot builder needs, without touching what is on this screen. */
 async function previewCustom(p: Custom2): Promise<{ text: string; problem: string }> {
   const sp = { ...specCore.value, oop_range: p.res.oopRange, ip_range: p.res.ipRange, board: p.board.map((c) => RANK_CHARS[c >> 2] + SUIT_CHARS[c & 3]).join(""), pot: p.res.pot, stack: p.res.stack, leaks: [], ...p.overrides } as api.StudySpec;
@@ -451,7 +487,38 @@ async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
   await nextTick();
   await startSolve();
   if (step.value === "results" && p.heroHand) { myHandInput.value = p.heroHand; await trackHand(); }
+  if (step.value === "results") await runReview();
   return { ok: step.value === "results", error: error.value };
+}
+
+// ---------- review of a pasted hand ----------
+const lastHeroHand = ref("");
+const review = ref<api.Review | null>(null); const reviewError = ref("");
+const reviewRows = computed(() => (review.value?.rows ?? []).map((r, i) => ({ r, i })).filter((x) => x.r.hero));
+/** Prices each of the hero's decisions in the pasted hand against the normal solve. */
+async function runReview() {
+  review.value = null; reviewError.value = "";
+  const p = lastPayload;
+  if (!p?.line?.length || !p.heroHand) return;
+  lastHeroHand.value = p.heroHand;
+  try { review.value = await api.studyReview("base", heroIdx.value, p.heroHand, p.line); }
+  catch (e) { reviewError.value = String((e as Error).message ?? e); }
+}
+/** bets by the other player that the solve has no exact size for */
+const reviewSizeNotes = computed(() => (review.value?.rows ?? []).filter((r) => !r.hero && r.played_as).map((r) =>
+  `On the ${r.street} the other player's ${r.played_as!.split(" to ")[0]} of ${fmt(Number(r.played_as!.split(" to ")[1]))} is read as ${reviewAction(r, r.chosen).toLowerCase()}, the closest size in the solve, so the figures after it are for that size.`));
+const reviewAction = (r: api.ReviewRow, a: number) => r.actions[a].replace(/^(Bet|Raise to|All-in) (\d+)$/, (_m, v, n) => `${v} ${fmt(Number(n))}`);
+const reviewVerdict = (r: api.ReviewRow) => {
+  const share = r.freqs[r.chosen] ?? 0; const small = r.loss <= 0.005 * r.pot;
+  if (r.chosen === r.best || small) return share >= 0.05 ? "Fine: the solve does this too" : "Costs almost nothing, though the solve rarely does it";
+  return r.loss >= 0.05 * r.pot ? "A real mistake" : "A small mistake";
+};
+/** Opens the result at one decision of the reviewed hand. */
+async function showReviewRow(r: api.ReviewRow) {
+  if (view.value !== "base") view.value = "base";
+  await goTo(0);
+  for (const h of r.history) { const v = node.value; if (!v) break; await play(h, v.kind === "player" ? actionLabel(h) : cardLabel(h)); }
+  if (lastPayload?.heroHand && myHand.value !== lastPayload.heroHand) { myHandInput.value = lastPayload.heroHand; await trackHand(); }
 }
 /** One quick solve of this spot on another flop, for the flop report. Leaves this screen empty afterwards. */
 async function quickFlop(p: Custom2, flop: number[]) {
@@ -534,6 +601,8 @@ async function openSaved(e: api.LibraryEntry): Promise<{ ok: boolean; error: str
     history.value = []; crumbs.value = []; probs.value = []; takeaway.value = ""; saved.value = false; error.value = "";
     await load();
     step.value = "results";
+    if (p.heroHand) { myHandInput.value = p.heroHand; await trackHand(); }
+    await runReview();
     return { ok: true, error: "" };
   } catch (x) { return { ok: false, error: String((x as Error).message ?? x) }; }
 }
@@ -732,6 +801,7 @@ const colors = computed(() => actionColors(node.value?.actions ?? []));
 const actionLabel = (i: number) => {
   const v = node.value!;
   const a = v.actions[i];
+  if (a === undefined) return ""; // a list from the previous decision can still be on screen for a moment
   const amt = v.action_amounts[i];
   if (a.startsWith("Bet")) return `Bet ${fmt(amt)} (${Math.round((amt / v.pot) * 100)}% pot)`;
   if (a.startsWith("Raise")) return `Raise to ${fmt(amt)}`;

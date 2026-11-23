@@ -1,6 +1,10 @@
-# Pontiac Solver 0.13.4
+# Pontiac Solver 0.13.5
 
-**New since 0.13.0, three-player spots:**
+**New since 0.13.0, hand review:**
+
+- Paste a hand history for a two-player pot and the result page now reviews it: each of your decisions after the flop, what the solve does with your exact hand, what each action is worth, and how much the action you took gave up. "Show" opens the result at that decision. Bets in sizes the solve does not have are matched to the closest size and marked.
+
+**Three-player spots:**
 
 - Three-player solves can be saved and opened again without solving: in the app's Library, and from the command line and Python (`solve --save`, then `query`).
 - Prize money (ICM) for three-player tournament pots is in the app: tick "Play for prize money, not chips" in Study a spot.

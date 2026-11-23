@@ -51,6 +51,11 @@ export const systemMemory = () => call<[number, number]>("memory");
 export interface HandView { player: number; acting: boolean; in_range: boolean; blocked: boolean; freqs: number[]; equity: number; ev: number }
 export const studyHand = (which: "base" | "locked", history: number[], player: number, hand: string) =>
   call<HandView>("study_hand", { which, history, player, hand });
+/** One thing that happened after the flop in a hand being reviewed. Amounts are in the solve's chips. */
+export type ReviewStep = { kind: "action"; who: number; verb: "fold" | "check" | "call" | "bet" | "raise"; to: number } | { kind: "card"; card: string };
+export interface ReviewRow { history: number[]; street: string; board: string[]; pot: number; hero: boolean; actions: string[]; amounts: number[]; chosen: number; played_as: string | null; freqs: number[]; evs: number[]; best: number; loss: number }
+export interface Review { rows: ReviewRow[]; total_loss: number; stopped: string | null }
+export const studyReview = (which: "base" | "locked", hero: number, hand: string, steps: ReviewStep[]) => call<Review>("study_review", { which, hero, hand, steps });
 export const studyRangeGrid = (range: string) => call<number[]>("study_range_grid", { range });
 
 // hand-made locks and the saved-solve library

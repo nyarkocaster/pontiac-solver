@@ -32,3 +32,6 @@ path="src/focus.rs"
 [features]
 default = ["zstd"]
 zstd = ["postflop-solver/zstd"]
+[[bin]]
+name="review_check"
+path="src/review_check.rs"

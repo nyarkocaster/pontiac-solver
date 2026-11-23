@@ -62,6 +62,12 @@ pub fn study_node(
     state.lock().unwrap().view(which == "locked", &history)
 }
 
+/// Sets a played hand against the solve on screen: each of the player's decisions, priced for the exact hand held.
+#[tauri::command(async)]
+pub fn study_review(state: tauri::State<Mutex<StudyState>>, which: String, hero: usize, hand: String, steps: Vec<ReviewStep>) -> Result<Review, String> {
+    state.lock().unwrap().review(which == "locked", hero, &hand, &steps)
+}
+
 #[tauri::command]
 pub fn study_hand(
     state: tauri::State<Mutex<StudyState>>,

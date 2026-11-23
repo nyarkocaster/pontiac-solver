@@ -869,6 +869,146 @@ pub fn hand_view(game: &mut PostFlopGame, history: &[usize], player: usize, hand
     Ok(v)
 }
 
+// ---------- reviewing a hand that was played ----------
+
+/// One thing that happened after the flop in the hand being reviewed.
+#[derive(Deserialize, Clone, Debug)]
+pub struct ReviewStep {
+    /// "action" or "card"
+    pub kind: String,
+    /// who acted: 0 = out of position, 1 = in position
+    #[serde(default)]
+    pub who: usize,
+    /// fold | check | call | bet | raise
+    #[serde(default)]
+    pub verb: String,
+    /// bets and raises: the player's total on this street after the action, in the solve's chips
+    #[serde(default)]
+    pub to: f64,
+    /// cards: "7h"
+    #[serde(default)]
+    pub card: String,
+}
+
+/// One decision of the hand set against the solve.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ReviewRow {
+    /// the line that leads to this decision (for jumping there on the result page)
+    pub history: Vec<usize>,
+    pub street: String,
+    pub board: Vec<String>,
+    pub pot: f64,
+    /// whether this was the reviewed player's decision
+    pub hero: bool,
+    pub actions: Vec<String>,
+    pub amounts: Vec<i32>,
+    /// the action in the solve that stands for what was done
+    pub chosen: usize,
+    /// what was done, as the hand history has it, when the solve has no action of exactly that size
+    pub played_as: Option<String>,
+    /// hero rows: how often the solve takes each action with this exact hand, and what each is worth
+    pub freqs: Vec<f64>,
+    pub evs: Vec<f64>,
+    pub best: usize,
+    /// what the action taken gives up against the best one, in the solve's chips (0 when it is the best or tied)
+    pub loss: f64,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct Review {
+    pub rows: Vec<ReviewRow>,
+    pub total_loss: f64,
+    /// set when the hand leaves what the solve covers before its end, with the reason
+    pub stopped: Option<String>,
+}
+
+/// Follows a played hand through the solve and prices each of `hero`'s decisions for the exact
+/// hand held: the value of every action available, how often the solve takes it, and what the
+/// action actually taken gave up.
+pub fn review(game: &mut PostFlopGame, hero: usize, hand: &str, steps: &[ReviewStep]) -> Result<Review, String> {
+    let h = hand.trim();
+    if h.len() != 4 { return Err("The review needs the two cards that were held, like AsKd.".into()); }
+    let c1 = card_from_str(&h[..2]).map_err(|e| e.to_string())?;
+    let c2 = card_from_str(&h[2..]).map_err(|e| e.to_string())?;
+    let key = if c1 < c2 { (c1, c2) } else { (c2, c1) };
+    let mut out = Review::default();
+    let mut history: Vec<usize> = vec![];
+    game.back_to_root();
+    for st in steps {
+        if game.is_terminal_node() { out.stopped = Some("The solve ends the hand before the hand history does (a fold or an all-in call in the solve).".into()); break; }
+        if st.kind == "card" {
+            let card = card_from_str(st.card.trim()).map_err(|_| format!("'{}' is not a card", st.card))?;
+            if !game.is_chance_node() { out.stopped = Some("The hand history deals a card where the solve still has betting to do: the two disagree on the bets before it.".into()); break; }
+            if card == c1 || card == c2 || game.possible_cards() & (1u64 << card) == 0 { out.stopped = Some(format!("The {} cannot come in this solve (it is in a hand or on the board).", st.card)); break; }
+            history.push(card as usize);
+            game.play(card as usize);
+            continue;
+        }
+        if game.is_chance_node() { out.stopped = Some("The hand history has more betting where the solve deals the next card: the two disagree on the bets before it.".into()); break; }
+        let player = game.current_player();
+        if player != st.who.min(1) { out.stopped = Some("The hand history and the solve disagree about whose turn it is. This happens when a bet in the hand was much smaller or larger than any size in the solve.".into()); break; }
+        let acts = game.available_actions();
+        let labels: Vec<(String, i32)> = acts.iter().map(action_label).collect();
+        // which action in the solve stands for what was done
+        let find = |want: &dyn Fn(&Action) -> bool| acts.iter().position(|a| want(a));
+        let (chosen, played_as) = match st.verb.as_str() {
+            "fold" => (find(&|a| matches!(a, Action::Fold)), None),
+            "check" => (find(&|a| matches!(a, Action::Check)), None),
+            "call" => (find(&|a| matches!(a, Action::Call)), None),
+            _ => {
+                let mut best: Option<(usize, f64)> = None;
+                for (i, a) in acts.iter().enumerate() {
+                    let amt = match a { Action::Bet(x) | Action::Raise(x) | Action::AllIn(x) => *x as f64, _ => continue };
+                    let d = (amt - st.to).abs();
+                    if best.map_or(true, |b| d < b.1) { best = Some((i, d)); }
+                }
+                match best {
+                    Some((i, d)) => (Some(i), if d > 0.5 + 0.02 * st.to.abs() { Some(format!("{} to {}", if st.verb == "raise" { "raise" } else { "bet" }, st.to)) } else { None }),
+                    None => (None, None),
+                }
+            }
+        };
+        let Some(chosen) = chosen else { out.stopped = Some(format!("The solve has no way to {} at this point, so the review stops here.", if st.verb == "bet" || st.verb == "raise" { "bet or raise" } else { st.verb.as_str() })); break };
+        let mut row = ReviewRow {
+            history: history.clone(), street: ["flop", "turn", "river"][game.current_board().len().clamp(3, 5) - 3].to_string(),
+            board: game.current_board().iter().map(|&c| card_to_string(c).unwrap_or_default()).collect(),
+            pot: (game.tree_config().starting_pot + game.total_bet_amount().iter().sum::<i32>()) as f64,
+            hero: player == hero, actions: labels.iter().map(|l| l.0.clone()).collect(), amounts: labels.iter().map(|l| l.1).collect(),
+            chosen, played_as, ..Default::default()
+        };
+        if player == hero {
+            let idx = game.private_cards(player).iter().position(|&p| p == key || p == (key.1, key.0));
+            game.cache_normalized_weights();
+            let Some(i) = idx else {
+                out.stopped = Some("This hand is not in the range the solve gives this player, so its decisions cannot be priced. Widen the range in the setup to include it.".into());
+                break;
+            };
+            // The hand itself may have no weight left (the solve would have played it differently
+            // earlier); its actions can still be priced as long as some of the player's hands get here.
+            let w = game.normalized_weights(player);
+            if !w.iter().any(|&x| x > 0.0) {
+                out.stopped = Some("The solve never gets to this point: an action before it is one the solve never takes, so there is nothing sound to compare with from here on.".into());
+                break;
+            }
+            if w[i] <= 0.0 {
+                out.stopped = Some("From here on the solve no longer holds this hand: at an earlier decision it always plays it another way, and a solve cannot price a hand it never has. To study this line anyway, lock that earlier decision to what was done and solve again.".into());
+                break;
+            }
+            let n = game.private_cards(player).len(); let na = acts.len();
+            let s = game.strategy(); let ev = game.expected_values_detail(player);
+            row.freqs = (0..na).map(|a| s[a * n + i] as f64).collect();
+            row.evs = (0..na).map(|a| ev[a * n + i] as f64).collect();
+            row.best = (0..na).max_by(|&a, &b| row.evs[a].partial_cmp(&row.evs[b]).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0);
+            row.loss = (row.evs[row.best] - row.evs[chosen]).max(0.0);
+            out.total_loss += row.loss;
+        }
+        out.rows.push(row);
+        history.push(chosen);
+        game.play(chosen);
+    }
+    Ok(out)
+}
+
 /// 13x13 weights (0..1) for a range string, chart layout (row/col 0 = Ace, suited above the diagonal).
 pub fn range_grid(range: &str) -> Result<Vec<f32>, String> {
     let r: Range = range.parse().map_err(|e: String| e)?;
@@ -889,6 +1029,9 @@ pub fn range_grid(range: &str) -> Result<Vec<f32>, String> {
 impl StudyState {
     pub fn hand(&mut self, locked: bool, history: &[usize], player: usize, hand: &str) -> Result<HandView, String> {
         hand_view(self.game(locked)?, history, player, hand)
+    }
+    pub fn review(&mut self, locked: bool, hero: usize, hand: &str, steps: &[ReviewStep]) -> Result<Review, String> {
+        review(self.game(locked)?, hero, hand, steps)
     }
 }
 

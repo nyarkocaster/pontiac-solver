@@ -53,6 +53,7 @@ The bundled solver program is for Linux x86-64. On Windows or a Mac, download th
 - **Which cards matter**: at each turn or river card choice, one click compares every card: how often the next player bets on it and who it helps.
 - **Flop report**: solves the same two-player preflop spot on 8, 16 or 24 representative flops and lines the answers up, with averages by kind of flop.
 - **Preflop**: heads-up push or fold; heads-up with limps, raises and re-raises (all-in pots exact, pots that see a flop estimated, with each line's ranges handed to the flop solver); three-handed push or fold with prize money (ICM).
+- **Hand review**: paste a hand history (PokerStars text layout) in Study a spot. For a two-player pot the result page prices each of your decisions after the flop for the exact hand you held and shows what the action you took gave up.
 - **Library**: save a solve from the Result page and open it again later. Solves are stored whole (compressed) and open without solving again.
 - **Node locks in the app**: at any decision, fix what a player does (whole range or one chart square) and solve again; the normal solve is reused.
 - **Chart views**: actions, value (EV) or chance to win on the hand chart. **Blockers**: which cards in your hand make the other player fold more or less after a bet.

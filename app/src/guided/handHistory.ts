@@ -7,7 +7,10 @@ export interface ParsedHand {
   table: TableSetup; seats: SeatInput[]; hero: string; heroHand: string; board: number[];
   /** things the reader should know: guesses made and anything the setup cannot express */
   notes: string[];
+  /** what happened from the flop on, in order: bets (the player's total on that street, in the setup's units) and the cards dealt */
+  later: LaterStep[];
 }
+export type LaterStep = { kind: "action"; seat: string; verb: "fold" | "check" | "call" | "bet" | "raise"; to: number } | { kind: "card"; card: string };
 const RANKS = "23456789TJQKA", SUITS = "cdhs";
 const num = (s: string) => Number(s.replace(/[$€£,]/g, ""));
 const cardId = (c: string) => RANKS.indexOf(c[0].toUpperCase()) * 4 + SUITS.indexOf(c[1].toLowerCase());
@@ -97,6 +100,33 @@ export function parseHandHistory(text: string): ParsedHand {
   }
   if (board.length < 3) throw new Error("This hand ended before the flop, so there is no flop to study. For all-in decisions before the flop, use Push / Fold.");
 
+  // what happened from the flop on
+  const later: LaterStep[] = [];
+  if (flopAt >= 0) {
+    const put = new Map<string, number>(); // each player's total on the current street
+    for (const l of rest.slice(flopAt + 1)) {
+      if (/^\*+\s*(SHOW ?DOWN|SUMMARY)/i.test(l)) break;
+      const st = l.match(/^\*+\s*(TURN|RIVER)/i);
+      if (st) {
+        const groups = [...l.matchAll(/\[([^\]]+)\]/g)].map((g) => g[1].trim().split(/\s+/));
+        const c = (groups[groups.length - 1] ?? []).find((x) => /^[2-9TJQKA][cdhs]$/i.test(x));
+        if (c) later.push({ kind: "card", card: c[0].toUpperCase() + c[1].toLowerCase() });
+        put.clear();
+        continue;
+      }
+      const m = l.match(/^(.+?):?\s+(folds|checks|calls|raises|bets)\b(.*)$/i);
+      if (!m) continue;
+      const who = nameOf(m[1]); const seat = who && seatOf.get(who.name); if (!who || !seat) continue;
+      const verb = m[2].toLowerCase(); const amounts = [...m[3].matchAll(/[$€£]?([\d,]*\.?\d+)/g)].map((x) => num(x[1]));
+      const last = amounts[amounts.length - 1] ?? 0;
+      if (verb === "folds") later.push({ kind: "action", seat, verb: "fold", to: 0 });
+      else if (verb === "checks") later.push({ kind: "action", seat, verb: "check", to: 0 });
+      else if (verb === "calls") { put.set(who.name, (put.get(who.name) ?? 0) + last); later.push({ kind: "action", seat, verb: "call", to: r1(put.get(who.name)!) }); }
+      else if (verb === "bets") { put.set(who.name, last); later.push({ kind: "action", seat, verb: "bet", to: r1(last) }); }
+      else { put.set(who.name, last); later.push({ kind: "action", seat, verb: "raise", to: r1(last) }); } // "raises 4 to 6": the total is the last number
+    }
+  }
+
   const stacks = order.map((p) => r1(p.stack)).sort((a, b) => a - b);
   const anteKind = !antes.size ? "none" : antes.size === 1 ? "bb" : "each";
   if (!tourney && antes.size) notes.push("This cash hand had antes; they are not added to the pot here.");
@@ -104,8 +134,8 @@ export function parseHandHistory(text: string): ParsedHand {
   // seats the table has but the hand did not use
   const all = seatsFor(size).map((s) => [...inputs.values()].find((x) => x.seat === s) ?? { seat: s, act: "fold" as Act, raiseTo: 0, reply: "call" as const, stack: table.startStack, type: "solid" as const });
   if (board.length > 3) {
-    const later = board.slice(3).map((c) => RANKS[c >> 2] + "♣♦♥♠"[c & 3]).join(" then ");
-    notes.push(`The study starts on the flop. The hand went on to ${later}: after solving, click the actions that were taken and deal ${board.length > 4 ? "those cards" : "that card"} to follow it.`);
+    const shown = board.slice(3).map((c) => RANKS[c >> 2] + "♣♦♥♠"[c & 3]).join(" then ");
+    notes.push(`The study starts on the flop. The hand went on to ${shown}: with two players, the result page reviews each of your decisions; otherwise click the actions that were taken and deal ${board.length > 4 ? "those cards" : "that card"} to follow it.`);
   }
-  return { table, seats: all, hero: seatOf.get(heroName)!, heroHand, board: board.slice(0, 3), notes };
+  return { table, seats: all, hero: seatOf.get(heroName)!, heroHand, board: board.slice(0, 3), notes, later };
 }

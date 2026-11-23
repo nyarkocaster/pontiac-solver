@@ -106,6 +106,7 @@ jobs:
         run: |
           (cd multiway && cargo test --release && cargo run --release --bin mwcheck)
           (cd pushfold && cargo test --release accurate_mode_resumes_exactly)
+          (cd checks && cargo run --release --bin review_check)
 
       # ---- desktop app ----
       - name: Build the desktop app

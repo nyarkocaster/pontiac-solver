@@ -306,7 +306,8 @@
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import RangeSlider from "./RangeSlider.vue";
 import FlopReport, { type FlopRow } from "./FlopReport.vue";
-import { parseHandHistory } from "../../guided/handHistory";
+import { parseHandHistory, type LaterStep } from "../../guided/handHistory";
+import type { ReviewStep } from "../../guided/api";
 import { useStore } from "../../store";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
 import { parseRange, rangePercent } from "../../guided/rangeTools";
@@ -321,7 +322,9 @@ const props = defineProps<{
   preview2: (p: Solve2) => Promise<Preview>; preview3: (p: Solve3) => Promise<Preview>;
   quickFlop: (p: Solve2, flop: number[]) => Promise<FlopRow>;
 }>();
-export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; heroHand?: string; overrides: Record<string, unknown> }
+export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; heroHand?: string; overrides: Record<string, unknown>;
+  /** from a pasted hand history: what happened after the flop, for the hand review (amounts in the solve's chips) */
+  line?: ReviewStep[] }
 export interface Solve3 {
   format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[];
   rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string;
@@ -505,7 +508,7 @@ function payload(): { two?: Solve2; three?: Solve3 } {
         stack: Math.max(1, Math.round(Math.min(oop.behind, ip.behind) * k)), pfrIsOop: oop.raisedLast,
         description: pre.value.story + left, oopName: oop.name, ipName: ip.name,
       },
-      format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value,
+      format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value, line: reviewLine(oop.seat, ip.seat, k),
       overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value,
         ...(icmActive.value && icmOthers.value.length && numList(icmPayouts.value).length ? { icm: { payouts: numList(icmPayouts.value), oop_stack: Math.round(oop.behind * k), ip_stack: Math.round(ip.behind * k), others: icmOthers.value.map((x) => Math.round(x * k)) } } : {}) },
     } };
@@ -545,6 +548,18 @@ watch(() => store.preflopLine, async (l) => {
 // a pasted hand history fills the whole setup in
 const hhOpen = ref(false); const hhText = ref(""); const hhError = ref(""); const hhNotes = ref<string[]>([]); const hhDone = ref(false);
 const heroHand = ref("");
+const hhLater = ref<LaterStep[]>([]); const hhFlop = ref("");
+/** The pasted hand's play after the flop, for the two players in the solve; nothing if anyone else acted or the flop was changed. */
+function reviewLine(oopSeat: string, ipSeat: string, k: number): ReviewStep[] | undefined {
+  if (!hhDone.value || !heroHand.value || !hhLater.value.length || board.value.slice(0, 3).join() !== hhFlop.value) return undefined;
+  const out: ReviewStep[] = [];
+  for (const st of hhLater.value) {
+    if (st.kind === "card") { out.push({ kind: "card", card: st.card }); continue; }
+    if (st.seat !== oopSeat && st.seat !== ipSeat) return undefined;
+    out.push({ kind: "action", who: st.seat === oopSeat ? 0 : 1, verb: st.verb, to: Math.round(st.to * k * 100) / 100 });
+  }
+  return out;
+}
 async function loadHistory() {
   hhError.value = ""; hhNotes.value = []; hhDone.value = false;
   try {
@@ -555,6 +570,7 @@ async function loadHistory() {
     hero.value = h.hero;
     await nextTick();
     board.value = [...h.board]; heroHand.value = h.heroHand; hhNotes.value = h.notes; hhDone.value = true;
+    hhLater.value = h.later; hhFlop.value = h.board.join();
   } catch (e) { hhError.value = String((e as Error).message ?? e); }
 }
 watch(() => [hero.value, seats.map((x) => x.act).join()], () => { if (!hhDone.value) heroHand.value = ""; });
