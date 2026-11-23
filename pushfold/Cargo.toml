@@ -26,5 +26,10 @@ name = "check_exact"
 path = "src/bin/check_exact.rs"
 required-features = ["generate"]
 
+[[bin]]
+name = "flopcheck"
+path = "src/bin/flopcheck.rs"
+required-features = ["generate"]
+
 [profile.release]
 opt-level = 3

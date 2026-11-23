@@ -7,6 +7,7 @@ pub mod tables;
 pub mod icm;
 pub mod three;
 pub mod preflop;
+pub mod flopweights;
 
 pub const RANKS: &str = "AKQJT98765432";
 
