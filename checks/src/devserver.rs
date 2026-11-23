@@ -62,6 +62,15 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
                 Err(e) => { mprog.phase.store(5, Ordering::Relaxed); Ok(serde_json::to_value(mw::Summary3 { error: Some(e), ..Default::default() }).unwrap()) }
             }
         }
+        "mw_relock" => {
+            let locks: Vec<mw::ManualLock3> = serde_json::from_value(args["locks"].clone()).map_err(|e| e.to_string())?;
+            { let mut st = mstate.write().unwrap(); st.locked = None; if st.sub.as_ref().map_or(false, |s| s.for_locked) { st.sub = None; } if let Some(s) = st.summary.as_mut() { s.locked = false; } }
+            let out = { let st = mstate.read().unwrap(); mw::relock3(&st, &locks, &mprog) };
+            match out {
+                Ok((g, s)) => { let mut st = mstate.write().unwrap(); st.locked = Some(g); st.summary = Some(s.clone()); mprog.phase.store(4, Ordering::Relaxed); Ok(serde_json::to_value(s).unwrap()) }
+                Err(e) => { mprog.phase.store(5, Ordering::Relaxed); let mut s = mstate.read().unwrap().summary.clone().unwrap_or_default(); s.error = Some(e); Ok(serde_json::to_value(s).unwrap()) }
+            }
+        }
         "pushfold_solve" => Ok(serde_json::to_value(pushfold::solve(args["stack"].as_f64().unwrap_or(0.0), args["sb"].as_f64().unwrap_or(0.5), args["ante"].as_f64().unwrap_or(0.0))?).unwrap()),
         "preflop_solve" => { let spec: pushfold::preflop::PreSpec = serde_json::from_value(args["spec"].clone()).map_err(|e| e.to_string())?; Ok(serde_json::to_value(pushfold::preflop::solve(&spec)?).unwrap()) }
         "pushfold3_solve" => { let spot: pushfold::three::Spot3 = serde_json::from_value(args["spot"].clone()).map_err(|e| e.to_string())?; Ok(serde_json::to_value(pushfold::three::solve(&spot)?).unwrap()) }

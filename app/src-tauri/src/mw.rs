@@ -67,6 +67,34 @@ pub fn mw_resolve(state: tauri::State<RwLock<State3>>, prog: tauri::State<Arc<Pr
     }
 }
 
+/// Solves the three-player spot again with hand-made locks, reusing the normal solve on screen.
+#[tauri::command(async)]
+pub fn mw_relock(state: tauri::State<RwLock<State3>>, prog: tauri::State<Arc<Progress3>>, locks: Vec<ManualLock3>) -> Summary3 {
+    let prog: Arc<Progress3> = prog.inner().clone();
+    {
+        // free the previous locked solve (and any exact turn solve built on it) before making the next
+        let mut st = state.write().unwrap();
+        st.locked = None;
+        if st.sub.as_ref().map_or(false, |s| s.for_locked) { st.sub = None; }
+        if let Some(s) = st.summary.as_mut() { s.locked = false; }
+    }
+    let out = { let st = state.read().unwrap(); relock3(&st, &locks, &prog) };
+    match out {
+        Ok((game, summary)) => {
+            let mut st = state.write().unwrap();
+            st.locked = Some(game); st.summary = Some(summary.clone());
+            prog.phase.store(4, Ordering::Relaxed);
+            summary
+        }
+        Err(e) => {
+            prog.phase.store(5, Ordering::Relaxed);
+            let mut s = state.read().unwrap().summary.clone().unwrap_or_default();
+            s.error = Some(e);
+            s
+        }
+    }
+}
+
 /// Heads-up push/fold equilibrium for one stack depth.
 #[tauri::command(async)]
 pub fn pushfold_solve(stack: f64, sb: f64, ante: f64) -> Result<pushfold::PushFold, String> {

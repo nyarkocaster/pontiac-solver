@@ -16,7 +16,7 @@
           <span v-if="saveError" class="ml-2 text-xs font-bold text-danger">{{ saveError }}</span>
           <div v-if="summary.locked" class="seg" role="group" aria-label="Which solution to show">
             <button :class="which === 'base' ? 'seg-on' : ''" @click="setWhich('base')">Normal strategy</button>
-            <button :class="which === 'locked' ? 'seg-on' : ''" @click="setWhich('locked')">Vs {{ players[habitSolved].name }}'s habit</button>
+            <button :class="which === 'locked' ? 'seg-on' : ''" @click="setWhich('locked')">{{ lockedLabel }}</button>
           </div>
         </div>
 
@@ -60,7 +60,7 @@
             <div v-if="node.kind === 'player'" class="panel">
               <h2 class="font-display font-extrabold text-lg">
                 {{ players[node.player].name }} to act
-                <span v-if="node.locked" class="ml-1 align-middle text-xs font-body font-bold bg-mine-light border border-mine rounded px-1.5 py-0.5">habit applied</span>
+                <span v-if="node.locked" class="ml-1 align-middle text-xs font-body font-bold bg-mine-light border border-mine rounded px-1.5 py-0.5">{{ lockedHere ? "locked" : "habit applied" }}</span>
               </h2>
               <p class="hint">Click an action to follow that line.</p>
               <div class="mt-3 space-y-2">
@@ -69,14 +69,50 @@
                   <span class="font-bold w-28 text-left">{{ actionText(a) }}</span>
                   <span class="flex-1 h-2 bg-paper rounded overflow-hidden"><span class="block h-full" :style="{ width: node.action_freqs[i] * 100 + '%', background: colors[i] }"></span></span>
                   <span class="w-12 text-right font-bold tabular-nums">{{ pct1(node.action_freqs[i]) }}</span>
-                  <span v-if="other && other.kind === 'player'" class="w-16 text-right text-xs text-muted tabular-nums" :title="which === 'base' ? 'Against the habit' : 'Normal strategy'">
-                    {{ which === "base" ? "habit" : "normal" }} {{ pct1(other.action_freqs[i] ?? 0) }}
+                  <span v-if="other && other.kind === 'player'" class="w-16 text-right text-xs text-muted tabular-nums" :title="which === 'base' ? (manualLocks.length ? 'With the locks' : 'Against the habit') : 'Normal strategy'">
+                    {{ which === "base" ? (manualLocks.length ? "locked" : "habit") : "normal" }} {{ pct1(other.action_freqs[i] ?? 0) }}
                   </span>
                 </button>
               </div>
               <ul class="mt-4 space-y-1.5 text-sm">
                 <li v-for="(n, i) in notes" :key="i" class="flex gap-2"><span class="text-felt font-bold">•</span><span>{{ n }}</span></li>
               </ul>
+              <details class="mt-3 rounded-lg border border-rule px-3 py-2" :open="lockOpen" @toggle="lockOpen = ($event.target as HTMLDetailsElement).open">
+                <summary class="cursor-pointer text-sm font-bold">Change how {{ players[node.player].name }} plays here (node lock){{ manualLocks.length ? ` · ${manualLocks.length} set` : "" }}</summary>
+                <div v-if="lockOpen" class="mt-2 text-sm">
+                  <p class="hint">Fix what this player does at this exact point, then solve again to see how the other two should adjust. Use it for reads like "this player never raises here".</p>
+                  <p v-if="node.exact" class="hint mt-1 font-bold">This point is inside an exact turn solve. Locks are set in the main solve: go back to the flop to add one.</p>
+                  <template v-else>
+                    <div class="seg mt-2" role="group" aria-label="Which hands the lock covers">
+                      <button :class="lockScope === 'all' ? 'seg-on' : ''" @click="lockScope = 'all'">Every hand</button>
+                      <button :class="lockScope === 'cell' ? 'seg-on' : ''" :disabled="selected === null" :title="selected === null ? 'Click a square in the chart first' : ''" @click="lockScope = 'cell'">Only {{ selected !== null ? cellName(selected) : "the square I click" }}</button>
+                    </div>
+                    <div class="mt-2 space-y-1">
+                      <label v-for="(a, i) in node.actions" :key="i" class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-sm shrink-0" :style="{ background: colors[i] }"></span>
+                        <span class="w-40">{{ actionText(a) }}</span>
+                        <input v-model.number="lockPct[i]" type="number" min="0" max="100" step="5" class="input !w-20 !py-1 text-right" :aria-label="actionText(a) + ' percent'" /><span>%</span>
+                      </label>
+                    </div>
+                    <div class="mt-2 flex items-center gap-3">
+                      <button class="btn-quiet" :disabled="lockTotal !== 100" @click="addLock">Add this lock</button>
+                      <span class="text-xs" :class="lockTotal === 100 ? 'text-muted' : 'text-danger font-bold'">Total {{ lockTotal }}%{{ lockTotal === 100 ? "" : " (must be 100)" }}</span>
+                    </div>
+                  </template>
+                  <ul v-if="manualLocks.length" class="mt-3 space-y-1">
+                    <li v-for="(l, i) in manualLocks" :key="i" class="flex items-start justify-between gap-2 border-t border-rule pt-1">
+                      <span>{{ l.label }}</span>
+                      <button class="text-xs text-danger underline shrink-0" :disabled="relocking" @click="removeLock(i)">Remove</button>
+                    </li>
+                  </ul>
+                  <div v-if="manualLocks.length || lockStale" class="mt-3">
+                    <button class="btn-solve !w-auto px-5 !py-2" :disabled="relocking || !manualLocks.length" @click="relockNow">{{ relocking ? `Solving again… step ${progress[1]} of up to ${progress[2]}` : `Solve again with ${manualLocks.length} lock${manualLocks.length === 1 ? "" : "s"}` }}</button>
+                    <button v-if="relocking" class="ml-2 text-xs underline" @click="api.mwCancel()">Stop</button>
+                    <p v-if="lockStale && !relocking" class="hint mt-1">The locks changed since the last solve. Solve again to see their effect.</p>
+                    <p v-if="lockError" class="text-sm font-bold text-danger mt-1">{{ lockError }}</p>
+                  </div>
+                </div>
+              </details>
             </div>
             <div v-else-if="node.kind === 'chance'" class="panel">
               <h2 class="font-display font-extrabold text-lg">Deal the {{ node.street === "flop" ? "turn" : "river" }}</h2>
@@ -177,7 +213,7 @@
               </p>
               <p v-if="summary.locked" class="mt-2">
                 Average result with normal play: {{ evLine(summary.base_ev) }}.<br />
-                Against the habit: {{ evLine(summary.locked_ev) }}.
+                {{ manualLocks.length ? "With the locks" : "Against the habit" }}: {{ evLine(summary.locked_ev) }}.
               </p>
             </div>
           </div>
@@ -438,7 +474,7 @@ async function saveSpot() {
   if (!lastPayload) { saveError.value = "Only spots set up in Study a spot can be saved."; return; }
   saveState.value = "busy"; saveError.value = "";
   const cards = lastPayload.board.map((c) => RANK_CHARS[c >> 2] + SUIT_SYMBOL[SUIT_CHARS[c & 3]]).join(" ");
-  try { await api2.librarySaveThree(`${lastPayload.names.join(", ")} · ${cards}`, { payload: lastPayload }); saveState.value = "done"; }
+  try { await api2.librarySaveThree(`${lastPayload.names.join(", ")} · ${cards}`, { payload: lastPayload, locks: lockStale.value ? [] : manualLocks.value }); saveState.value = "done"; }
   catch (e) { saveError.value = String((e as Error).message ?? e); saveState.value = ""; }
 }
 /** Puts a spot from the spot builder on this screen, ready to solve or to show a stored solve. */
@@ -471,13 +507,14 @@ async function openSaved(e: api2.LibraryEntry): Promise<{ ok: boolean; error: st
     await applyCustom(p);
     const s = await api2.libraryOpenThree<api.Summary3>(e.id);
     solvedScale.value = scale.value;
-    await showSolved(s);
+    await showSolved(s, (e.meta.locks as api.ManualLock3[] | undefined) ?? []);
     saveState.value = "done";
     return { ok: true, error: "" };
   } catch (x) { step.value = "setup"; return { ok: false, error: String((x as Error).message ?? x) }; }
 }
 /** Switches the screen to a solve the engine now holds. */
-async function showSolved(s: api.Summary3) {
+async function showSolved(s: api.Summary3, locks: api.ManualLock3[] = []) {
+  manualLocks.value = locks; lockStale.value = false; lockError.value = ""; hadHabit.value = leaks.value.length > 0;
   summary.value = s;
   startLen.value = board.value.length;
   heroSolved.value = hero.value; habitSolved.value = Math.max(habitSeat.value, 0);
@@ -570,6 +607,47 @@ async function loadCard(id: number): Promise<CardRow> {
   const bet = v.actions.reduce((a, name, i) => a + (/^(Bet|Raise|All-in)/.test(name) ? v.action_freqs[i] : 0), 0);
   return { actor: v.kind === "player" ? players[v.player].name : "the next player", bet, equity: v.equity.map((e, i) => (v.folded[i] ? undefined : e)) as number[] };
 }
+// ---------- locks made by hand ----------
+const RANKS_HI = "AKQJT98765432";
+const cellName = (i: number) => { const r = Math.floor(i / 13), c = i % 13; return r === c ? RANKS_HI[r] + RANKS_HI[c] : c > r ? RANKS_HI[r] + RANKS_HI[c] + "s" : RANKS_HI[c] + RANKS_HI[r] + "o"; };
+const manualLocks = ref<api.ManualLock3[]>([]);
+const lockOpen = ref(false); const lockScope = ref<"all" | "cell">("all"); const lockPct = ref<number[]>([]);
+const lockStale = ref(false); const relocking = ref(false); const lockError = ref("");
+const lockTotal = computed(() => lockPct.value.reduce((a, v) => a + (Number(v) || 0), 0));
+const hadHabit = ref(false);
+const lockedLabel = computed(() => (manualLocks.value.length && !lockStale.value ? (hadHabit.value ? "Vs the habit and your locks" : "With your locks") : `Vs ${players[habitSolved.value].name}'s habit`));
+const lockedHere = computed(() => manualLocks.value.some((l) => l.history.join() === history.value.join()));
+function fillLock() {
+  const v = node.value; if (!v || v.kind !== "player") return;
+  if (lockScope.value === "cell" && selected.value === null) lockScope.value = "all";
+  const src = lockScope.value === "cell" && selected.value !== null && v.grid[selected.value].weight > 0 ? v.grid[selected.value].freqs : v.action_freqs;
+  const out = src.map((f) => Math.round(f * 100));
+  const off = 100 - out.reduce((a, x) => a + x, 0);
+  if (out.length) out[out.indexOf(Math.max(...out))] += off;
+  lockPct.value = out;
+}
+watch([() => node.value?.actions.join("|"), () => history.value.join(), selected, lockScope, lockOpen, which, summary], fillLock);
+function addLock() {
+  const v = node.value!; const cell = lockScope.value === "cell" ? selected.value : null;
+  const what = lockPct.value.map((p, i) => (p > 0 ? `${actionText(v.actions[i]).toLowerCase()} ${p}%` : "")).filter(Boolean).join(", ");
+  const where = line.value.length ? line.value.map((l) => (l.player < 0 ? l.label : `${players[l.player].name} ${l.label.toLowerCase()}`)).join(" › ") : "First decision";
+  manualLocks.value = [...manualLocks.value.filter((l) => !(l.history.join() === history.value.join() && l.cells.join() === (cell === null ? "" : String(cell)))),
+    { history: [...history.value], cells: cell === null ? [] : [cell], freqs: lockPct.value.map((p) => (Number(p) || 0) / 100), label: `${where}: ${players[v.player].name} with ${cell === null ? "every hand" : cellName(cell)}: ${what}` }];
+  lockStale.value = true; saveState.value = "";
+}
+const removeLock = (i: number) => { manualLocks.value = manualLocks.value.filter((_l, j) => j !== i); lockStale.value = true; };
+async function relockNow() {
+  relocking.value = true; lockError.value = ""; progress.value = [2, 0, spec.value.max_iter, 100];
+  const timer = window.setInterval(async () => { try { progress.value = await api.mwProgress(); } catch { /* ignore */ } }, 400);
+  try {
+    const s = await api.mwRelock(manualLocks.value);
+    if (s.error) { lockError.value = s.error === "Solve cancelled" ? "Stopped. The normal solve is still here." : s.error; summary.value = { ...s, error: null }; which.value = "base"; }
+    else { summary.value = s; which.value = "locked"; lockStale.value = false; saveState.value = ""; exactAt.value = exactAt.value?.which === "locked" ? null : exactAt.value; }
+    await load();
+  } catch (e) { lockError.value = String((e as Error).message ?? e); }
+  finally { window.clearInterval(timer); relocking.value = false; }
+}
+
 async function goto(n: number) { history.value = history.value.slice(0, n); line.value = line.value.slice(0, n); await load(); }
 async function setWhich(w: "base" | "locked") {
   which.value = w;
@@ -641,7 +719,7 @@ const notes = computed(() => {
   if (other.value && other.value.kind === "player") {
     let big = 0; let bi = 0;
     v.action_freqs.forEach((f, i) => { const d = f - (other.value!.action_freqs[i] ?? 0); if (Math.abs(d) > Math.abs(big)) { big = d; bi = i; } });
-    if (Math.abs(big) >= 0.03) out.push(`Biggest change ${which.value === "locked" ? "against the habit" : "compared with the habit solve"}: ${actionText(v.actions[bi]).toLowerCase()} ${big > 0 ? "more" : "less"} often (${pct1(Math.abs(big))} ${big > 0 ? "up" : "down"}).`);
+    if (Math.abs(big) >= 0.03) out.push(`Biggest change ${which.value === "locked" ? (manualLocks.value.length ? "with the locks" : "against the habit") : manualLocks.value.length ? "compared with the locked solve" : "compared with the habit solve"}: ${actionText(v.actions[bi]).toLowerCase()} ${big > 0 ? "more" : "less"} often (${pct1(Math.abs(big))} ${big > 0 ? "up" : "down"}).`);
   }
   return out;
 });

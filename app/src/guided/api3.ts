@@ -47,6 +47,11 @@ export const mwNode = (which: "base" | "locked", history: number[], ev = true) =
 /** After a flop solve: solve one turn card exactly (every river card) from the ranges that reach it. */
 export const mwResolve = (which: "base" | "locked", history: number[], card: number) => call<Summary3>("mw_resolve", { which, history, card });
 
+/** A strategy fixed by hand at one decision; `cells` empty = every hand. */
+export interface ManualLock3 { history: number[]; cells: number[]; freqs: number[]; label?: string }
+/** Solves again with hand-made locks, reusing the normal solve on screen. */
+export const mwRelock = (locks: ManualLock3[]) => call<Summary3>("mw_relock", { locks: locks.map((l) => ({ history: l.history, cells: l.cells, freqs: l.freqs })) });
+
 export interface PushFold {
   stack_bb: number; small_blind: number; ante: number; jam_pct: number; call_pct: number;
   jam: number[]; call: number[]; jam_edge_bb: number[]; call_edge_bb: number[];

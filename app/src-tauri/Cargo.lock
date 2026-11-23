@@ -560,7 +560,7 @@ dependencies = [
 
 [[package]]
 name = "desktop-postflop"
-version = "0.13.3"
+version = "0.13.4"
 dependencies = [
  "indexmap 1.9.3",
  "multiway",
@@ -1808,6 +1808,8 @@ version = "0.2.0"
 dependencies = [
  "rayon",
  "serde",
+ "serde_json",
+ "zstd",
 ]
 
 [[package]]

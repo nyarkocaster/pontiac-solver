@@ -1,6 +1,12 @@
-# Pontiac Solver 0.13.3
+# Pontiac Solver 0.13.4
 
-**New since 0.13.0 (speed):**
+**New since 0.13.0, three-player spots:**
+
+- Three-player solves can be saved and opened again without solving: in the app's Library, and from the command line and Python (`solve --save`, then `query`).
+- Prize money (ICM) for three-player tournament pots is in the app: tick "Play for prize money, not chips" in Study a spot.
+- Node locks by hand on the three-player result: fix what a player does at a decision, for every hand or one chart square, and solve again to see how the other two adjust. It reuses the solve on screen, including one opened from the Library.
+
+**Speed:**
 
 - Three-player spots played for tournament prize money solve about four times faster, with the same answers. A prize-money solve now costs under twice a chips solve instead of seven times.
 - Three-player solves get closer to the answer in the same number of steps (the average strategy now leans harder on recent steps), and the accuracy check, which costs several steps' worth of time, is run only when it is likely to matter.

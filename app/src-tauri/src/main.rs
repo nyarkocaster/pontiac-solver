@@ -110,6 +110,7 @@ fn main() {
             mw_solve,
             mw_node,
             mw_resolve,
+            mw_relock,
             pushfold_solve,
             pushfold3_solve,
             preflop_solve,

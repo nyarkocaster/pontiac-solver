@@ -642,6 +642,64 @@ fn reach_at(game: &Game, history: &[usize]) -> Result<(usize, [Vec<f32>; 3]), St
     Ok((id, r))
 }
 
+/// A strategy fixed by hand at one decision: the line that leads there (action numbers, and card
+/// ids at deals), the chart squares it covers (none = every hand) and a frequency per action.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ManualLock3 {
+    pub history: Vec<usize>,
+    #[serde(default)]
+    pub cells: Vec<usize>,
+    pub freqs: Vec<f32>,
+}
+
+/// Solves the spot again with hand-made locks in place (on top of the spot's habits and path
+/// locks), starting from the normal solve already held in `st`, which is only read. Works on a
+/// solve reopened from a file. Returns the locked tree and the updated summary.
+pub fn relock3(st: &State3, locks: &[ManualLock3], prog: &Progress3) -> Result<(Game, Summary3), String> {
+    let (Some(base), Some(spec), Some(old)) = (st.base.as_ref(), st.spec.as_ref(), st.summary.as_ref()) else { return Err("solve a spot first".into()) };
+    if locks.is_empty() && spec.leaks.is_empty() && spec.node_locks.is_empty() { return Err("add a lock first".into()); }
+    let names = names_of(spec);
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(thread_count(spec)).build().map_err(|e| e.to_string())?;
+    prog.cancel.store(false, Ordering::Relaxed);
+    prog.phase.store(2, Ordering::Relaxed); prog.iter.store(0, Ordering::Relaxed);
+    let mut lg = Game::new(base.cfg.clone(), true)?;
+    let mut count = 0;
+    if !spec.leaks.is_empty() { let r = base.cfg.ranges.clone(); pool.install(|| lock_walk(base, &mut lg, 0, &r, &spec.leaks, &mut count)); }
+    for l in &spec.node_locks {
+        let (_, id) = resolve_path(base, &names, &l.node, spec.chips_per_bb)?;
+        if base.nodes[id].kind != Kind::Decision { return Err(format!("node_locks: '{}' is not a decision", l.node)); }
+        let strat = lock_strategy(base, id, l, Some(&base.avg_strategy(id)))?;
+        if lg.nodes[id].locked.is_none() { count += 1; }
+        merge_lock(&mut lg, id, strat);
+    }
+    for l in locks {
+        let (id, _) = reach_at(base, &l.history)?;
+        let node = &base.nodes[id];
+        if node.kind != Kind::Decision { return Err("A lock points at a place where nobody acts.".into()); }
+        let (na, nh) = (node.actions.len(), base.hands[node.player].len());
+        if l.freqs.len() != na { return Err("A lock has the wrong number of actions for its decision.".into()); }
+        let total: f32 = l.freqs.iter().sum();
+        if l.freqs.iter().any(|f| !(0.0..=1.0001).contains(f)) || (total - 1.0).abs() > 0.02 { return Err("The percentages in a lock must add up to 100.".into()); }
+        let mut strat = vec![0f32; na * nh];
+        for (h, &hand) in base.hands[node.player].iter().enumerate() {
+            if l.cells.is_empty() || l.cells.contains(&grid_index(base.deck.cards[hand as usize])) {
+                for a in 0..na { strat[a * nh + h] = l.freqs[a] / total; }
+            }
+        }
+        if lg.nodes[id].locked.is_none() { count += 1; }
+        merge_lock(&mut lg, id, strat);
+    }
+    let t1 = Instant::now();
+    let (it, ev, g, cancelled) = pool.install(|| run(&lg, spec, prog));
+    if cancelled && prog.cancel.load(Ordering::Relaxed) { return Err("Solve cancelled".into()); }
+    let mut sum = old.clone();
+    sum.locked = true; sum.locked_iters = it; sum.locked_ev = ev; sum.locked_gain_pct = g; sum.locked_secs = t1.elapsed().as_secs_f64();
+    sum.locked_nodes = count; sum.cancelled = cancelled; sum.error = None;
+    sum.memory_mb = (base.memory_bytes() + lg.memory_bytes()) as f64 / 1e6;
+    if let (Some(icm), Some(i)) = (&base.icm, sum.icm.as_mut()) { i.locked_share = [icm.share_pct(0, ev[0]), icm.share_pct(1, ev[1]), icm.share_pct(2, ev[2])]; }
+    Ok((lg, sum))
+}
+
 /// After a flop solve: solves the turn and river exactly (every river card) for one flop line and
 /// any turn card, starting from the ranges that reach it. Works when a player has already folded.
 pub fn resolve_turn(st: &State3, for_locked: bool, history: &[usize], card: u8, prog: &Progress3) -> Result<Sub, String> {

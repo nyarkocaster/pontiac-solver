@@ -184,4 +184,39 @@ mod tests {
         assert!(load_state(&bytes[..bytes.len() / 2]).is_err());
         assert!(load_state(&b"not a pontiac file at all"[..]).is_err());
     }
+    /// A hand-made lock on a solve reopened from a file: the locked tree obeys it, for every hand
+    /// or for one chart square only, and the normal solve is untouched.
+    #[test]
+    fn hand_made_locks_work_on_a_reopened_solve() {
+        let spec = Spec3 {
+            ranges: ["99-22,A9s-A2s,KTs+,QTs+,ATo+,KQo".into(), "TT-22,AJs-A2s,KTs+,QJs,AQo+".into(), "AA-22,AKs-A2s,K9s+,QTs+,AKo-ATo,KJo+".into()],
+            board: "Kh9s6d4c2s".into(), pot: 30.0, stack: 60.0, bet_sizes: "66%".into(), raise_sizes: "60%".into(), max_raises: 1, allin_spr: 1.0, threads: 1, accuracy_pct: 0.5, max_iter: 60,
+            ..Default::default()
+        };
+        let st = solve3(&spec, &Progress3::default()).unwrap();
+        assert!(st.locked.is_none());
+        let mut bytes = vec![];
+        save_state(&st, "", &mut bytes).unwrap();
+        let (mut back, _) = load_state(&bytes[..]).unwrap();
+        let before = back.view(false, &[], true).unwrap();
+        let na = before.actions.len();
+        // first player always checks
+        let mut freqs = vec![0f32; na]; freqs[0] = 1.0;
+        let (lg, sum) = relock3(&back, &[ManualLock3 { history: vec![], cells: vec![], freqs: freqs.clone() }], &Progress3::default()).unwrap();
+        assert!(sum.locked && sum.locked_nodes == 1);
+        back.locked = Some(lg); back.summary = Some(sum);
+        let after = back.view(true, &[], true).unwrap();
+        assert!((after.action_freqs[0] - 1.0).abs() < 1e-6 && after.locked);
+        assert_eq!(back.view(false, &[], true).unwrap().action_freqs, before.action_freqs);
+        // one square only: that square checks, the rest still mix
+        let cell = (0..169).find(|&c| before.grid[c].weight > 0.0 && before.grid[c].freqs[0] < 0.9).expect("some square bets");
+        let (lg, _) = relock3(&back, &[ManualLock3 { history: vec![], cells: vec![cell], freqs }], &Progress3::default()).unwrap();
+        back.locked = Some(lg);
+        let one = back.view(true, &[], false).unwrap();
+        assert!((one.grid[cell].freqs[0] - 1.0).abs() < 1e-6);
+        assert!(one.action_freqs[0] < 0.999);
+        // nonsense is refused
+        assert!(relock3(&back, &[ManualLock3 { history: vec![], cells: vec![], freqs: vec![0.5; na + 1] }], &Progress3::default()).is_err());
+        assert!(relock3(&back, &[], &Progress3::default()).is_err());
+    }
 }
