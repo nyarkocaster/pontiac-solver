@@ -50,12 +50,16 @@ pub const SAMPLE_32: [&str; 32] = ["AdTd3c", "9h6d2c", "AhJdTc", "QdQc9c", "9d6c
 /// 96 flops: every rank appears on a paired flop and every pair of ranks shares a flop (chosen by `flopsample search`).
 pub const SAMPLE_96: [&str; 96] = ["Qc9d3c", "Kh4d2c", "Kc9d3c", "8h7d3c", "Jh4d2c", "Qd9d5c", "KcTd4c", "Jc7d6c", "Jh4d4c", "QdJd8c", "AhQdQc", "AcJdTc", "AdAc9c", "Qh9d8c", "QhJd5c", "5h4d4c", "AhQd5c", "KcQdQc", "Kc9d8c", "Th9d3c", "Kh8d5c", "6h6d3c", "Jc4c3c", "Jd3d2c", "Ac9d8c", "AhTd9c", "7c5d4c", "7h5d3c", "Qh6d3c", "6h6d5c", "KdTd9c", "Th7d6c", "8d8c3c", "6d5d2c", "Kd7c2c", "AhKdTc", "Kc8d2c", "8d5c4c", "Ah5d5c", "Jc8d2c", "6c5d3c", "Qh8d2c", "Th6d4c", "Jh8d5c", "Jd7c5c", "AdTc8c", "8d5d2c", "Kh8d7c", "Th8d6c", "Kd8c2c", "Qd8c2c", "Qh8d3c", "6c4c3c", "Kd9c5c", "KhQd2c", "AcQc7c", "8h6d4c", "Ac3c2c", "KdTc5c", "Th4d3c", "7c6d2c", "Qd5d3c", "7h4d3c", "9d6c5c", "Tc2d2c", "KcTc6c", "9h7d6c", "ThTd8c", "KcJd7c", "3h3d3c", "Jd9c7c", "8d5c3c", "Qd6c4c", "Jh5d3c", "Jc8c2c", "JhJd6c", "AdQdTc", "Kh5d3c", "Td9d7c", "Qd9c3c", "Kh7d7c", "9h7d4c", "Qh8d5c", "Ah9d8c", "KdKc8c", "Ah6d3c", "AcJd8c", "AhJd8c", "8c6d3c", "Td8d5c", "9h9d2c", "6h5d4c", "AdAcJc", "Ah4d2c", "KcQc8c", "Qd7d3c"];
 
-/// The built-in sample of `n` flops: the chosen 24, 32 or 96 when asked for exactly that many,
+/// 64 flops with the same full rank coverage as the 96, for when 96 are too slow.
+pub const SAMPLE_64: [&str; 64] = ["TdTc4c", "Tc8d6c", "Th9d3c", "QcTd8c", "AcJd9c", "8d7d4c", "Kh4d3c", "Kh5d5c", "Qh8d3c", "AcQcJc", "Qd7d2c", "9c6d5c", "AcKdTc", "Tc5d4c", "KhJd4c", "KhJdTc", "AhQdTc", "8h7d4c", "Qh8d4c", "Kh7d5c", "Ac8c2c", "AhAd9c", "Qc9d2c", "QhTd9c", "KdQc5c", "8c5d3c", "Jh8d6c", "JdJc5c", "7h6d3c", "Ad8d3c", "8d8c2c", "9d7c2c", "Th7d2c", "Ad6d4c", "7d6d4c", "9h6d6c", "Qd9d4c", "KdQd3c", "Jd8c4c", "Ac5d4c", "AdJd2c", "Qh4d2c", "8h2d2c", "Kd6c3c", "KhKdTc", "Ac7c5c", "KhQdQc", "AhJd7c", "Kh9d8c", "4d4c3c", "Kd7d3c", "Th5d2c", "KcJc8c", "7h7d5c", "6h5d2c", "Qh8d6c", "Qc3d3c", "Th8d2c", "Ah9d9c", "Ah9d5c", "Jc8d3c", "JhJd6c", "KdTd2c", "8h3d2c"];
+
+/// The built-in sample of `n` flops: the chosen 24, 32, 64 or 96 when asked for exactly that many,
 /// otherwise the first `n` of the original 16.
 pub fn sample(n: usize) -> Vec<&'static str> {
     match n {
         24 => SAMPLE_24.to_vec(),
         32 => SAMPLE_32.to_vec(),
+        64 => SAMPLE_64.to_vec(),
         96 => SAMPLE_96.to_vec(),
         _ => SAMPLE_16.iter().take(n.min(SAMPLE_16.len())).copied().collect(),
     }
