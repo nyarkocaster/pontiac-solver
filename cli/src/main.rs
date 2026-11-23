@@ -762,7 +762,7 @@ fn main() {
                 let plain_flops = args.iter().any(|a| a == "--plain-flops");
                 let flop_fit = pushfold::flopweights::fit(&flop_cards, None);
                 let flop_ways: Vec<f64> = flop_cards.iter().map(|f| pushfold::flopweights::suit_ways(*f)).collect();
-                let passes = (num("--passes")?.unwrap_or(3.0) as usize).clamp(1, 12);
+                let passes = (num("--passes")?.unwrap_or(3.0) as usize).clamp(1, 40);
                 let min_freq = num("--min-line")?.unwrap_or(0.02);
                 let accuracy = num("--flop-accuracy")?.unwrap_or(1.0) as f32;
                 let threads = num("--threads")?.map(|x| x as usize).unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
