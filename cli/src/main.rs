@@ -760,6 +760,36 @@ fn main() {
                 let nflops = flop_cards.len();
                 if nflops == 0 { return Err("--flop-list needs at least one flop, e.g. --flop-list As7d2c,Ks8s3d".into()); }
                 let plain_flops = args.iter().any(|a| a == "--plain-flops");
+                // --valuing kinds: build each hand's value from kinds of flop (miss, pair, two pair, trips) at their true
+                // frequencies, leaning on adjacent-kicker hands where its own flops are few (--lean N: the neighbours count
+                // as N flops of evidence, default 2; 0 only fills gaps). --valuing weights (default): the fitted weights alone.
+                let valuing = flag("--valuing").unwrap_or("weights");
+                if valuing != "weights" && valuing != "kinds" { return Err("--valuing is weights or kinds".into()); }
+                if valuing == "kinds" && plain_flops { return Err("--valuing kinds works on the fitted weights; leave out --plain-flops".into()); }
+                let lean = num("--lean")?.unwrap_or(2.0).max(0.0);
+                // --floor X: keep at least this much of every hand in the ranges sent to the flop solver (e.g. 0.01), so a hand
+                // that has stopped taking a line still gets a real value for it and can come back. Default 0: hands under half a
+                // percent are left out and take the average adjustment of the hands that are in.
+                let floor = num("--floor")?.unwrap_or(0.0).clamp(0.0, 0.2);
+                // --rounds fixed|average|rising: how the rounds are combined. fixed (default) moves --step (0.35) of the way to
+                // each fresh solve; average keeps the plain average of every round's solve; rising weights later rounds more.
+                let rule = match flag("--rounds").unwrap_or("fixed") {
+                    "fixed" => pushfold::preflop::StepRule::Fixed(num("--step")?.unwrap_or(0.35)),
+                    "average" => pushfold::preflop::StepRule::Average,
+                    "rising" => pushfold::preflop::StepRule::Rising,
+                    _ => return Err("--rounds is fixed, average or rising".into()),
+                };
+                // --until-settled [points]: stop once each of the button's totals has moved less than this (default 1 point) over three rounds
+                let settle: Option<f64> = if args.iter().any(|a| a == "--until-settled") { Some(num("--until-settled").ok().flatten().unwrap_or(1.0)) } else { None };
+                // --start-from <file.resume>: begin from the strategy another run had reached, instead of the quick estimate
+                let start_from = flag("--start-from");
+                let start_sigmas: Option<Vec<Vec<f64>>> = match &start_from {
+                    Some(path) => {
+                        let v: Value = serde_json::from_str(&std::fs::read_to_string(path).map_err(|e| format!("could not read {path}: {e}"))?).map_err(|_| format!("{path} is not a .resume file"))?;
+                        Some(serde_json::from_value(v["checkpoint"]["prev"].clone()).map_err(|_| format!("{path} holds no strategy to start from"))?)
+                    }
+                    None => None,
+                };
                 let flop_fit = pushfold::flopweights::fit(&flop_cards, None);
                 let flop_ways: Vec<f64> = flop_cards.iter().map(|f| pushfold::flopweights::suit_ways(*f)).collect();
                 let passes = (num("--passes")?.unwrap_or(3.0) as usize).clamp(1, 40);
@@ -772,6 +802,12 @@ fn main() {
                 let t0 = std::time::Instant::now();
                 // --flop-detail <file>: every round, the value of every hand class on each flop of each line goes to
                 // <file>.round<N>.json (big blinds; null where the hand is not in the range), with the flop weights used
+                let save_path = flag("--save");
+                let replay: Option<Value> = match flag("--flop-values") {
+                    Some(path) => Some(serde_json::from_str(&std::fs::read_to_string(&path).map_err(|e| format!("could not read {path}: {e}"))?).map_err(|_| format!("{path} is not a flop-detail file"))?),
+                    None => None,
+                };
+                if replay.is_some() && plain_flops { return Err("--flop-values cannot be used with --plain-flops".into()); }
                 let detail = flag("--flop-detail");
                 let mut detail_round = 0usize;
                 let mut detail_lines: Vec<Value> = vec![];
@@ -793,15 +829,29 @@ fn main() {
                     let (mut num_v, mut den_v) = ([vec![0f64; 169], vec![0f64; 169]], [vec![0f64; 169], vec![0f64; 169]]);
                     let mut worst = 0f64;
                     let mut detail_flops: Vec<Value> = vec![];
+                    // by_flop[player][flop][class] in big blinds, button first
+                    let mut by_flop: [Vec<Vec<f64>>; 2] = [vec![], vec![]];
                     for (k, board) in flop_names.iter().enumerate() {
                         let sp = study_core::StudySpec {
-                            oop_range: l.big_blind_range.clone(), ip_range: l.button_range.clone(),
+                            oop_range: if floor > 0.0 { pushfold::preflop::range_with_floor(&l.reach[1], floor) } else { l.big_blind_range.clone() },
+                            ip_range: if floor > 0.0 { pushfold::preflop::range_with_floor(&l.reach[0], floor) } else { l.button_range.clone() },
                             board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
                             oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
                             allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None };
                         let t = std::time::Instant::now();
-                        let (vals, acc, mass) = study_core::class_values(&sp, &prog)?;
+                        if let Some(p) = &save_path { if std::path::Path::new(&format!("{p}.stop")).exists() { return Err(format!("stopped because the file {p}.stop exists; remove it and run again with --resume to carry on")); } }
+                        // --flop-values <detail file>: replay the per-flop values a run recorded with --flop-detail instead of solving
+                        let (vals, acc, mass) = match &replay {
+                            Some(d) => {
+                                let line = d["lines"].as_array().and_then(|a| a.iter().find(|x| x["line"] == json!(l.path))).ok_or(format!("the flop-values file has no line '{}'", l.path))?;
+                                let f = line["flops"].as_array().and_then(|a| a.iter().find(|x| x["flop"] == json!(board))).ok_or(format!("the flop-values file has no flop {board} for the line '{}'", l.path))?;
+                                let row = |k: &str| -> Vec<f64> { (0..169).map(|c| f[k][c].as_f64().map(|x| x * 10.0).unwrap_or(f64::NAN)).collect() };
+                                ([row("big_blind"), row("button")], f["accuracy_pct"].as_f64().unwrap_or(0.0), [vec![0.0; 169], vec![0.0; 169]])
+                            }
+                            None => study_core::class_values(&sp, &prog)?,
+                        };
                         worst = worst.max(acc);
+                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { by_flop[mine].push(vals[theirs].iter().map(|x| x / 10.0).collect()); }
                         // vals[0] is the big blind (first to act after the flop), vals[1] the button; chips are tenths of a big blind
                         for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; let k = if plain_flops { flop_ways[k] * mass[theirs][c] } else { flop_fit.weight[c][k] }; if x.is_finite() && k > 0.0 { num_v[mine][c] += k * x / 10.0; den_v[mine][c] += k; } } }
                         if detail.is_some() {
@@ -810,14 +860,22 @@ fn main() {
                         }
                         say(format!("pass {pass} | {} | flop {} of {nflops} ({board}) | {:.0}s, within {:.2}% of the pot | {:.0} min so far", l.path, k + 1, t.elapsed().as_secs_f64(), acc, t0.elapsed().as_secs_f64() / 60.0));
                     }
-                    let out = [0, 1].map(|p| (0..169).map(|c| if den_v[p][c] > 0.0 { num_v[p][c] / den_v[p][c] } else { f64::NAN }).collect::<Vec<f64>>());
+                    let mut out = [0, 1].map(|p| (0..169).map(|c| if den_v[p][c] > 0.0 { num_v[p][c] / den_v[p][c] } else { f64::NAN }).collect::<Vec<f64>>());
+                    let mut kinds_detail = Value::Null;
+                    if valuing == "kinds" {
+                        let kv = [0, 1].map(|p| pushfold::flopweights::value_by_kinds(&flop_cards, &flop_fit.weight, &by_flop[p], lean));
+                        let nums = |v: &[f64]| -> Vec<Value> { v.iter().map(|x| if x.is_finite() { json!((x * 1e4).round() / 1e4) } else { Value::Null }).collect() };
+                        let table = |k: &pushfold::flopweights::KindValues| json!({"own": k.own.iter().map(|r| nums(r)).collect::<Vec<_>>(), "flops": k.count.iter().map(|r| nums(r)).collect::<Vec<_>>(), "used": k.used.iter().map(|r| nums(r)).collect::<Vec<_>>()});
+                        if detail.is_some() { kinds_detail = json!({"kinds": pushfold::flopweights::KIND_NAMES, "lean": lean, "weights_only_button": nums(&out[0]), "weights_only_big_blind": nums(&out[1]), "button": table(&kv[0]), "big_blind": table(&kv[1])}); }
+                        out = [kv[0].value.clone(), kv[1].value.clone()];
+                    }
                     if let Some(path) = &detail {
                         if pass != detail_round { detail_round = pass; detail_lines.clear(); }
                         let avg = |v: &Vec<f64>| -> Vec<Value> { v.iter().map(|x| if x.is_finite() { json!((x * 1e4).round() / 1e4) } else { Value::Null }).collect() };
                         detail_lines.push(json!({"line": l.path, "pot_bb": l.pot_bb, "behind_bb": l.behind_bb, "button_range": l.button_range, "big_blind_range": l.big_blind_range,
-                            "weighted_button": avg(&out[0]), "weighted_big_blind": avg(&out[1]), "flops": detail_flops}));
+                            "weighted_button": avg(&out[0]), "weighted_big_blind": avg(&out[1]), "by_kind": kinds_detail, "flops": detail_flops}));
                         let doc = json!({"round": pass, "classes": (0..169).map(pushfold::class_name).collect::<Vec<_>>(), "flop_names": flop_names,
-                            "weighting": if plain_flops { "plain" } else { "fitted" },
+                            "weighting": if plain_flops { "plain" } else { "fitted" }, "valuing": valuing,
                             "weights": flop_fit.weight.iter().map(|w| w.iter().map(|x| (x * 1e5).round() / 1e5).collect::<Vec<f64>>()).collect::<Vec<_>>(),
                             "note": "values are in big blinds out of the line's pot, before the two sides are scaled to add up to it; weights[class][flop] add to 1 for each class (fitted weighting only)",
                             "lines": detail_lines});
@@ -836,14 +894,20 @@ fn main() {
                             if std::fs::write(&tmp, v.to_string()).is_ok() { let _ = std::fs::rename(&tmp, path); }
                         }
                     }
-                    say(format!("== after pass {}: {} ==", i.pass, i.root_actions.iter().zip(&i.root_freqs).map(|(a, f)| format!("{a} {:.1}%", f * 100.0)).collect::<Vec<_>>().join(", ")));
-                    for l in &i.lines { say(format!("   {} ({:.1}% of hands): button's share was {:.1}%, flop solves gave {:.1}%", l.path, l.freq * 100.0, l.share_before * 100.0, l.share_solved * 100.0)); }
+                    say(format!("== after pass {}: {} =={}", i.pass, i.root_actions.iter().zip(&i.root_freqs).map(|(a, f)| format!("{a} {:.1}%", f * 100.0)).collect::<Vec<_>>().join(", "), if i.settled { " settled" } else { "" }));
+                    for l in &i.lines { say(format!("   {} ({:.1}% of hands): button's share was {:.1}%, flop solves gave {:.1}%; the two sides' values came to {:.1}% of the pot", l.path, l.freq * 100.0, l.share_before * 100.0, l.share_solved * 100.0, l.values_total * 100.0)); }
                 };
                 // --resume: carry on from the round a stopped run last finished (kept beside the --save file)
                 let want_resume = args.iter().any(|a| a == "--resume");
                 if want_resume && save.is_none() { return Err("--resume needs --save <file>: the run's progress is kept beside that file".into()); }
                 let cp_path = save.as_ref().map(|p| format!("{p}.resume"));
                 let settings = json!({"spec": serde_json::to_value(&spec).map_err(|e| e.to_string())?, "flops": nflops, "flop_list": flop_names, "flop_weights": if plain_flops { "plain" } else { "fitted" }, "min_line": min_freq, "flop_accuracy": accuracy});
+                // newer options join the settings only when used, so runs saved before they existed can still be resumed
+                let mut settings = settings;
+                if valuing == "kinds" { settings["valuing"] = json!({"kinds": true, "lean": lean}); }
+                if rule != pushfold::preflop::StepRule::Fixed(0.35) { settings["rounds"] = json!(rule); }
+                if let Some(p) = &start_from { settings["start_from"] = json!(p); }
+                if floor > 0.0 { settings["floor"] = json!(floor); }
                 let mut start: Option<pushfold::preflop::Checkpoint> = None;
                 if want_resume {
                     if let Some(text) = cp_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
@@ -857,7 +921,8 @@ fn main() {
                 let mut keep = |c: &pushfold::preflop::Checkpoint| {
                     if let Some(p) = &cp_path { let tmp = format!("{p}.part"); if std::fs::write(&tmp, json!({"settings": settings, "checkpoint": c}).to_string()).is_ok() { let _ = std::fs::rename(&tmp, p); } }
                 };
-                pushfold::preflop::solve_accurate_from(&spec, passes, min_freq, &mut eval, &mut report, start, &mut keep)?
+                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: 8, start: start_sigmas };
+                pushfold::preflop::solve_accurate_opts(&spec, passes, min_freq, &mut eval, &mut report, start, &mut keep, &opts)?
             } else { pushfold::preflop::solve(&spec)? };
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
             let m = v.as_object_mut().unwrap();

@@ -283,6 +283,127 @@ pub fn fit_class(q: &[f64; NF], prof: &[&([f64; NF], f64)], ways: &[f64], iterat
     (base, w)
 }
 
+// ---------------------------------------------------------------------------------------------
+// Valuing a hand kind by kind
+//
+// With a couple of dozen flops a hand's value hangs on the one or two where it makes two pair or
+// trips: worth ten times an ordinary flop, and present for one hand and absent for its neighbour by
+// luck. So the value is built from kinds of flop instead, each at its true frequency over all
+// flops, and what a kind is worth to a hand leans on its neighbours where its own flops are few.
+
+/// The kinds of flop for a hand, by rank alone (so they are the same for every suit of a class).
+pub const KIND_NAMES: [&str; 5] = ["miss", "pair, high card", "pair, low card", "two pair", "trips or better"];
+pub const NK: usize = 5;
+
+/// (sort, high rank, low rank) of a class: sort 0 pair, 1 suited, 2 offsuit; rank 12 = ace.
+pub fn class_shape(class: usize) -> (u8, u8, u8) {
+    let (r, c) = (class / 13, class % 13);
+    if r == c { (0, 12 - r as u8, 12 - r as u8) } else if c > r { (1, 12 - r as u8, 12 - c as u8) } else { (2, 12 - c as u8, 12 - r as u8) }
+}
+fn class_from(sort: u8, hi: u8, lo: u8) -> usize {
+    let (a, b) = (12 - hi as usize, 12 - lo as usize); // chart row and column of the two ranks, ace first
+    match sort { 0 => a * 13 + a, 1 => a * 13 + b, _ => b * 13 + a }
+}
+
+/// Which kind of flop this is for the class. Pocket pairs: 0 without a set, 4 with a set or better.
+pub fn kind_of(class: usize, flop: [u8; 3]) -> usize {
+    let (sort, hi, lo) = class_shape(class);
+    let br = [flop[0] / 4, flop[1] / 4, flop[2] / 4];
+    let n_hi = br.iter().filter(|&&r| r == hi).count();
+    if sort == 0 { return if n_hi >= 1 { 4 } else { 0 }; }
+    let n_lo = br.iter().filter(|&&r| r == lo).count();
+    match (n_hi, n_lo) { (0, 0) => 0, (1, 0) => 1, (0, 1) => 2, (1, 1) => 3, _ => 4 }
+}
+
+/// How often each kind comes over all 19,600 flops the class can see.
+pub fn kind_truth(class: usize) -> [f64; NK] {
+    let h = representative(class);
+    let rest: Vec<u8> = (0..52u8).filter(|c| *c != h[0] && *c != h[1]).collect();
+    let mut q = [0f64; NK];
+    let mut n = 0f64;
+    for a in 0..rest.len() { for b in a + 1..rest.len() { for c in b + 1..rest.len() { q[kind_of(class, [rest[a], rest[b], rest[c]])] += 1.0; n += 1.0; } } }
+    for k in 0..NK { q[k] /= n; }
+    q
+}
+
+/// The nearest hands to borrow from: same sort and top card, kicker `dist` ranks either side
+/// (pocket pairs: the pairs `dist` ranks either side).
+fn neighbours(class: usize, dist: u8) -> Vec<usize> {
+    let (sort, hi, lo) = class_shape(class);
+    let mut out = vec![];
+    if sort == 0 {
+        if hi >= dist { out.push(class_from(0, hi - dist, hi - dist)); }
+        if hi + dist <= 12 { out.push(class_from(0, hi + dist, hi + dist)); }
+    } else {
+        if lo >= dist { out.push(class_from(sort, hi, lo - dist)); }
+        if lo + dist < hi { out.push(class_from(sort, hi, lo + dist)); }
+    }
+    out
+}
+
+/// What `value_by_kinds` worked out, kept for the record.
+pub struct KindValues {
+    /// each class's value (NaN for a class with no value on any flop)
+    pub value: Vec<f64>,
+    /// per class and kind: the average over the class's own flops of that kind (NaN if it has none), and how many there were
+    pub own: Vec<[f64; NK]>,
+    pub count: Vec<[f64; NK]>,
+    /// per class and kind: the value used, after leaning on neighbours
+    pub used: Vec<[f64; NK]>,
+}
+
+/// Values a line kind by kind. `vals[flop][class]` is the class's value on that flop (NaN where it
+/// has none); `weight[class][flop]` the fitted weights. Within a kind the class's own flops are
+/// averaged with the fitted weights. That average is then pulled toward the same kind's value for
+/// the adjacent-kicker hands, as if the neighbours were `lean` extra flops of evidence: a kind with
+/// many flops of its own barely moves, one with a single flop moves most of the way, and one with
+/// none takes the neighbours' value outright (looking further along the kickers, then to every
+/// hand of the same sort, if the adjacent ones have none either). `lean` 0 only fills the gaps.
+pub fn value_by_kinds(flops: &[[u8; 3]], weight: &[Vec<f64>], vals: &[Vec<f64>], lean: f64) -> KindValues {
+    let nf = flops.len();
+    let mut own = vec![[f64::NAN; NK]; NC];
+    let mut count = vec![[0f64; NK]; NC];
+    for c in 0..NC {
+        let (mut num, mut den, mut plain) = ([0f64; NK], [0f64; NK], [0f64; NK]);
+        for f in 0..nf {
+            let v = vals[f][c];
+            if !v.is_finite() { continue; }
+            let k = kind_of(c, flops[f]);
+            num[k] += weight[c][f] * v; den[k] += weight[c][f]; plain[k] += v; count[c][k] += 1.0;
+        }
+        for k in 0..NK { if count[c][k] > 0.0 { own[c][k] = if den[k] > 1e-9 { num[k] / den[k] } else { plain[k] / count[c][k] }; } }
+    }
+    let mut used = vec![[f64::NAN; NK]; NC];
+    let mut value = vec![f64::NAN; NC];
+    for c in 0..NC {
+        if count[c].iter().all(|&n| n == 0.0) { continue; }
+        let q = kind_truth(c);
+        let (sort, _, _) = class_shape(c);
+        let (mut tot, mut qsum) = (0.0, 0.0);
+        for k in 0..NK {
+            if q[k] <= 0.0 { continue; }
+            // the neighbours' value for this kind: adjacent kickers first, then further out
+            let mut near = f64::NAN;
+            for dist in 1..12u8 {
+                let (mut num, mut den) = (0.0, 0.0);
+                for nb in neighbours(c, dist) { if count[nb][k] > 0.0 { num += count[nb][k] * own[nb][k]; den += count[nb][k]; } }
+                if den > 0.0 { near = num / den; break; }
+                if count[c][k] > 0.0 { break; } // a hand with flops of its own only leans on the adjacent ones
+            }
+            if !near.is_finite() && count[c][k] == 0.0 {
+                let (mut num, mut den) = (0.0, 0.0);
+                for o in 0..NC { if class_shape(o).0 == sort && count[o][k] > 0.0 { num += count[o][k] * own[o][k]; den += count[o][k]; } }
+                if den > 0.0 { near = num / den; }
+            }
+            let n = count[c][k];
+            let v = if n > 0.0 && near.is_finite() { (n * own[c][k] + lean * near) / (n + lean) } else if n > 0.0 { own[c][k] } else { near };
+            if v.is_finite() { used[c][k] = v; tot += q[k] * v; qsum += q[k]; }
+        }
+        if qsum > 0.0 { value[c] = tot / qsum; }
+    }
+    KindValues { value, own, count, used }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,6 +451,33 @@ mod tests {
             // 7-2 offsuit pairs on a third of all flops, whatever the sample happens to hold
             assert!((fw.fitted_profile[c][name("pair or better")] - 0.324).abs() < 0.02, "{n} flops: {}", fw.fitted_profile[c][name("pair or better")]);
         }
+    }
+    #[test]
+    fn kinds_have_true_frequencies_and_fill_gaps() {
+        let c = |a: &str, b: &str| class_of(parse_card(a).unwrap(), parse_card(b).unwrap());
+        let q = kind_truth(c("Tc", "5d"));
+        assert!((q[0] - 0.6757).abs() < 1e-3 && (q[1] - 0.1448).abs() < 1e-3 && (q[3] - 0.0202).abs() < 1e-3 && (q[4] - 0.0145).abs() < 1e-3, "{q:?}");
+        let q = kind_truth(c("8c", "8d"));
+        assert!((q[4] - 0.1176).abs() < 1e-3 && q[1] == 0.0);
+        assert_eq!(kind_of(c("Tc", "5d"), parse_flop("Th5d2c").unwrap()), 3);
+        assert_eq!(kind_of(c("Tc", "5d"), parse_flop("5h5d2c").unwrap()), 4);
+        assert_eq!(kind_of(c("8c", "8d"), parse_flop("8h5d2c").unwrap()), 4);
+        // neighbours of T5o are T4o and T6o; of 88, 77 and 99
+        let names = |v: Vec<usize>| -> Vec<String> { v.into_iter().map(crate::class_name).collect() };
+        assert_eq!(names(neighbours(c("Tc", "5d"), 1)), vec!["T4o", "T6o"]);
+        assert_eq!(names(neighbours(c("8c", "8d"), 1)), vec!["77", "99"]);
+        assert_eq!(names(neighbours(c("Tc", "9c"), 1)), vec!["T8s"]);
+        // a made-up line: every hand is worth 1 on a miss, 3 on a pair, 10 on two pair or better.
+        // Whatever the sample, every unpaired hand must then come out at the same true-odds value.
+        let flops: Vec<[u8; 3]> = sample(24).iter().map(|f| parse_flop(f).unwrap()).collect();
+        let fw = fit(&flops, None);
+        let vals: Vec<Vec<f64>> = flops.iter().map(|f| (0..NC).map(|h| match kind_of(h, *f) { 0 => 1.0, 1 | 2 => 3.0, _ => 10.0 }).collect()).collect();
+        let kv = value_by_kinds(&flops, &fw.weight, &vals, 2.0);
+        let want = 0.6757 * 1.0 + 0.2896 * 3.0 + 0.0347 * 10.0;
+        for h in 0..NC { if class_shape(h).0 != 0 { assert!((kv.value[h] - want).abs() < 0.01, "{}: {}", crate::class_name(h), kv.value[h]); } }
+        // T5o has no two-pair flop in the 24, so that kind was borrowed
+        let t5 = c("Tc", "5d");
+        assert!(kv.count[t5][3] == 0.0 && (kv.used[t5][3] - 10.0).abs() < 1e-9);
     }
     #[test]
     fn suit_ways_counts() {

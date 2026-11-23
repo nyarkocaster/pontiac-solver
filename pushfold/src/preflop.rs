@@ -276,13 +276,60 @@ const ACCURATE_NOTE: &str = "All-in pots are exact. Lines marked solved take the
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PassInfo {
     pub pass: usize,
+    /// how far this round moved from the strategy before it toward the fresh solve (1 = all the way)
+    #[serde(default)] pub step: f64,
+    /// true once the button's totals have stopped moving (see `AccurateOpts::settled_points`)
+    #[serde(default)] pub settled: bool,
     /// the button's first decision after this round's flop values went in
     pub root_actions: Vec<String>, pub root_freqs: Vec<f64>,
     /// per line solved this round: the button's pot share used going in, and what the flop solves gave
     pub lines: Vec<PassLine>,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PassLine { pub path: String, pub freq: f64, pub share_before: f64, pub share_solved: f64, pub flops: usize, pub worst_accuracy_pct: f64 }
+pub struct PassLine { pub path: String, pub freq: f64, pub share_before: f64, pub share_solved: f64, pub flops: usize, pub worst_accuracy_pct: f64,
+    /// the two players' flop values as a share of the pot, added together, before they are scaled to add up to it (1.0 = they already do)
+    #[serde(default)] pub values_total: f64 }
+
+/// How far each round moves from the strategy so far toward the fresh solve.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum StepRule {
+    /// the same share every round (0.35 is what the first accurate runs used); never has to stop moving
+    Fixed(f64),
+    /// the strategy is the plain average of every round's fresh solve (round n moves 1/n)
+    Average,
+    /// the average with later rounds counting more, in proportion to the round number (round n moves 2/(n+1))
+    Rising,
+}
+impl StepRule {
+    pub fn step(&self, round: usize) -> f64 {
+        let n = round.max(1) as f64;
+        match self { StepRule::Fixed(x) => x.clamp(0.01, 1.0), StepRule::Average => 1.0 / n, StepRule::Rising => 2.0 / (n + 1.0) }
+    }
+}
+/// Options for an accurate run beyond the basic ones.
+#[derive(Clone, Debug)]
+pub struct AccurateOpts {
+    pub step: StepRule,
+    /// stop early once each of the button's totals has changed by less than this many points
+    /// (percent of hands) over the last three rounds
+    pub settled_points: Option<f64>,
+    /// never stop for being settled before this round
+    pub min_rounds: usize,
+    /// start from another run's strategy (its `sigmas`), which then counts as one round already done
+    pub start: Option<Vec<Vec<f64>>>,
+}
+impl Default for AccurateOpts { fn default() -> Self { AccurateOpts { step: StepRule::Fixed(0.35), settled_points: None, min_rounds: 6, start: None } } }
+
+/// Have the button's totals stopped moving? True when, over the last three rounds (four readings),
+/// no total's highest and lowest reading differ by `points` or more.
+pub fn settled(history: &[PassInfo], points: f64) -> bool {
+    if history.len() < 4 { return false; }
+    let last = &history[history.len() - 4..];
+    let n = last[0].root_freqs.len();
+    if last.iter().any(|h| h.root_freqs.len() != n) { return false; }
+    (0..n).all(|a| { let v: Vec<f64> = last.iter().map(|h| h.root_freqs[a] * 100.0).collect(); v.iter().cloned().fold(f64::MIN, f64::max) - v.iter().cloned().fold(f64::MAX, f64::min) < points })
+}
 
 /// What a flop evaluator hands back for one line: per hand class, the big blinds each player wins
 /// from the pot on average (button first, then big blind); how many flops; the worst accuracy reached.
@@ -311,27 +358,45 @@ pub fn solve_accurate(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut d
 /// As `solve_accurate`, but can start from a checkpoint and hands one out after every round.
 /// The preflop solve is deterministic, so a resumed run gives the same answer as an unbroken one.
 pub fn solve_accurate_from(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut dyn FnMut(&FlopLine, usize) -> Result<LineValues, String>, report: &mut dyn FnMut(&PassInfo, &Preflop), resume: Option<Checkpoint>, checkpoint: &mut dyn FnMut(&Checkpoint)) -> Result<Preflop, String> {
+    solve_accurate_opts(spec, passes, min_freq, eval, report, resume, checkpoint, &AccurateOpts::default())
+}
+
+/// As `solve_accurate_from`, with a choice of how the rounds are averaged, an early stop once the
+/// button's totals have settled, and an optional starting strategy.
+pub fn solve_accurate_opts(spec: &PreSpec, passes: usize, min_freq: f64, eval: &mut dyn FnMut(&FlopLine, usize) -> Result<LineValues, String>, report: &mut dyn FnMut(&PassInfo, &Preflop), resume: Option<Checkpoint>, checkpoint: &mut dyn FnMut(&Checkpoint), opts: &AccurateOpts) -> Result<Preflop, String> {
     let mut solved: std::collections::HashMap<usize, [Vec<f64>; 2]> = Default::default();
-    let mut history = vec![];
+    let mut history: Vec<PassInfo> = vec![];
     let mut first = 1;
     let mut resumed: Option<Preflop> = None;
+    // a starting strategy counts as one round already behind us when the rounds are averaged
+    let offset = if opts.start.is_some() { 1 } else { 0 };
     if let Some(c) = resume {
         solved = c.solved.into_iter().collect(); history = c.history; first = c.rounds_done + 1;
-        let mut o = solve_with(spec, &solved, Some((&c.prev, 0.35)))?;
+        let mut o = solve_with(spec, &solved, Some((&c.prev, opts.step.step(c.rounds_done + offset))))?;
         o.accurate = Some(history.clone()); o.model_note = ACCURATE_NOTE.into();
         resumed = Some(o);
+        if let Some(points) = opts.settled_points { if history.len() >= opts.min_rounds && settled(&history, points) { return Ok(resumed.unwrap()); } }
     }
     let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
-    let mut out = match resumed { Some(o) => o, None => solve_with(spec, &solved, None)? };
+    let mut out = match (resumed, &opts.start) {
+        (Some(o), _) => o,
+        (None, Some(start)) => {
+            let o = solve_with(spec, &solved, Some((start, 0.0)))?;
+            if o.sigmas.len() != start.len() || o.sigmas.iter().zip(start.iter()).any(|(a, b)| a.len() != b.len()) { return Err("the starting strategy was made for a different preflop tree (stack, sizes or limp setting)".into()); }
+            o
+        }
+        (None, None) => solve_with(spec, &solved, None)?,
+    };
     // Each round the flops are solved for the ranges as they stand, and the strategy then moves only
     // part of the way toward the best answer to those values. The values are only right for the
     // ranges they were solved with; small steps keep the two in agreement, and a strategy that no
     // longer moves is one where every hand is doing its best against real flop results.
-    let step = 0.35;
     for pass in first..=passes.max(1) {
+        let step = opts.step.step(pass + offset);
         let mut lines = vec![];
         for l in out.lines.iter().filter(|l| l.freq >= min_freq) {
             let (mut vals, flops, worst) = eval(l, pass)?;
+            let values_total;
             // A sample of flops pairs each hand a little more often than the full deck does, so the two
             // players' solved values add up to slightly more than the pot. Scale both back so they add up.
             {
@@ -342,6 +407,7 @@ pub fn solve_accurate_from(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
                         let m = combos(i) * l.reach[p][i] * w; num += m * vals[p][i]; den += m; }
                     share[p] = if den > 0.0 { num / den / l.pot_bb } else { 0.5 }; }
                 let total = share[0] + share[1];
+                values_total = total;
                 if total > 0.5 { for p in 0..2 { for v in vals[p].iter_mut() { *v /= total; } } }
             }
             let entry = fit_offsets(&cp, &eq, &l.reach, &vals, l.pot_bb);
@@ -361,19 +427,22 @@ pub fn solve_accurate_from(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
             // the button's share these flop solves gave, over the ranges that were sent
             let (mut num, mut den) = (0.0, 0.0);
             for i in 0..N { let w = combos(i) * l.reach[0][i]; if vals[0][i].is_finite() { num += w * vals[0][i]; den += w; } }
-            lines.push(PassLine { path: l.path.clone(), freq: l.freq, share_before: l.button_share, share_solved: if den > 0.0 { ((num / den / l.pot_bb) * 1e4).round() / 1e4 } else { 0.0 }, flops, worst_accuracy_pct: worst });
+            lines.push(PassLine { path: l.path.clone(), freq: l.freq, share_before: l.button_share, share_solved: if den > 0.0 { ((num / den / l.pot_bb) * 1e4).round() / 1e4 } else { 0.0 }, flops, worst_accuracy_pct: worst, values_total: (values_total * 1e4).round() / 1e4 });
             solved.insert(l.leaf, entry);
         }
         let prev = std::mem::take(&mut out.sigmas);
         out = solve_with(spec, &solved, Some((&prev, step)))?;
-        let info = PassInfo { pass, root_actions: out.nodes[0].actions.clone(), root_freqs: out.nodes[0].freqs.clone(), lines };
+        let mut info = PassInfo { pass, step, settled: false, root_actions: out.nodes[0].actions.clone(), root_freqs: out.nodes[0].freqs.clone(), lines };
         history.push(info.clone());
+        let done = match opts.settled_points { Some(points) => history.len() >= opts.min_rounds && settled(&history, points), None => false };
+        if done { info.settled = true; history.last_mut().unwrap().settled = true; }
         // hand over the whole answer as it stands, so a run that stops later loses one round, not everything
         out.accurate = Some(history.clone());
         out.model_note = ACCURATE_NOTE.into();
         report(&info, &out);
         let mut sv: Vec<(usize, [Vec<f64>; 2])> = solved.iter().map(|(k, v)| (*k, v.clone())).collect(); sv.sort_by_key(|x| x.0);
         checkpoint(&Checkpoint { rounds_done: pass, solved: sv, prev, history: history.clone() });
+        if done { break; }
     }
     out.accurate = Some(history);
     out.model_note = ACCURATE_NOTE.into();
@@ -387,17 +456,21 @@ pub fn solve_accurate_from(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
 /// sensibly when the ranges shift in the next preflop solve. Hands that were not in the solved
 /// range get the average offset of the hands that were.
 fn fit_offsets(cp: &[f64], eq: &[f64], reach: &[Vec<f64>; 2], vals: &[Vec<f64>; 2], pot: f64) -> [Vec<f64>; 2] {
+    // `have`: in the range that was solved, so it counts when averaging over the other player's hands.
+    // `valued`: has a solved value, so it gets its own offset; a hand kept in the solve only as a sliver
+    // (see --floor) has a value without being in the range.
     let have = |p: usize, i: usize| vals[p][i].is_finite() && reach[p][i] > 0.005;
+    let valued = |p: usize, i: usize| vals[p][i].is_finite();
     let (mut up, mut down) = (vec![0.0; N], vec![0.0; N]);
     for _ in 0..40 {
         for b in 0..N {
-            if !have(0, b) { continue; }
+            if !valued(0, b) { continue; }
             let (mut w, mut e, mut d) = (0.0, 0.0, 0.0);
             for x in 0..N { if !have(1, x) { continue; } let k = cp[b * N + x] * reach[1][x]; w += k; e += k * eq[b * N + x]; d += k * down[x]; }
             if w > 0.0 { up[b] = vals[0][b] / pot - e / w + d / w; }
         }
         for x in 0..N {
-            if !have(1, x) { continue; }
+            if !valued(1, x) { continue; }
             let (mut w, mut e, mut u) = (0.0, 0.0, 0.0);
             for b in 0..N { if !have(0, b) { continue; } let k = cp[x * N + b] * reach[0][b]; w += k; e += k * eq[b * N + x]; u += k * up[b]; }
             if w > 0.0 { down[x] = vals[1][x] / pot - 1.0 + e / w + u / w; }
@@ -405,13 +478,13 @@ fn fit_offsets(cp: &[f64], eq: &[f64], reach: &[Vec<f64>; 2], vals: &[Vec<f64>; 
         // only the difference matters; keep the big blind's offsets centred
         let (mut w, mut m) = (0.0, 0.0);
         for x in 0..N { if have(1, x) { let k = combos(x) * reach[1][x]; w += k; m += k * down[x]; } }
-        if w > 0.0 { let m = m / w; for x in 0..N { if have(1, x) { down[x] -= m; } } for b in 0..N { if have(0, b) { up[b] -= m; } } }
+        if w > 0.0 { let m = m / w; for x in 0..N { if valued(1, x) { down[x] -= m; } } for b in 0..N { if valued(0, b) { up[b] -= m; } } }
     }
     for (p, v) in [(0usize, &mut up), (1, &mut down)] {
         let (mut w, mut m) = (0.0, 0.0);
         for i in 0..N { if have(p, i) { let k = combos(i) * reach[p][i]; w += k; m += k * v[i]; } }
         let mean = if w > 0.0 { m / w } else { 0.0 };
-        for i in 0..N { if !have(p, i) { v[i] = mean; } else { v[i] = v[i].clamp(-2.0, 2.0); } }
+        for i in 0..N { if !valued(p, i) { v[i] = mean; } else { v[i] = v[i].clamp(-2.0, 2.0); } }
     }
     [up, down]
 }
@@ -533,6 +606,48 @@ mod tests {
         println!("plain {:?}", plain.nodes[0].freqs);
         for (a, b) in acc.nodes[0].freqs.iter().zip(&plain.nodes[0].freqs) { assert!((a - b).abs() < 0.05, "{a} vs {b}"); }
         for l in &log.last().unwrap().lines { assert!((l.share_before - l.share_solved).abs() < 0.02, "{} {} {}", l.path, l.share_before, l.share_solved); }
+    }
+
+    /// Averaged rounds: the step sizes are those of an average, the run stops when the button's
+    /// totals stop moving, a stopped run resumes to the same answer, and another run's strategy can
+    /// be the starting point.
+    #[test]
+    fn averaged_rounds_settle_and_resume() {
+        assert!((StepRule::Average.step(4) - 0.25).abs() < 1e-12 && (StepRule::Rising.step(4) - 0.4).abs() < 1e-12 && StepRule::Fixed(0.35).step(9) == 0.35);
+        let spec: PreSpec = serde_json::from_str(r#"{"stack":15,"iterations":600}"#).unwrap();
+        let cp = compat(); let eq: Vec<f64> = (0..N * N).map(|k| equity(k / N, k % N)).collect();
+        let play: Vec<f64> = (0..N).map(playability).collect(); let m = FlopModel::default();
+        let mut eval = |l: &FlopLine, _pass: usize| -> Result<LineValues, String> {
+            let spr = l.behind_bb / l.pot_bb; let depth = spr / (spr + m.half_spr);
+            let raiser = l.path.rsplit(" > ").find(|s| s.contains("raise")).map(|s| if s.starts_with("SB") { 1.0 } else { -1.0 }).unwrap_or(0.0);
+            let share = |b: usize, x: usize| (eq[b * N + x] + depth * (m.position + m.initiative * raiser + m.playability * (play[b] - play[x]))).clamp(0.0, 1.0);
+            let mut v = [vec![f64::NAN; N], vec![f64::NAN; N]];
+            for b in 0..N { if l.reach[0][b] < 0.005 { continue; } let (mut w, mut s) = (0.0, 0.0); for x in 0..N { if l.reach[1][x] < 0.005 { continue; } let k = cp[b * N + x] * l.reach[1][x]; w += k; s += k * share(b, x); } if w > 0.0 { v[0][b] = s / w * l.pot_bb; } }
+            for x in 0..N { if l.reach[1][x] < 0.005 { continue; } let (mut w, mut s) = (0.0, 0.0); for b in 0..N { if l.reach[0][b] < 0.005 { continue; } let k = cp[x * N + b] * l.reach[0][b]; w += k; s += k * (1.0 - share(b, x)); } if w > 0.0 { v[1][x] = s / w * l.pot_bb; } }
+            Ok((v, 1, 0.0))
+        };
+        let opts = AccurateOpts { step: StepRule::Rising, settled_points: Some(1.0), min_rounds: 4, start: None };
+        // an unbroken run stops by itself, well short of the 12 rounds allowed
+        let mut cps: Vec<Checkpoint> = vec![];
+        let whole = solve_accurate_opts(&spec, 12, 0.02, &mut eval, &mut |_, _| {}, None, &mut |c: &Checkpoint| cps.push(c.clone()), &opts).unwrap();
+        let hist = whole.accurate.clone().unwrap();
+        assert!(hist.len() >= 4 && hist.len() < 12 && hist.last().unwrap().settled, "{} rounds", hist.len());
+        assert!((hist[2].step - 0.5).abs() < 1e-12);
+        for l in &hist.last().unwrap().lines { assert!((l.values_total - 1.0).abs() < 0.02, "{} {}", l.path, l.values_total); }
+        // stopped after round 2 and resumed: the same rounds and the same answer
+        let again = solve_accurate_opts(&spec, 12, 0.02, &mut eval, &mut |_, _| {}, Some(cps[1].clone()), &mut |_| {}, &opts).unwrap();
+        assert_eq!(again.accurate.as_ref().unwrap().len(), hist.len());
+        for (a, b) in again.nodes[0].freqs.iter().zip(&whole.nodes[0].freqs) { assert!((a - b).abs() < 1e-9, "{a} vs {b}"); }
+        // started from the finished run's strategy, the first round barely moves it
+        let warm = AccurateOpts { step: StepRule::Rising, settled_points: None, min_rounds: 4, start: Some(whole.sigmas.clone()) };
+        let mut first: Option<PassInfo> = None;
+        solve_accurate_opts(&spec, 1, 0.02, &mut eval, &mut |i: &PassInfo, _| first = Some(i.clone()), None, &mut |_| {}, &warm).unwrap();
+        let first = first.unwrap();
+        assert!((first.step - 2.0 / 3.0).abs() < 1e-12);
+        for (a, b) in first.root_freqs.iter().zip(&whole.nodes[0].freqs) { assert!((a - b).abs() < 0.03, "{a} vs {b}"); }
+        // a strategy for another tree is refused
+        let other: PreSpec = serde_json::from_str(r#"{"stack":15,"iterations":600,"limp":false}"#).unwrap();
+        assert!(solve_accurate_opts(&other, 1, 0.02, &mut eval, &mut |_, _| {}, None, &mut |_| {}, &warm).is_err());
     }
 
     /// A run stopped after two rounds and resumed must end exactly where an unbroken run ends.
