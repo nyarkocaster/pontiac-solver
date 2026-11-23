@@ -775,7 +775,21 @@ fn main() {
                 let detail = flag("--flop-detail");
                 let mut detail_round = 0usize;
                 let mut detail_lines: Vec<Value> = vec![];
+                // --line-values <file>: take each line's per-hand values from a file instead of solving flops
+                // ({"lines": {"<line path>": {"button": [169 numbers or null], "big_blind": [...]}}}, big blinds out of the pot).
+                // For testing other ways of turning flop results into hand values without solving again.
+                let given: Option<Value> = match flag("--line-values") {
+                    Some(path) => Some(serde_json::from_str(&std::fs::read_to_string(&path).map_err(|e| format!("could not read {path}: {e}"))?).map_err(|_| format!("{path} is not a line-values file"))?),
+                    None => None,
+                };
                 let mut eval = |l: &pushfold::preflop::FlopLine, pass: usize| -> Result<pushfold::preflop::LineValues, String> {
+                    if let Some(g) = &given {
+                        let e = &g["lines"][&l.path];
+                        if e.is_null() { return Err(format!("the line-values file has no entry for the line '{}' ({:.1}% of hands)", l.path, l.freq * 100.0)); }
+                        let row = |k: &str| -> Vec<f64> { (0..169).map(|c| e[k][c].as_f64().unwrap_or(f64::NAN)).collect() };
+                        say(format!("pass {pass} | {} | values taken from the file", l.path));
+                        return Ok(([row("button"), row("big_blind")], nflops, 0.0));
+                    }
                     let (mut num_v, mut den_v) = ([vec![0f64; 169], vec![0f64; 169]], [vec![0f64; 169], vec![0f64; 169]]);
                     let mut worst = 0f64;
                     let mut detail_flops: Vec<Value> = vec![];
