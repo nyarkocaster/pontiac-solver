@@ -71,6 +71,10 @@ pub struct PreNode {
     pub range: Vec<f64>,
     /// where each action leads: a decision id, or -1 when the betting ends
     pub next: Vec<i64>,
+    /// per action, what taking it is worth in big blinds with each of the 169 classes, counted from the
+    /// start of the hand, given how both players play from there on (0 for a hand that never gets here).
+    /// Two actions a hand mixes between should be worth about the same.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub values: Vec<Vec<f64>>,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FlopLine { #[serde(skip)] pub leaf: usize, #[serde(skip)] pub reach: [Vec<f64>; 2], pub path: String, pub freq: f64, pub pot_bb: f64, pub behind_bb: f64, pub button_range: String, pub big_blind_range: String, pub button_share: f64,
@@ -225,6 +229,34 @@ impl Game {
                 n.sum[a * N + h] += t * mine[h] * s[a * N + h];
             } }
         }
+        val
+    }
+    /// Value for `hero` of every class at node `id` when both players follow the strategies `sig`
+    /// (summed over the other player's hands, weighted by their reach), and, at each of hero's
+    /// decisions on the way, what each action is worth per hand (`out[node][action][class]`).
+    fn value_under(&self, sig: &[Vec<f64>], id: usize, hero: usize, theirs: &[f64], out: &mut Vec<Vec<Vec<f64>>>) -> Vec<f64> {
+        let n = &self.nodes[id];
+        if !matches!(n.kind, Kind::Decision) {
+            return (0..N).map(|i| (0..N).map(|j| { let w = self.cp[i * N + j] * theirs[j]; if w > 0.0 { w * self.payoff(id, hero, i, j) } else { 0.0 } }).sum()).collect();
+        }
+        let (na, s) = (n.actions.len(), &sig[id]);
+        let mut val = vec![0.0; N];
+        if n.player != hero {
+            for a in 0..na {
+                let r: Vec<f64> = (0..N).map(|h| theirs[h] * s[a * N + h]).collect();
+                if r.iter().all(|&x| x <= 0.0) { continue; }
+                let v = self.value_under(sig, n.children[a], hero, &r, out);
+                for h in 0..N { val[h] += v[h]; }
+            }
+            return val;
+        }
+        let den: Vec<f64> = (0..N).map(|h| (0..N).map(|j| self.cp[h * N + j] * theirs[j]).sum()).collect();
+        let mut rec = vec![vec![0.0; N]; na];
+        for a in 0..na {
+            let v = self.value_under(sig, n.children[a], hero, theirs, out);
+            for h in 0..N { val[h] += s[a * N + h] * v[h]; if den[h] > 1e-9 { rec[a][h] = v[h] / den[h]; } }
+        }
+        out[id] = rec;
         val
     }
     fn total(&self, v: &[f64]) -> f64 { (0..N).map(|i| combos(i) * v[i]).sum::<f64>() / (1326.0 * 1225.0) }
@@ -414,6 +446,9 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
         let new = g.sigma(i, true);
         sigmas[i] = match blend { Some((old, step)) if old.len() == g.nodes.len() && old[i].len() == new.len() => new.iter().zip(&old[i]).map(|(n, o)| o + step * (n - o)).collect(), _ => new };
     }
+    // what each action is worth to each hand under the strategies being reported
+    let mut action_values: Vec<Vec<Vec<f64>>> = vec![vec![]; g.nodes.len()];
+    for hero in 0..2 { g.value_under(&sigmas, 0, hero, &ones, &mut action_values); }
     let decisions: Vec<usize> = (0..g.nodes.len()).filter(|&i| matches!(g.nodes[i].kind, Kind::Decision)).collect();
     for (k, &i) in decisions.iter().enumerate() { ids[i] = k as i64; }
     for i in 0..g.nodes.len() {
@@ -431,7 +466,8 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
                 nodes.push(PreNode { id: ids[i] as usize, path: n.path.clone(), player: ["Small blind", "Big blind"][p].into(), situation,
                     actions: n.actions.iter().map(|a| a.0.clone()).collect(), amounts_bb: n.actions.iter().map(|a| a.1).collect(), freqs, reach: r(here, 4),
                     strategy: (0..na).map(|a| (0..N).map(|h| r(s[a * N + h], 3)).collect()).collect(), range: rc[p].iter().map(|&x| r(x, 3)).collect(),
-                    next: n.children.iter().map(|&c| ids[c]).collect() });
+                    next: n.children.iter().map(|&c| ids[c]).collect(),
+                    values: action_values[i].iter().map(|v| v.iter().map(|&x| r(x, 4)).collect()).collect() });
             }
             Kind::Flop { raiser } => {
                 let freq = share_of(&rc); if freq < 0.0005 { continue; }

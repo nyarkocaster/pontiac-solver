@@ -706,19 +706,39 @@ fn main() {
                 let text = std::fs::read_to_string(&path).map_err(|e| format!("could not read {path}: {e}"))?;
                 let v: Value = serde_json::from_str(&text).map_err(|_| format!("{path} is not a preflop result"))?;
                 let tol = num("--tolerance")?.unwrap_or(0.15);
+                let min_gap = num("--min-value-gap")?.unwrap_or(0.03);
                 let mut out = vec![];
+                let row = |x: &Value| -> Vec<f64> { x.as_array().map(|a| a.iter().map(|y| y.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default() };
                 for n in v["nodes"].as_array().ok_or("no decisions in that file")? {
                     let actions: Vec<String> = n["actions"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
-                    let Some(fold) = actions.iter().position(|a| a == "Fold") else { continue };
                     let reach = n["reach"].as_f64().unwrap_or(0.0);
                     if reach < 0.05 { continue; }
-                    let folds: Vec<f64> = n["strategy"][fold].as_array().map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default();
-                    if folds.len() != 169 { continue; }
-                    let plays: Vec<f64> = folds.iter().map(|f| 1.0 - f).collect();
-                    out.push(json!({"decision": n["situation"], "path": n["path"], "reach": reach, "check": pushfold::chartcheck::check(&plays, tol)}));
+                    let strat: Vec<Vec<f64>> = (0..actions.len()).map(|a| row(&n["strategy"][a])).collect();
+                    if strat.iter().any(|s| s.len() != 169) { continue; }
+                    let values: Option<Vec<Vec<f64>>> = { let v: Vec<Vec<f64>> = (0..actions.len()).map(|a| row(&n["values"][a])).collect(); if v.iter().all(|x| x.len() == 169) { Some(v) } else { None } };
+                    let present = row(&n["range"]);
+                    let present = if present.len() == 169 { Some(present) } else { None };
+                    // playing against folding
+                    if let Some(fold) = actions.iter().position(|a| a == "Fold") {
+                        let plays: Vec<f64> = strat[fold].iter().map(|f| 1.0 - f).collect();
+                        let edge: Option<Vec<f64>> = values.as_ref().map(|v| (0..169).map(|h| (0..actions.len()).filter(|&a| a != fold).map(|a| v[a][h]).fold(f64::MIN, f64::max) - v[fold][h]).collect());
+                        out.push(json!({"decision": n["situation"], "path": n["path"], "reach": reach, "compares": "playing against folding",
+                            "check": pushfold::chartcheck::check_values(&plays, edge.as_deref(), present.as_deref(), tol, min_gap)}));
+                    }
+                    // raising against limping (or against calling or checking): only among hands that mostly do one of the two
+                    let passive = actions.iter().position(|a| a == "Limp" || a == "Call" || a == "Check");
+                    let raises: Vec<usize> = (0..actions.len()).filter(|&a| actions[a].starts_with("Raise") || actions[a].starts_with("Re-raise")).collect();
+                    if let (Some(pa), false) = (passive, raises.is_empty()) {
+                        let both: Vec<f64> = (0..169).map(|h| strat[pa][h] + raises.iter().map(|&a| strat[a][h]).sum::<f64>()).collect();
+                        let prefers: Vec<f64> = (0..169).map(|h| if both[h] > 0.0 { raises.iter().map(|&a| strat[a][h]).sum::<f64>() / both[h] } else { 0.0 }).collect();
+                        let edge: Option<Vec<f64>> = values.as_ref().map(|v| (0..169).map(|h| raises.iter().map(|&a| v[a][h]).fold(f64::MIN, f64::max) - v[pa][h]).collect());
+                        let part: Vec<f64> = (0..169).map(|h| present.as_ref().map(|p| p[h]).unwrap_or(1.0) * if both[h] >= 0.5 { 1.0 } else { 0.0 }).collect();
+                        out.push(json!({"decision": n["situation"], "path": n["path"], "reach": reach, "compares": format!("raising against {}", actions[pa].to_lowercase()),
+                            "check": pushfold::chartcheck::check_values(&prefers, edge.as_deref(), Some(&part), tol, min_gap)}));
+                    }
                 }
                 return Ok(json!({"ok": true, "version": version_string(), "file": path,
-                    "note": "For each decision with a fold: pairs of hands where a clearly stronger hand of the same kind is played less often than a weaker one, by more than the tolerance. A sound chart has none or very few. Only the first decision is over every hand; later ones are judged over all 169 classes even where few of them get there.",
+                    "note": "Pairs of hands where a clearly stronger hand of the same kind takes the stronger action (playing, or raising) less often than a weaker one, by more than the tolerance. `inversions` counts them by frequency alone, over all 169 classes; `inversions_by_value` counts only those where the action is also worth more than the value gap (default 0.03 bb) more to the weaker hand, among hands that get to the decision. Raising against limping need not run in order of strength in a sound strategy (weak hands can raise as bluffs), so read that comparison as a description, not a pass mark.",
                     "decisions": out}));
             }
             let mut spec = json!({"stack": match num("--stack")? { Some(x) => x, None => args.get(1).and_then(|x| x.parse::<f64>().ok()).ok_or("give the stack in big blinds, e.g. pontiac preflop --stack 20")? }});
@@ -750,9 +770,15 @@ fn main() {
                 let say = |line: String| { eprintln!("{line}"); if let Some(p) = &log { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) { let _ = writeln!(f, "{line}"); } } };
                 let prog = study_core::StudyProgress::default();
                 let t0 = std::time::Instant::now();
+                // --flop-detail <file>: every round, the value of every hand class on each flop of each line goes to
+                // <file>.round<N>.json (big blinds; null where the hand is not in the range), with the flop weights used
+                let detail = flag("--flop-detail");
+                let mut detail_round = 0usize;
+                let mut detail_lines: Vec<Value> = vec![];
                 let mut eval = |l: &pushfold::preflop::FlopLine, pass: usize| -> Result<pushfold::preflop::LineValues, String> {
                     let (mut num_v, mut den_v) = ([vec![0f64; 169], vec![0f64; 169]], [vec![0f64; 169], vec![0f64; 169]]);
                     let mut worst = 0f64;
+                    let mut detail_flops: Vec<Value> = vec![];
                     for (k, board) in flop_names.iter().enumerate() {
                         let sp = study_core::StudySpec {
                             oop_range: l.big_blind_range.clone(), ip_range: l.button_range.clone(),
@@ -764,9 +790,26 @@ fn main() {
                         worst = worst.max(acc);
                         // vals[0] is the big blind (first to act after the flop), vals[1] the button; chips are tenths of a big blind
                         for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; let k = if plain_flops { flop_ways[k] * mass[theirs][c] } else { flop_fit.weight[c][k] }; if x.is_finite() && k > 0.0 { num_v[mine][c] += k * x / 10.0; den_v[mine][c] += k; } } }
+                        if detail.is_some() {
+                            let bb = |v: &Vec<f64>| -> Vec<Value> { v.iter().map(|x| if x.is_finite() { json!((x / 10.0 * 1e4).round() / 1e4) } else { Value::Null }).collect() };
+                            detail_flops.push(json!({"flop": board, "accuracy_pct": acc, "button": bb(&vals[1]), "big_blind": bb(&vals[0])}));
+                        }
                         say(format!("pass {pass} | {} | flop {} of {nflops} ({board}) | {:.0}s, within {:.2}% of the pot | {:.0} min so far", l.path, k + 1, t.elapsed().as_secs_f64(), acc, t0.elapsed().as_secs_f64() / 60.0));
                     }
                     let out = [0, 1].map(|p| (0..169).map(|c| if den_v[p][c] > 0.0 { num_v[p][c] / den_v[p][c] } else { f64::NAN }).collect::<Vec<f64>>());
+                    if let Some(path) = &detail {
+                        if pass != detail_round { detail_round = pass; detail_lines.clear(); }
+                        let avg = |v: &Vec<f64>| -> Vec<Value> { v.iter().map(|x| if x.is_finite() { json!((x * 1e4).round() / 1e4) } else { Value::Null }).collect() };
+                        detail_lines.push(json!({"line": l.path, "pot_bb": l.pot_bb, "behind_bb": l.behind_bb, "button_range": l.button_range, "big_blind_range": l.big_blind_range,
+                            "weighted_button": avg(&out[0]), "weighted_big_blind": avg(&out[1]), "flops": detail_flops}));
+                        let doc = json!({"round": pass, "classes": (0..169).map(pushfold::class_name).collect::<Vec<_>>(), "flop_names": flop_names,
+                            "weighting": if plain_flops { "plain" } else { "fitted" },
+                            "weights": flop_fit.weight.iter().map(|w| w.iter().map(|x| (x * 1e5).round() / 1e5).collect::<Vec<f64>>()).collect::<Vec<_>>(),
+                            "note": "values are in big blinds out of the line's pot, before the two sides are scaled to add up to it; weights[class][flop] add to 1 for each class (fitted weighting only)",
+                            "lines": detail_lines});
+                        let file = format!("{path}.round{pass}.json");
+                        std::fs::write(&file, doc.to_string()).map_err(|e| format!("could not write {file}: {e}"))?;
+                    }
                     Ok((out, nflops, worst))
                 };
                 let save = flag("--save");
