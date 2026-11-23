@@ -93,6 +93,7 @@ fn main() {
             study_cancel,
             study_memory_estimate,
             study_solve,
+            study_pick_sizes,
             study_summary,
             study_node,
             study_relock,

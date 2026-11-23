@@ -48,6 +48,14 @@ pub fn study_solve(
     }
 }
 
+/// A first, rough solve with a wide menu of bet sizes; returns the sizes each player used most.
+#[tauri::command(async)]
+pub fn study_pick_sizes(prog: tauri::State<Arc<StudyProgress>>, state: tauri::State<Mutex<StudyState>>, spec: StudySpec, offered: Vec<f64>, keep: usize, max_memory_mb: f64) -> Result<SizePick, String> {
+    let prog: Arc<StudyProgress> = prog.inner().clone();
+    state.lock().unwrap().reset(); // free the previous study first
+    pick_sizes(&spec, &offered, keep, max_memory_mb, &prog)
+}
+
 #[tauri::command]
 pub fn study_summary(state: tauri::State<Mutex<StudyState>>) -> Option<StudySummary> {
     state.lock().unwrap().summary.clone()

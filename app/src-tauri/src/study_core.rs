@@ -578,6 +578,97 @@ fn read_lock(r: &mut impl Read) -> std::io::Result<Option<(Vec<usize>, Vec<f32>)
     Ok(Some((hb.into_iter().map(|x| x as usize).collect(), strat)))
 }
 
+/// Bet sizes chosen for a spot by `pick_sizes`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct SizePick {
+    /// "flop", "turn" or "river": the street the spot starts on, the only one sizes are chosen for
+    pub street: String,
+    /// the spec fields to overwrite with the chosen sizes, e.g. {"oop_flop_bet": "33%, 100%"}
+    pub overrides: std::collections::BTreeMap<String, String>,
+    /// per player [out of position, in position]: each offered size (percent of pot) and how often it was used
+    pub used: [Vec<(f64, f64)>; 2],
+    pub chosen: [Vec<f64>; 2],
+    pub secs: f64,
+    pub expl_pct: f64,
+    pub memory_mb: f64,
+}
+
+fn pct_list(v: &[f64]) -> String { v.iter().map(|x| format!("{}%", (x * 10.0).round() / 10.0)).collect::<Vec<_>>().join(", ") }
+
+/// Offers `offered` (percent of pot) as bet sizes on the spot's first street, solves that roughly with
+/// one size on later streets, and keeps the `keep` sizes each player uses most the first time they can
+/// bet. On the flop each player gets their own sizes; turn and river sizes are shared in a `StudySpec`,
+/// so there the two players' use is added together.
+pub fn pick_sizes(spec: &StudySpec, offered: &[f64], keep: usize, max_memory_mb: f64, prog: &StudyProgress) -> Result<SizePick, String> {
+    if offered.len() <= keep { return Err("Give more sizes to try than sizes to keep.".into()); }
+    prog.cancel.store(false, Ordering::Relaxed);
+    prog.iter.store(0, Ordering::Relaxed);
+    prog.phase.store(1, Ordering::Relaxed);
+    let ncards = spec.board.chars().filter(|c| !c.is_whitespace()).count() / 2;
+    let street = match ncards { 3 => "flop", 4 => "turn", _ => "river" };
+    let one = |s: &str| -> String { let v: Vec<&str> = s.split(',').map(|x| x.trim()).filter(|x| !x.is_empty()).collect(); if v.is_empty() { String::new() } else { v[v.len() / 2].to_string() } };
+    let mut scout = spec.clone();
+    scout.leaks = vec![]; scout.low_memory = false;
+    scout.accuracy_pct = (spec.accuracy_pct * 2.0).max(0.5);
+    let menu = pct_list(offered);
+    match street {
+        "flop" => { scout.oop_flop_bet = menu.clone(); scout.ip_flop_bet = menu; scout.turn_bet = one(&spec.turn_bet); scout.river_bet = one(&spec.river_bet); }
+        "turn" => { scout.turn_bet = menu; scout.river_bet = one(&spec.river_bet); }
+        _ => { scout.river_bet = menu; }
+    }
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(spec.threads).build().map_err(|e| e.to_string())?;
+    pool.install(|| {
+        let mut game = build_game(&scout)?;
+        let (_, mem) = game.memory_usage();
+        let memory_mb = mem as f64 / 1_048_576.0;
+        if max_memory_mb > 0.0 && memory_mb > max_memory_mb {
+            return Err(format!("Trying {} bet sizes on this spot needs about {:.1} GB of memory, more than is free. Untick \"Pick the bet sizes for me\", or use a shorter stack.", offered.len(), memory_mb / 1024.0));
+        }
+        game.allocate_memory(true);
+        let t = Instant::now();
+        let expl = run_solve(&game, &scout, prog);
+        if prog.cancel.load(Ordering::Relaxed) { return Err("Solve cancelled".into()); }
+        finalize(&mut game);
+        let mut pick = SizePick { street: street.into(), secs: t.elapsed().as_secs_f64(), expl_pct: (expl / spec.pot as f32 * 100.0) as f64, memory_mb, ..Default::default() };
+        // the first time each player can bet: first to act at the start, the other after a check
+        let root = node_view(&mut game, &[])?;
+        let check = root.actions.iter().position(|a| a.starts_with("Check"));
+        let views = [Some(root), match check { Some(c) => Some(node_view(&mut game, &[c])?), None => None }];
+        for (i, v) in views.iter().enumerate() {
+            let Some(v) = v else { continue };
+            if v.kind != "player" { continue; }
+            for (a, f) in v.actions.iter().zip(&v.action_freqs) {
+                let Some(x) = a.strip_prefix("Bet ").and_then(|x| x.trim().parse::<f64>().ok()) else { continue };
+                let share = x / v.pot as f64 * 100.0;
+                let near = offered.iter().copied().min_by(|p, q| (p - share).abs().total_cmp(&(q - share).abs())).unwrap();
+                pick.used[i].push((if (near - share).abs() <= 3.0 { near } else { (share * 10.0).round() / 10.0 }, *f as f64));
+            }
+        }
+        let choose = |used: &[(f64, f64)]| -> Vec<f64> {
+            let mut u = used.to_vec();
+            u.sort_by(|a, b| b.1.total_cmp(&a.1));
+            let total: f64 = u.iter().map(|x| x.1).sum();
+            // a size carrying under a twentieth of the betting is not worth its cost
+            let mut kept: Vec<f64> = u.iter().enumerate().filter(|(k, x)| *k == 0 || (*k < keep && x.1 >= total * 0.05)).map(|(_, x)| x.0).collect();
+            if kept.is_empty() { kept = vec![offered[offered.len() / 2]]; }
+            kept.sort_by(|a, b| a.total_cmp(b));
+            kept
+        };
+        if street == "flop" {
+            pick.chosen = [choose(&pick.used[0]), choose(&pick.used[1])];
+            pick.overrides.insert("oop_flop_bet".into(), pct_list(&pick.chosen[0]));
+            pick.overrides.insert("ip_flop_bet".into(), pct_list(&pick.chosen[1]));
+        } else {
+            let mut both: Vec<(f64, f64)> = vec![];
+            for u in pick.used.iter() { for (x, f) in u { match both.iter_mut().find(|b| b.0 == *x) { Some(b) => b.1 += f, None => both.push((*x, *f)) } } }
+            let c = choose(&both);
+            pick.overrides.insert(format!("{street}_bet"), pct_list(&c));
+            pick.chosen = [c.clone(), c];
+        }
+        Ok(pick)
+    })
+}
+
 pub fn solve_inner(spec: &StudySpec, prog: &StudyProgress) -> Result<SolveOutcome, String> {
     prog.cancel.store(false, Ordering::Relaxed);
     prog.iter.store(0, Ordering::Relaxed);

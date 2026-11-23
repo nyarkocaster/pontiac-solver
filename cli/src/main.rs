@@ -530,6 +530,115 @@ fn nodes_report(spot: &Spot, game: &mut PostFlopGame) -> Result<Value, String> {
     Ok(Value::Object(out))
 }
 
+// ------------------------------------------------------------------ choosing bet sizes
+
+/// `"auto_sizes"`: offer a wide menu of bet sizes on the spot's first street, solve that roughly,
+/// and keep the sizes each player uses most. Returns the spot rewritten with the kept sizes, and a
+/// report of what was offered, how much each size was used and what was kept.
+fn pick_sizes(raw: &Value, threads: usize) -> Result<(Value, Value), String> {
+    let cfg = raw.get("auto_sizes").cloned().unwrap_or(Value::Null);
+    if raw.get("node_locks").and_then(|x| x.as_array()).map_or(false, |a| !a.is_empty()) {
+        return Err("auto_sizes cannot be combined with node_locks: a lock's path names bet sizes, and the sizes are not known until they are chosen. Solve once with auto_sizes, read the chosen sizes from the result, then lock with those sizes listed.".into());
+    }
+    let keep = cfg.get("keep").and_then(|x| x.as_u64()).unwrap_or(2).clamp(1, 4) as usize;
+    let offered: Vec<f64> = match cfg.get("candidates").and_then(|x| x.as_array()) {
+        Some(a) => a.iter().filter_map(|x| x.as_f64()).filter(|x| *x > 0.0).collect(),
+        None => vec![0.25, 0.33, 0.5, 0.75, 1.0, 1.5],
+    };
+    if offered.len() <= keep { return Err(format!("auto_sizes: give more candidates ({}) than sizes to keep ({keep})", offered.len())); }
+    let spot0 = parse_spot(raw)?;
+    let names = spot0.names.clone();
+    let streets = ["flop", "turn", "river"];
+    let first = match spot0.tree.initial_state { BoardState::Flop => 0, BoardState::Turn => 1, _ => 2 };
+    let bt = raw.get("bet_tree").cloned().unwrap_or(json!({}));
+    let own = |i: usize| -> Value { bt.get(&names[i]).cloned().unwrap_or(bt.clone()) };
+    // the tree written per player, keeping whatever else sits at the top of bet_tree (the thresholds)
+    let nested = |trees: [Value; 2]| -> Value {
+        let mut m = Map::new();
+        if let Some(o) = bt.as_object() { for (k, v) in o { if !streets.contains(&k.as_str()) && !names.contains(k) { m.insert(k.clone(), v.clone()); } } }
+        m.insert(names[0].clone(), trees[0].clone()); m.insert(names[1].clone(), trees[1].clone());
+        Value::Object(m)
+    };
+    let with_bets = |tree: &Value, street: &str, bets: &[f64]| -> Value {
+        let mut t = tree.clone();
+        if !t.is_object() { t = json!({}); }
+        let st = t.as_object_mut().unwrap().entry(street.to_string()).or_insert(json!({}));
+        if !st.is_object() { *st = json!({}); }
+        st["bet"] = json!(bets);
+        if st.get("raise").is_none() { st["raise"] = json!([2.5]); }
+        t
+    };
+    // the rough solve: every candidate on the first street, one size on later streets to keep it small
+    let scout_tree = |i: usize| -> Value {
+        let mut t = with_bets(&own(i), streets[first], &offered);
+        for s in &streets[first + 1..] {
+            let listed: Vec<Value> = t.get(*s).and_then(|x| x.get("bet")).and_then(|x| x.as_array()).cloned().unwrap_or_default();
+            if listed.len() > 1 { t[*s]["bet"] = json!([listed[listed.len() / 2].clone()]); }
+        }
+        t
+    };
+    let budget = raw.get("max_seconds").and_then(|x| x.as_f64()).unwrap_or(600.0);
+    let target = raw.get("target_exploitability_pct").and_then(|x| x.as_f64()).unwrap_or(0.5);
+    let mut scout = raw.clone();
+    { let o = scout.as_object_mut().ok_or("the spot must be a JSON object")?;
+      o.remove("auto_sizes"); o.remove("habits");
+      o.insert("bet_tree".into(), nested([scout_tree(0), scout_tree(1)]));
+      o.insert("target_exploitability_pct".into(), json!(cfg.get("rough_exploitability_pct").and_then(|x| x.as_f64()).unwrap_or((target * 2.0).max(0.5))));
+      o.insert("max_seconds".into(), json!(budget * 0.4)); }
+    let sspot = parse_spot(&scout)?;
+    let mut game = build(&sspot)?;
+    let (mem_full, mem_small) = game.memory_usage();
+    let compress = match raw.get("compress") { Some(Value::Bool(b)) => *b, _ => mem_full as f64 / 1048576.0 > 1500.0 };
+    let mem_mb = if compress { mem_small } else { mem_full } as f64 / 1048576.0;
+    if let Some(cap) = raw.get("max_memory_mb").and_then(|x| x.as_f64()) { if mem_mb > cap { return Err(format!("auto_sizes: the rough solve with {} bet sizes needs about {:.0} MB, over max_memory_mb = {cap}. Give fewer candidates.", offered.len(), mem_mb)); } }
+    game.allocate_memory(compress);
+    eprintln!("choosing bet sizes on the {}: {} offered, keeping {keep} per player | {:.0} MB", streets[first], offered.len(), mem_mb);
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().map_err(|e| e.to_string())?;
+    let s = pool.install(|| run(&mut game, &sspot, budget * 0.4, "sizes"));
+    // how much each player uses each size the first time they can bet: first to act at the start, the other after a check
+    let paths = [streets[first].to_string(), format!("{}/{}_check", streets[first], names[0])];
+    let mut used = Map::new(); let mut chosen: [Vec<f64>; 2] = [vec![], vec![]];
+    for i in 0..2 {
+        let cur = walk(&mut game, &names, &paths[i])?;
+        let rep = report(&mut game, &names, &cur, &paths[i], "class", None);
+        let mut sizes: Vec<(f64, f64)> = vec![]; let mut rec = Map::new();
+        for a in rep.get("actions").and_then(|x| x.as_array()).cloned().unwrap_or_default() {
+            let (name, f) = (a.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string(), a.get("frequency").and_then(|x| x.as_f64()).unwrap_or(0.0));
+            rec.insert(name.clone(), json!(round(f, 4)));
+            if let Some(x) = name.strip_prefix("bet").and_then(|x| x.parse::<f64>().ok()) {
+                let near = offered.iter().copied().min_by(|a, b| (a - x).abs().total_cmp(&(b - x).abs())).unwrap();
+                sizes.push((if (near - x).abs() <= 0.03 { near } else { x }, f));
+            }
+        }
+        used.insert(names[i].clone(), Value::Object(rec));
+        sizes.sort_by(|a, b| b.1.total_cmp(&a.1));
+        let total: f64 = sizes.iter().map(|x| x.1).sum();
+        // keep the most used; a size carrying under a twentieth of the player's betting is not worth its cost
+        let mut kept: Vec<f64> = sizes.iter().enumerate().filter(|(k, x)| *k == 0 || (*k < keep && x.1 >= total * 0.05)).map(|(_, x)| x.0).collect();
+        if kept.is_empty() { kept = vec![offered[offered.len() / 2]]; }
+        kept.sort_by(|a, b| a.total_cmp(b));
+        chosen[i] = kept;
+    }
+    game.back_to_root();
+    let ev = root_evs(&mut game);
+    drop(game);
+    let mut out = raw.clone();
+    { let o = out.as_object_mut().unwrap();
+      o.remove("auto_sizes");
+      o.insert("bet_tree".into(), nested([with_bets(&own(0), streets[first], &chosen[0]), with_bets(&own(1), streets[first], &chosen[1])]));
+      o.insert("max_seconds".into(), json!((budget - s.seconds).max(budget * 0.25))); }
+    let rep = json!({
+        "street": streets[first], "offered": offered, "keep": keep,
+        "chosen": {names[0].clone(): chosen[0].clone(), names[1].clone(): chosen[1].clone()},
+        "use": Value::Object(used),
+        "rough_solve": {"seconds": round(s.seconds, 1), "iterations": s.iterations, "memory_mb": round(mem_mb, 1),
+            "exploitability_pct": round((s.exploit / sspot.tree.starting_pot as f32 * 100.0) as f64, 3),
+            "ev_bb": {names[0].clone(): round(ev[0], 3), names[1].clone(): round(ev[1], 3)}},
+        "note": "Sizes were chosen on the first street only, from how often each player used them the first time they could bet. Later streets use the sizes listed. \"spot\" in this result holds the bet tree that was solved.",
+    });
+    Ok((out, rep))
+}
+
 /// The player names when the spot has three players.
 fn three_players(raw: &Value) -> Option<Vec<String>> {
     let p: Vec<String> = raw.get("players")?.as_array()?.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
@@ -544,10 +653,15 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
         if let Some(p) = out_path { std::fs::write(p, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| format!("cannot write {p}: {e}"))?; }
         return Ok(v);
     }
+    let t_all = Instant::now();
+    let auto = match raw.get("auto_sizes") { None | Some(Value::Null) | Some(Value::Bool(false)) => false, _ => true };
+    let (raw, sizes_report) = if auto {
+        let th = raw.get("threads").and_then(|x| x.as_u64()).filter(|x| *x > 0).map(|x| x as usize).unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2));
+        let (r, rep) = pick_sizes(&raw, th)?; (r, Some(rep))
+    } else { (raw, None) };
     let spot = parse_spot(&raw)?;
     let threads = if spot.threads > 0 { spot.threads } else { std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2) };
     let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().map_err(|e| e.to_string())?;
-    let t_all = Instant::now();
     let locks: Vec<Value> = raw.get("node_locks").and_then(|x| x.as_array()).cloned().unwrap_or_default();
     let habits: Vec<Value> = raw.get("habits").and_then(|x| x.as_array()).cloned().unwrap_or_default();
     let icm = icm_setup(&spot)?;
@@ -564,6 +678,7 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
     let mut result = Map::new();
     result.insert("version".into(), json!(version_string()));
     result.insert("spot".into(), raw.clone());
+    if let Some(r) = sizes_report { result.insert("auto_sizes".into(), r); }
     result.insert("out_of_position".into(), json!(spot.names[0])); result.insert("in_position".into(), json!(spot.names[1]));
     result.insert("memory_mb".into(), json!(round(mem_mb, 1))); result.insert("compressed".into(), json!(compress)); result.insert("threads".into(), json!(threads));
     result.insert("units".into(), json!("EVs and amounts in big blinds; ev_bb counts the pot at the start of the spot, so the two players' EVs add up to pot_bb when there is no rake; frequencies and equity are 0-1"));

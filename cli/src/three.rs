@@ -190,6 +190,7 @@ pub fn estimate3(raw: &Value, players: &[String]) -> Result<Value, String> {
 }
 
 pub fn solve(raw: &Value, players: &[String], save: Option<&str>) -> Result<Value, String> {
+    if !matches!(raw.get("auto_sizes"), None | Some(Value::Null) | Some(Value::Bool(false))) { return Err("auto_sizes is for two-player spots; a three-player spot solves the sizes listed".into()); }
     let (spec, names) = spec_from(raw, players)?;
     let est = estimate(&spec)?;
     if let Some(cap) = raw.get("max_memory_mb").and_then(|x| x.as_f64()) { if est.memory_mb > cap { return Err(format!("this spot needs about {:.0} MB, over max_memory_mb = {cap}", est.memory_mb)); } }

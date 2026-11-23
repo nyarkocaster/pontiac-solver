@@ -223,6 +223,10 @@
                 <label class="field"><span>Raises</span><input v-model="sizes.raise" class="input w-24" /></label>
                 <label class="field"><span>Accuracy (% of pot)</span><input v-model.number="accuracyPct" type="number" min="0.05" max="5" step="0.05" class="input w-24" /></label>
                 <p class="hint basis-full">Bet sizes are shares of the pot, separated by commas (“33%, 75%”). Raises are multiples of the bet (“3x”). More sizes mean a slower solve and more memory.</p>
+                <label class="flex items-start gap-2 basis-full cursor-pointer">
+                  <input v-model="autoSizes" type="checkbox" class="mt-1" />
+                  <span><b>Pick the bet sizes for me.</b> <span class="hint">A rough first solve tries 33, 50, 75, 100 and 150% of the pot on the {{ board.length === 3 ? "flop" : board.length === 4 ? "turn" : "river" }} and keeps the two each player uses most; the real solve then uses those instead of the sizes typed above for that street. Later streets keep the sizes above. Adds time, and the first solve needs more memory than the figure shown.</span></span>
+                </label>
               </div>
               <div v-else-if="spot.players.length === 3" class="flex flex-wrap items-end gap-4 mt-4">
                 <label class="field"><span>Bet sizes</span>
@@ -322,7 +326,7 @@ const props = defineProps<{
   preview2: (p: Solve2) => Promise<Preview>; preview3: (p: Solve3) => Promise<Preview>;
   quickFlop: (p: Solve2, flop: number[]) => Promise<FlopRow>;
 }>();
-export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; heroHand?: string; overrides: Record<string, unknown>;
+export interface Solve2 { autoSizes?: boolean; res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; heroHand?: string; overrides: Record<string, unknown>;
   /** from a pasted hand history: what happened after the flop, for the hand review (amounts in the solve's chips) */
   line?: ReviewStep[] }
 export interface Solve3 {
@@ -450,6 +454,7 @@ const exploitSeat = ref("");
 watch(() => opponentsInSpot.value.map((p) => p.seat).join(","), () => { if (!opponentsInSpot.value.some((p) => p.seat === exploitSeat.value)) exploitSeat.value = ""; });
 const sizes = reactive({ pfrFlop: "33%, 66%", callerFlop: "33%", turn: "75%", river: "75%", raise: "3x" });
 const accuracyPct = ref(0.5);
+const autoSizes = ref(false);
 const sizing3 = ref("simple"); const later3 = ref("fast");
 // flops default to the light tree and a card sample; later streets to fuller sizes and every card. A manual choice sticks.
 const touched3 = ref(false);
@@ -508,7 +513,7 @@ function payload(): { two?: Solve2; three?: Solve3 } {
         stack: Math.max(1, Math.round(Math.min(oop.behind, ip.behind) * k)), pfrIsOop: oop.raisedLast,
         description: pre.value.story + left, oopName: oop.name, ipName: ip.name,
       },
-      format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value, line: reviewLine(oop.seat, ip.seat, k),
+      format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value, line: reviewLine(oop.seat, ip.seat, k), autoSizes: autoSizes.value,
       overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value,
         ...(icmActive.value && icmOthers.value.length && numList(icmPayouts.value).length ? { icm: { payouts: numList(icmPayouts.value), oop_stack: Math.round(oop.behind * k), ip_stack: Math.round(ip.behind * k), others: icmOthers.value.map((x) => Math.round(x * k)) } } : {}) },
     } };

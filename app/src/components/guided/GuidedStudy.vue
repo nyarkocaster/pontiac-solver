@@ -44,6 +44,7 @@
             <p class="text-sm text-muted mt-1">
               Accurate to within {{ summary?.base_expl_pct.toFixed(2) }}% of the pot. Solved in {{ secs(summary?.base_secs ?? 0) }}<template v-if="summary?.locked">, exploit solve {{ secs(summary.locked_secs) }}</template>.
             </p>
+            <p v-if="pickedText" class="text-sm text-muted mt-1 max-w-[110ch]">{{ pickedText }}</p>
           </div>
           <div class="shrink-0 text-right">
             <div v-if="saveOpen" class="flex items-center gap-2">
@@ -464,7 +465,22 @@ const built = computed(() => custom.value?.res ?? scenario.value.build(seat.valu
 const emit = defineEmits<{ (e: "new"): void }>();
 const newSpot = () => { step.value = "setup"; };
 watch(step, (v) => { if (v === "setup" && custom.value) emit("new"); });
-type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown>; heroHand?: string; line?: api.ReviewStep[] };
+type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown>; heroHand?: string; line?: api.ReviewStep[]; autoSizes?: boolean };
+/** "Pick the bet sizes for me": a rough first solve tries these sizes (percent of pot) and keeps each player's two most used */
+const SIZES_TRIED = [33, 50, 75, 100, 150];
+const autoSizes = ref(false);
+const picking = ref(false);
+const picked = ref<api.SizePick | null>(null);
+const pickedText = computed(() => {
+  const p = picked.value; if (!p) return "";
+  const list = (v: number[]) => v.map((x) => `${x}%`).join(" and ");
+  const used = (i: number) => p.used[i].filter((u) => !p.chosen[i].includes(u[0]) && u[1] >= 0.005).map((u) => `${u[0]}% (${Math.round(u[1] * 100)}% of hands)`).join(", ");
+  const who = p.street === "flop"
+    ? `${built.value.oopName} bets ${list(p.chosen[0])} of the pot, ${built.value.ipName} ${list(p.chosen[1])}`
+    : `both players bet ${list(p.chosen[0])} of the pot`;
+  const dropped = [used(0), used(1)].filter(Boolean);
+  return `Bet sizes on the ${p.street} were picked for this spot: ${who}. A rough first solve (${secs(p.secs)}) tried ${SIZES_TRIED.join(", ")}% and these were used most${dropped.length ? `; left out: ${p.street === "flop" ? `${built.value.oopName} ${used(0) || "none"}; ${built.value.ipName} ${used(1) || "none"}` : dropped.join("; ")}` : ""}.`;
+});
 /** Memory a spot from the spot builder needs, without touching what is on this screen. */
 async function previewCustom(p: Custom2): Promise<{ text: string; problem: string }> {
   const sp = { ...specCore.value, oop_range: p.res.oopRange, ip_range: p.res.ipRange, board: p.board.map((c) => RANK_CHARS[c >> 2] + SUIT_CHARS[c & 3]).join(""), pot: p.res.pot, stack: p.res.stack, leaks: [], ...p.overrides } as api.StudySpec;
@@ -481,6 +497,7 @@ async function previewCustom(p: Custom2): Promise<{ text: string; problem: strin
 async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
   lastPayload = p; manualLocks.value = []; lockStale.value = false; savedId.value = "";
   custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
+  autoSizes.value = !!p.autoSizes; picked.value = null;
   if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
   await nextTick();
   oopRangeEdit.value = p.res.oopRange; ipRangeEdit.value = p.res.ipRange;
@@ -676,6 +693,7 @@ const specCore = computed<api.StudySpec>(() => {
     accuracy_pct: accuracy.value.pct, max_iter: accuracy.value.iters, leaks: leakList.value, threads: threads.value,
     low_memory: false, freeze_rest: freezeRest.value, confidence: confidence.value,
     ...(custom.value ? override.value : {}),
+    ...(picked.value?.overrides ?? {}),
   };
 });
 const spec = computed<api.StudySpec>(() => ({ ...specCore.value, low_memory: lowMemory.value }));
@@ -690,6 +708,7 @@ const phase = ref(0), iter = ref(0), maxIter = ref(1), expl = ref(100);
 const startedAt = ref(0), phaseStartedAt = ref(0), now = ref(0);
 let timer: number | undefined;
 const phaseText = computed(() =>
+  picking.value ? `First, a rough solve to pick bet sizes: trying ${SIZES_TRIED.join(", ")}% of the pot` :
   ["Starting", "Step 1 of " + (leakList.value.length ? 2 : 1) + ": the normal (game-theory) strategy", "Applying the habit to every decision", "Step 2 of 2: your best counter-strategy", "Done", "Stopped"][phase.value] ?? ""
 );
 const progressPct = computed(() => {
@@ -727,6 +746,12 @@ const startSolve = async () => {
     } catch { /* ignore */ }
   }, 500);
   try {
+    if (autoSizes.value && custom.value) {
+      picked.value = null; picking.value = true;
+      try { picked.value = await api.studyPickSizes(spec.value, SIZES_TRIED, 2, freeMb.value ? freeMb.value * 0.85 : 0); }
+      finally { picking.value = false; }
+      phaseStartedAt.value = Date.now(); iter.value = 0; expl.value = 100;
+    }
     const s = await api.studySolve(spec.value);
     window.clearInterval(timer);
     if (s.error) { error.value = s.error; step.value = "setup"; return; }

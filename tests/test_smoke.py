@@ -75,6 +75,35 @@ def test_errors_are_readable():
         pontiac.solve({**SPOT, "ranges": {"SB": "AA"}})
 
 
+def test_auto_sizes_keeps_the_most_used_sizes():
+    offered = [0.33, 0.66, 1.0, 1.5]
+    r = pontiac.solve({**SPOT, "auto_sizes": {"candidates": offered, "keep": 2}})
+    a = r["auto_sizes"]
+    assert a["street"] == "river" and a["offered"] == offered
+    for i, who in enumerate(("BB", "SB")):
+        kept = a["chosen"][who]
+        assert 1 <= len(kept) <= 2 and set(kept) <= set(offered)
+        # the kept sizes are the most used ones in the rough solve, and are what the final solve offers
+        use = {float(k[3:]): v for k, v in a["use"][who].items() if k.startswith("bet")}
+        assert max(use, key=use.get) in kept
+        node = r["nodes"]["river" if i == 0 else "river/BB_check"]
+        assert {float(n[3:]) for n in freqs(node) if n.startswith("bet")} == set(kept)
+        assert r["spot"]["bet_tree"][who]["river"]["bet"] == kept
+    assert "auto_sizes" not in r["spot"] and r["stopped_because"] == "target_reached"
+    assert abs(sum(r["ev_bb"].values()) - SPOT["pot_bb"]) < 0.05
+    # plain true uses the standard menu
+    assert pontiac.solve({**SPOT, "auto_sizes": True})["auto_sizes"]["offered"] == [0.25, 0.33, 0.5, 0.75, 1.0, 1.5]
+
+
+def test_auto_sizes_errors_are_readable():
+    with pytest.raises(pontiac.SolverError, match="cannot be combined with node_locks"):
+        pontiac.solve({**SPOT, "auto_sizes": True, "node_locks": [{"node": NODE, "lock": {"action_freqs": {"fold": 1}}}]})
+    with pytest.raises(pontiac.SolverError, match="more candidates"):
+        pontiac.solve({**SPOT, "auto_sizes": {"candidates": [0.5, 1.0], "keep": 2}})
+    with pytest.raises(pontiac.SolverError, match="two-player spots"):
+        pontiac.solve({**THREE, "auto_sizes": True})
+
+
 # ---- three players ----
 
 THREE = json.loads((Path(__file__).parent.parent / "examples" / "three_way_river.json").read_text())

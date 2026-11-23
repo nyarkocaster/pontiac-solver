@@ -57,6 +57,7 @@ The bundled solver program is for Linux x86-64. On Windows or a Mac, download th
 - **Library**: save a solve from the Result page and open it again later. Solves are stored whole (compressed) and open without solving again.
 - **Node locks in the app**: at any decision, fix what a player does (whole range or one chart square) and solve again; the normal solve is reused.
 - **Chart views**: actions, value (EV) or chance to win on the hand chart. **Blockers**: which cards in your hand make the other player fold more or less after a bet.
+- **Pick the bet sizes for me**: a rough first solve tries five bet sizes and keeps the two each player uses most, so you do not have to guess which sizes matter on a board.
 - **Paste a hand history** to fill in the table, preflop action, stacks, flop and your cards. Hands are read as saved by PokerStars, GGPoker, Winamax, 888poker, partypoker, Americas Cardroom (Winning network), Ignition / Bovada / Bodog, iPoker sites and PokerNow.
 - Dark and light looks (switch in the top bar).
 

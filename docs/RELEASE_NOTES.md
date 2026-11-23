@@ -1,6 +1,12 @@
-# Pontiac Solver 0.13.6
+# Pontiac Solver 0.13.7
 
-**New since 0.13.0, hand histories from more sites:**
+**New since 0.13.0, the solver can pick the bet sizes:**
+
+- Tick "Pick the bet sizes for me" in Study a spot (two-player pots). A rough first solve tries 33, 50, 75, 100 and 150% of the pot on the street the spot starts on and keeps the two sizes each player uses most; the real solve then uses those. The result page says which sizes were kept and which were left out. Sizes on later streets stay as typed.
+- From the command line and Python: add `"auto_sizes": true` to a spot (or `{"candidates": [...], "keep": 2}`). The result reports what was offered, how often each size was used, and what was kept.
+- Measured on eight heads-up turn spots: with five sizes offered, the two kept sizes gave up at most 0.3% of the pot against having all five, and under 0.05% on five of the eight. The rough first solve is small, because it uses one size on later streets: on a 20 bb flop it needed half the memory of the normal two-size solve.
+
+**Hand histories from more sites:**
 
 - The hand-history paste box now reads hands as these sites save them, not only the PokerStars layout: GGPoker, Winamax, 888poker, partypoker, Americas Cardroom and the other Winning network sites, Ignition, Bovada and Bodog, iPoker sites (bet365, Betfair and others, whose files are XML), and PokerNow game logs. Paste the hand as it is; the app says which layout it recognised. Everything that worked for PokerStars hands, including the hand review below, works for all of them.
 - A PokerNow log does not say which player you are. If the hand reached a showdown your seat is found from the cards you showed; otherwise pick your seat yourself.

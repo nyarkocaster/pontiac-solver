@@ -40,6 +40,9 @@ export interface NodeView {
 export interface Combo { hand: string; cell: number; weight: number; freqs: number[]; equity: number; ev: number }
 
 export const studySolve = (spec: StudySpec) => call<StudySummary>("study_solve", { spec });
+/** Bet sizes chosen by a first, rough solve with a wide menu. `used`: per player [first to act, other], [size in percent of pot, how often used]. */
+export interface SizePick { street: string; overrides: Partial<StudySpec>; used: [number, number][][]; chosen: number[][]; secs: number; expl_pct: number; memory_mb: number }
+export const studyPickSizes = (spec: StudySpec, offered: number[], keep: number, maxMemoryMb: number) => call<SizePick>("study_pick_sizes", { spec, offered, keep, maxMemoryMb });
 export const studyProgress = () => call<[number, number, number, number]>("study_progress");
 export const studyCancel = () => call<void>("study_cancel");
 export const studyMemory = (spec: StudySpec) => call<[number, number]>("study_memory_estimate", { spec });

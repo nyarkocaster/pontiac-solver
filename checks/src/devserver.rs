@@ -98,6 +98,12 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
                 Err(e) => { prog.phase.store(5, Ordering::Relaxed); Ok(json!({"error": e, "base_ev":[0,0],"base_expl_pct":0,"base_secs":0,"locked":false,"locked_ev":[0,0],"locked_expl_pct":0,"locked_secs":0,"locked_nodes":0,"memory_mb":0})) }
             }
         }
+        "study_pick_sizes" => {
+            let spec: StudySpec = serde_json::from_value(args["spec"].clone()).map_err(|e| e.to_string())?;
+            let offered: Vec<f64> = serde_json::from_value(args["offered"].clone()).map_err(|e| e.to_string())?;
+            state.lock().unwrap().reset();
+            Ok(serde_json::to_value(pick_sizes(&spec, &offered, args["keep"].as_u64().unwrap_or(2) as usize, args["maxMemoryMb"].as_f64().unwrap_or(0.0), &prog)?).unwrap())
+        }
         "study_relock" => {
             let spec: StudySpec = serde_json::from_value(args["spec"].clone()).map_err(|e| e.to_string())?;
             let locks: Vec<ManualLock> = serde_json::from_value(args["locks"].clone()).map_err(|e| e.to_string())?;
