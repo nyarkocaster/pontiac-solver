@@ -16,7 +16,7 @@ pub struct Progress3 {
     pub cancel: AtomicBool,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Leak3 {
     pub player: usize,  // 0 = first to act, 2 = last to act
     #[serde(default = "all_streets")]
@@ -27,7 +27,7 @@ pub struct Leak3 {
 
 fn all_streets() -> String { "all".into() }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Spec3 {
     pub ranges: [String; 3],
     pub board: String,
@@ -91,7 +91,7 @@ pub struct Spec3 {
     pub leaks: Vec<Leak3>,
 }
 
-#[derive(Serialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Summary3 {
     pub base_ev: [f64; 3],
     pub base_gain_pct: [f64; 3],
@@ -180,7 +180,7 @@ pub struct Sub {
 }
 
 /// A fixed strategy at one decision, by action name.
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct NodeLock3 {
     pub node: String,
     #[serde(default)]

@@ -8,6 +8,8 @@ description = "Three-player no-limit hold'em postflop solver (part of Pontiac So
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 rayon = "1.8"
+serde_json = { version = "1", features = ["float_roundtrip"] }
+zstd = { version = "0.12.4", default-features = false }
 
 [profile.release]
 opt-level = 3

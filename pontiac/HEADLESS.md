@@ -49,7 +49,7 @@ pontiac.query("t72.pontiac", "flop/BB_check/SB_bet0.33/BB_call/turn=Ah", hand="Q
 
 ```
 pontiac solve spot.json [-o result.json] [--save solved.pontiac]
-pontiac query solved.pontiac --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]
+pontiac query solved.pontiac --node <path> [--hand AhKd | --hand AKs] [--detail class|combo] [--normal]
 pontiac estimate spot.json
 pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]
 pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20]
@@ -152,6 +152,8 @@ flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check/SB_bet0.5/BB_call/river=2c
 
 `pontiac.query(saved, node, hand=None, detail="class")` loads a saved solve and reports one node. `hand` narrows it to one exact hand (`"AhKd"`, either card order) or one class (`"AKs"`). A query takes a few seconds, nearly all of it loading the file. Saved solves are big: the 20 bb flop example is about 1 GB on disk.
 
+Three-player solves save and query the same way. When the spot had a lock or habit the file holds both solves: `query` reports the locked one, and `pontiac.query(..., normal=True)` (command line: `--normal`) reports the normal one. The answer carries `"solve": "locked" | "normal" | "only"`. A reopened solve gives exactly the figures of the original. The file keeps the finished strategies only, so it is smaller than the solve's memory (a three-way turn spot with one size is under 1 MB; a wide flop solve is hundreds of MB).
+
 ## 3. Node locking
 
 ```json
@@ -207,7 +209,7 @@ Tendencies applied across the whole tree, as in the app:
   Three sizes per street was not measured; expect more than double the two-size figures. A lock that needs a normal solve first doubles the time. Turn and river spots take seconds. Use `pontiac.estimate` to check memory before solving.
 
   Accuracy does not always fall smoothly: a two-size flop solve can sit near 0.5% for several minutes and briefly rise before settling. For coaching answers 0.5% is enough (range EVs are already right to about 0.01 bb); set `max_seconds` rather than chasing 0.3%. A long solve started in the background of a chat can be stopped when the reply ends, so run it and wait for it within one turn.
-- **Three players: yes**, with the same `solve` call (section 5). No `save`/`query` for three players yet: the result itself lists the first street's nodes.
+- **Three players: yes**, with the same `solve` call (section 5). `save` and `query` work as for two players, so later streets can be read without solving again.
 
 ## Heads-up preflop with limps and raises
 
@@ -311,7 +313,7 @@ Add an `icm` block to a two-player spot file and every result of the hand is val
 - A win, a loss and a split are each valued with the Independent Chip Model from the stacks they leave. Because the players sitting out gain when the two in the pot clash, the game is no longer zero-sum: the two players' `ev_bb` add up to less than the pot.
 - `ev_bb`, the EVs in node reports and `exploitability_pct` are then in chip-sized units of prize money (prize pool divided by chips in play, per chip), so they read like big blinds. The result gains `icm.prize_pool_share_pct` (each player's expected share of the prize pool after the spot), `icm.if_pot_were_split_pct` and `icm.if_player_gave_up_the_pot_pct` for comparison.
 - Checked: with one prize and no other players the answer equals the chip solve; on a bubble the player at risk calls an all-in less often (both in the smoke tests). `examples/icm_bubble_river.json` is a sample.
-- **Three players:** add `"icm": {"payouts": [50, 30, 20], "others_bb": [30, 12]}` to a three-player spot; the three stacks are the spot's `stacks_bb`. Every finishing order of a showdown is valued, side pots included, and a player who has folded keeps a stake in how the other two finish (someone busting moves them up). Showdown weights are exact, checked against a count of every pair of opposing hands. With one of the three folded from the start, the answer matches the two-player engine's (in the smoke tests). Prize-money steps cost about six times a chip step, so start with river and turn spots. A player folded before the spot starts is reported at their value if the pot were shared, not solved for.
+- **Three players:** add `"icm": {"payouts": [50, 30, 20], "others_bb": [30, 12]}` to a three-player spot; the three stacks are the spot's `stacks_bb`. Every finishing order of a showdown is valued, side pots included, and a player who has folded keeps a stake in how the other two finish (someone busting moves them up). Showdown weights are exact, checked against a count of every pair of opposing hands. With one of the three folded from the start, the answer matches the two-player engine's (in the smoke tests). Prize-money steps cost about one and a half times a chip step. A player folded before the spot starts is reported at their value if the pot were shared, not solved for.
 - In the app: Study a spot, Tournament, a two-player pot, then tick "Play for prize money, not chips" beside the Solve button. The stacks of the players who folded are taken from the table you set up.
 - Limits for now: no rake, no `--save` from the command line (the app's library does keep prize-money solves), and node locks and habits work but their reports are in the same prize-money units.
 

@@ -63,7 +63,6 @@ The bundled solver program is for Linux x86-64. On Windows or a Mac, download th
 
 - Preflop: all-in or fold is solved exactly (heads-up and three-handed). Limps and small raises are an estimate, not a solution.
 - Prize-money (ICM) payoffs: push/fold, two-player postflop spots (app and headless) and three-player postflop spots (headless only). No rake with prize money.
-- Three-player solves cannot be saved and queried later yet; the result lists the first street.
 - Three-player flop spots deal a sample of turn and river cards by default. The app can then solve any single turn card exactly.
 - Checked against GTO Wizard on a heads-up flop spot (chips, a node lock, prize money) and on three-handed push/fold. Three players after the flop has internal checks only.
 

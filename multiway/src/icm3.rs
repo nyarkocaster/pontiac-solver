@@ -37,7 +37,7 @@ pub fn icm_values(stacks: &[f64], payouts: &[f64]) -> Vec<f64> {
 }
 
 /// Settings: the prizes (first place first) and the stacks of players not in this hand.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct IcmCfg { pub payouts: Vec<f64>, pub others: Vec<f64> }
 
 /// Class of a finish from one player's side: 9 * (first opponent vs me) + 3 * (second opponent

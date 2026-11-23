@@ -652,7 +652,12 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
     Ok(v)
 }
 
-fn query(save: &str, node: &str, only: Option<&str>, detail: &str) -> Result<Value, String> {
+fn query(save: &str, node: &str, only: Option<&str>, detail: &str, normal: bool) -> Result<Value, String> {
+    // three-player solves have their own file layout
+    let mut first = [0u8; 8];
+    let three = std::fs::File::open(save).map_err(|e| format!("could not open {save}: {e}")).map(|mut f| { use std::io::Read; f.read_exact(&mut first).is_ok() && multiway::save::is_three_player(&first) })?;
+    if three { return three::query(save, node, only, detail, normal); }
+    if normal { return Err("--normal is for three-player solves saved with a lock or habit".into()); }
     let (mut game, memo): (PostFlopGame, String) = load_data_from_file(save, None)?;
     let m: Value = serde_json::from_str(&memo).map_err(|_| "this file was not saved by pontiac".to_string())?;
     let names: [String; 2] = [m["names"][0].as_str().unwrap_or("OOP").to_string(), m["names"][1].as_str().unwrap_or("IP").to_string()];
@@ -663,7 +668,7 @@ fn query(save: &str, node: &str, only: Option<&str>, detail: &str) -> Result<Val
 }
 
 fn usage() -> String {
-    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac]\n  pontiac query <solved.pontiac> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo]\n  pontiac estimate <spot.json>\n  pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]\n  pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 6] [--sb 0.5] [--ante 0] [--bb-ante 1]\n  pontiac icm --stacks 5000,3000,2000 --payouts 50,30,20\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
+    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac]\n  pontiac query <solved.pontiac> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo] [--normal]\n  pontiac estimate <spot.json>\n  pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]\n  pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 6] [--sb 0.5] [--ante 0] [--bb-ante 1]\n  pontiac icm --stacks 5000,3000,2000 --payouts 50,30,20\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
 }
 
 fn main() {
@@ -679,7 +684,7 @@ fn main() {
         Some("version") | Some("--version") | Some("-V") => { println!("{}", version_string()); return; }
         Some("solve") if args.len() >= 2 => solve(&args[1], flag("-o").or(flag("--out")), flag("--save")).map(|v| if flag("-o").or(flag("--out")).is_some() {
             json!({"ok": true, "written": flag("-o").or(flag("--out")), "exploitability_pct": v["exploitability_pct"], "runtime_seconds": v["total_seconds"], "saved_to": v.get("saved_to")}) } else { v }),
-        Some("query") if args.len() >= 2 => query(&args[1], flag("--node").unwrap_or(""), flag("--hand").or(flag("--combo")), flag("--detail").unwrap_or("class")),
+        Some("query") if args.len() >= 2 => query(&args[1], flag("--node").unwrap_or(""), flag("--hand").or(flag("--combo")), flag("--detail").unwrap_or("class"), args.iter().any(|a| a == "--normal")),
         Some("estimate") if args.len() >= 2 => std::fs::read_to_string(&args[1]).map_err(|e| e.to_string())
             .and_then(|t| serde_json::from_str::<Value>(&t).map_err(|e| e.to_string())).and_then(|raw| {
                 if let Some(three) = three_players(&raw) { return three::estimate3(&raw, &three); }

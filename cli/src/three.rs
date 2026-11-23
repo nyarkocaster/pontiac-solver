@@ -249,6 +249,44 @@ pub fn solve(raw: &Value, players: &[String], save: Option<&str>) -> Result<Valu
     }
     result.insert("nodes".into(), nodes_of(s.locked)?);
     result.insert("total_seconds".into(), json!(round(t0.elapsed().as_secs_f64(), 2)));
-    if save.is_some() { result.insert("note".into(), json!("three-player solves cannot be saved yet; list deeper nodes in \"report_nodes\" to include them in this result")); }
+    if let Some(path) = save {
+        let memo = json!({"version": version_string(), "names": names, "spot": raw}).to_string();
+        multiway::save::save_file(&st, &memo, path)?;
+        result.insert("saved_to".into(), json!(path));
+    }
     Ok(Value::Object(result))
+}
+
+/// One node of a saved three-player solve. With a lock or habit the file holds two solves:
+/// the locked one is reported unless `normal` is set.
+pub fn query(save: &str, node: &str, only: Option<&str>, detail: &str, normal: bool) -> Result<Value, String> {
+    let (st, memo) = multiway::save::load_file(save)?;
+    let m: Value = serde_json::from_str(&memo).map_err(|_| "this file was not saved by pontiac".to_string())?;
+    let name = |i: usize| m["names"][i].as_str().map(|s| s.to_string()).ok_or("this file was not saved by pontiac".to_string());
+    let names: [String; 3] = [name(0)?, name(1)?, name(2)?];
+    let locked = st.locked.is_some() && !normal;
+    if normal && st.locked.is_none() { return Err("this solve has no locks or habits, so there is no separate normal solve in the file".into()); }
+    let g = if locked { st.locked.as_ref().unwrap() } else { st.base.as_ref().unwrap() };
+    let start = match g.start_len() { 3 => "flop", 4 => "turn", _ => "river" };
+    let node = if node.trim_matches('/').is_empty() { start } else { node };
+    let (hist, _) = resolve_path(g, &names, node, CHIPS)?;
+    let v = st.view(locked, &hist, true)?;
+    let mut r = node_json(&v, &names, node.trim_matches('/'), if only.is_some() { "combo" } else { detail });
+    if let Some(want) = only {
+        // narrow to one exact hand ("AhKd", either order) or one class ("AKs")
+        let o = r.as_object_mut().unwrap();
+        let alt = if want.len() == 4 { format!("{}{}", &want[2..4], &want[0..2]) } else { String::new() };
+        let mut found = false;
+        if let Some(Value::Object(c)) = o.get_mut("by_combo") {
+            let class_of = |hand: &str| -> Option<String> { v.combos.iter().find(|x| x.hand == hand).map(|x| class_of_cell(x.cell)) };
+            c.retain(|k, _| k.eq_ignore_ascii_case(want) || k.eq_ignore_ascii_case(&alt) || class_of(k).map_or(false, |cn| cn.eq_ignore_ascii_case(want)));
+            found = !c.is_empty();
+            let keep: std::collections::HashSet<String> = c.keys().filter_map(|k| class_of(k)).collect();
+            if let Some(Value::Object(bc)) = o.get_mut("by_class") { bc.retain(|k, _| keep.contains(k)); }
+        }
+        if o.get("kind").and_then(|x| x.as_str()) == Some("decision") && !found { return Err(format!("'{want}' is not in {}'s range at this node", names[v.player])); }
+    }
+    r["version"] = m["version"].clone();
+    r["solve"] = json!(if locked { "locked" } else if st.locked.is_some() { "normal" } else { "only" });
+    Ok(r)
 }

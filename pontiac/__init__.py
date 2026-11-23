@@ -68,13 +68,17 @@ def solve(spot, save=None, timeout=None, progress=False):
             os.unlink(path)
 
 
-def query(saved, node, hand=None, detail="class"):
+def query(saved, node, hand=None, detail="class", normal=False):
     """One node of a saved solve. `node` is a path such as
     "flop/BB_check/SB_bet0.33/BB_call/turn=7h". `hand` narrows the answer to one
-    exact hand ("AhKd") or one hand class ("AKs"). `detail="combo"` lists every exact hand."""
+    exact hand ("AhKd") or one hand class ("AKs"). `detail="combo"` lists every exact hand.
+    `normal=True`: for a three-player solve saved with a lock or habit, read the
+    normal solve instead of the locked one."""
     args = ["query", str(saved), "--node", node, "--detail", detail]
     if hand:
         args += ["--hand", hand]
+    if normal:
+        args += ["--normal"]
     return _run(args)
 
 
@@ -211,10 +215,15 @@ def selftest(full=False):
 
     def three_players():
         spot = example("three_way_river")
-        r = solve(spot)
-        if r["exploitability_pct"] > spot["target_exploitability_pct"]:
-            raise AssertionError(f"reached only {r['exploitability_pct']}%")
-        return f"EVs {r['ev_bb']}"
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "three.pontiac")
+            r = solve(spot, save=path)
+            if r["exploitability_pct"] > spot["target_exploitability_pct"]:
+                raise AssertionError(f"reached only {r['exploitability_pct']}%")
+            first = next(iter(r["nodes"]))
+            q = query(path, first)
+            near(q["range_ev_bb"], r["nodes"][first]["range_ev_bb"], 0.001, "queried EV")
+        return f"EVs {r['ev_bb']}; saved and read back"
 
     def prize_money_postflop():
         spot = example("icm_bubble_river")

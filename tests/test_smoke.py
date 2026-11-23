@@ -109,6 +109,27 @@ def test_three_players_habit_reports_normal_play_too():
     assert r["ev_bb"]["BTN"] < r["normal"]["ev_bb"]["BTN"]
 
 
+def test_three_players_save_and_query(tmp_path):
+    path = str(tmp_path / "three.pontiac")
+    spot = dict(THREE, node_locks=[{"node": "river", "player": "BB", "action_freqs": {"check": 0.5}}])
+    r = pontiac.solve(spot, save=path)
+    assert r["saved_to"] == path and "normal" in r
+    # every reported node reads back exactly, from the locked solve and from the normal one
+    for node, want in list(r["nodes"].items())[:6]:
+        got = pontiac.query(path, node, detail="combo")
+        assert got["solve"] == "locked"
+        assert {k: v for k, v in got.items() if k not in ("version", "solve")} == want
+    first = next(iter(r["normal"]["nodes"]))
+    got = pontiac.query(path, first, detail="combo", normal=True)
+    assert got["solve"] == "normal" and got["actions"] == r["normal"]["nodes"][first]["actions"]
+    # one hand class
+    cls = next(iter(r["nodes"]["river"]["by_class"]))
+    one = pontiac.query(path, "river", hand=cls)
+    assert list(one["by_class"]) == [cls] and one["by_combo"]
+    with pytest.raises(pontiac.SolverError, match="not available here"):
+        pontiac.query(path, "river/BB_bet99")
+
+
 # ---- push/fold ----
 
 def test_pushfold_matches_published_ranges():

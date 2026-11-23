@@ -65,7 +65,7 @@ pub struct Node {
     pub full_lock: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Config {
     /// 3 cards (flop), 4 cards (turn) or 5 cards (river)
     pub board: Vec<u8>,
@@ -89,7 +89,7 @@ pub struct Config {
 }
 
 /// Optional settings; `Default` gives equal stacks, no rake, nobody folded.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Extra {
     /// stack behind per player; `None` gives everyone `Config::stack`
     pub stacks: Option<[f64; 3]>,
