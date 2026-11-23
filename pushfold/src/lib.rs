@@ -8,6 +8,9 @@ pub mod icm;
 pub mod three;
 pub mod preflop;
 pub mod flopweights;
+pub mod chartcheck;
+#[cfg(feature = "generate")]
+pub mod flopeq;
 
 pub const RANKS: &str = "AKQJT98765432";
 

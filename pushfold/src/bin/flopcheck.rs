@@ -4,45 +4,11 @@
 //! weights, and compared with the exact figure over all boards from the bundled table.
 //!
 //!   cargo run --release --features generate --bin flopcheck [-- "As7d2c,Ks8s3d,..."] [--tsv out.tsv]
-use multiway::cards::eval7;
+use pushfold::flopeq::flop_equities;
 use pushfold::flopweights::*;
 use pushfold::{class_name, equity};
-use rayon::prelude::*;
 
 pub const DEFAULT_16: &str = "As7d2c,Ks8s3d,QhJh6c,Ts9s8d,7s6d5c,KsKd4c,8s3d2c,Jh9h5h,AsKdTc,Qs7d2c,9c6c4d,7s7d4d,Ah8h5c,Jd7d4s,Ts6d2c,As5d5c";
-
-/// Equity against a random hand of every two-card hand on one flop (NaN where the flop blocks it), indexed a * 52 + b.
-fn flop_equities(flop: [u8; 3]) -> Vec<f64> {
-    let rest: Vec<u8> = (0..52u8).filter(|c| !flop.contains(c)).collect();
-    let mut runouts = vec![];
-    for a in 0..rest.len() { for b in a + 1..rest.len() { runouts.push((rest[a], rest[b])); } }
-    let (sum, cnt) = runouts.par_iter().map(|&(t, r)| {
-        let live: Vec<u8> = rest.iter().copied().filter(|c| *c != t && *c != r).collect();
-        let mut hands: Vec<(u32, u8, u8)> = vec![];
-        for a in 0..live.len() { for b in a + 1..live.len() { hands.push((eval7(&[flop[0], flop[1], flop[2], t, r, live[a], live[b]]), live[a], live[b])); } }
-        hands.sort();
-        let mut sum = vec![0f64; 52 * 52]; let mut cnt = vec![0f64; 52 * 52];
-        let mut below = 0f64; let mut below_card = [0f64; 52];
-        let opp = ((live.len() - 2) * (live.len() - 3) / 2) as f64;
-        let mut i = 0;
-        while i < hands.len() {
-            let mut j = i; while j < hands.len() && hands[j].0 == hands[i].0 { j += 1; }
-            let mut group_card = [0f64; 52];
-            for h in &hands[i..j] { group_card[h.1 as usize] += 1.0; group_card[h.2 as usize] += 1.0; }
-            let g = (j - i) as f64;
-            for h in &hands[i..j] {
-                let wins = below - below_card[h.1 as usize] - below_card[h.2 as usize];
-                let ties = g - group_card[h.1 as usize] - group_card[h.2 as usize] + 1.0;
-                let k = h.1 as usize * 52 + h.2 as usize;
-                sum[k] += (wins + ties / 2.0) / opp; cnt[k] += 1.0;
-            }
-            for h in &hands[i..j] { below_card[h.1 as usize] += 1.0; below_card[h.2 as usize] += 1.0; }
-            below += g; i = j;
-        }
-        (sum, cnt)
-    }).reduce(|| (vec![0f64; 52 * 52], vec![0f64; 52 * 52]), |mut a, b| { for k in 0..52 * 52 { a.0[k] += b.0[k]; a.1[k] += b.1[k]; } a });
-    (0..52 * 52).map(|k| if cnt[k] > 0.0 { sum[k] / cnt[k] } else { f64::NAN }).collect()
-}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -54,7 +20,7 @@ fn main() {
     let fw = fit(&flops, None);
     eprintln!("weights fitted for {} flops in {:.1}s", flops.len(), t0.elapsed().as_secs_f64());
     let by_class = hands_by_class();
-    let eqs: Vec<Vec<f64>> = flops.iter().map(|f| flop_equities(*f)).collect();
+    let eqs: Vec<Vec<f64>> = flops.iter().map(|f| flop_equities(*f, None)).collect();
     eprintln!("flop equities done at {:.1}s", t0.elapsed().as_secs_f64());
     // exact equity against a random hand, from the bundled table
     let exact: Vec<f64> = (0..NC).map(|c| {

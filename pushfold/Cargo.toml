@@ -31,5 +31,10 @@ name = "flopcheck"
 path = "src/bin/flopcheck.rs"
 required-features = ["generate"]
 
+[[bin]]
+name = "flopsample"
+path = "src/bin/flopsample.rs"
+required-features = ["generate"]
+
 [profile.release]
 opt-level = 3

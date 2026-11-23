@@ -36,6 +36,15 @@ const LAMBDA: [f64; NF] = [
     1.0, 1.0,
 ];
 
+/// The sample used up to 0.13.3, in its original order (the first eight were the short sample).
+pub const SAMPLE_16: [&str; 16] = ["As7d2c", "Ks8s3d", "QhJh6c", "Ts9s8d", "7s6d5c", "KsKd4c", "8s3d2c", "Jh9h5h",
+    "AsKdTc", "Qs7d2c", "9c6c4d", "7s7d4d", "Ah8h5c", "Jd7d4s", "Ts6d2c", "As5d5c"];
+
+/// The built-in sample of `n` flops.
+pub fn sample(n: usize) -> Vec<&'static str> {
+    SAMPLE_16.iter().take(n.min(SAMPLE_16.len())).copied().collect()
+}
+
 pub fn parse_card(s: &str) -> Result<u8, String> {
     let b: Vec<char> = s.chars().collect();
     if b.len() != 2 { return Err(format!("bad card '{s}'")); }
@@ -51,15 +60,16 @@ pub fn parse_flop(s: &str) -> Result<[u8; 3], String> {
     Ok([v[0], v[1], v[2]])
 }
 
+const PERMS: [[u8; 4]; 24] = [
+    [0, 1, 2, 3], [0, 1, 3, 2], [0, 2, 1, 3], [0, 2, 3, 1], [0, 3, 1, 2], [0, 3, 2, 1],
+    [1, 0, 2, 3], [1, 0, 3, 2], [1, 2, 0, 3], [1, 2, 3, 0], [1, 3, 0, 2], [1, 3, 2, 0],
+    [2, 0, 1, 3], [2, 0, 3, 1], [2, 1, 0, 3], [2, 1, 3, 0], [2, 3, 0, 1], [2, 3, 1, 0],
+    [3, 0, 1, 2], [3, 0, 2, 1], [3, 1, 0, 2], [3, 1, 2, 0], [3, 2, 0, 1], [3, 2, 1, 0],
+];
+
 /// How many flops a sample flop stands for when suits are swapped around (1 to 24 of the 22,100).
 pub fn suit_ways(f: [u8; 3]) -> f64 {
     let mut seen = std::collections::HashSet::new();
-    const PERMS: [[u8; 4]; 24] = [
-        [0, 1, 2, 3], [0, 1, 3, 2], [0, 2, 1, 3], [0, 2, 3, 1], [0, 3, 1, 2], [0, 3, 2, 1],
-        [1, 0, 2, 3], [1, 0, 3, 2], [1, 2, 0, 3], [1, 2, 3, 0], [1, 3, 0, 2], [1, 3, 2, 0],
-        [2, 0, 1, 3], [2, 0, 3, 1], [2, 1, 0, 3], [2, 1, 3, 0], [2, 3, 0, 1], [2, 3, 1, 0],
-        [3, 0, 1, 2], [3, 0, 2, 1], [3, 1, 0, 2], [3, 1, 2, 0], [3, 2, 0, 1], [3, 2, 1, 0],
-    ];
     for p in PERMS { let mut g = f.map(|c| (c / 4) * 4 + p[(c % 4) as usize]); g.sort(); seen.insert(g); }
     seen.len() as f64
 }
@@ -181,6 +191,23 @@ pub fn flop_profile(hands: &[[u8; 2]], flop: [u8; 3]) -> ([f64; NF], f64) {
     (sum, n)
 }
 
+/// Every flop up to a relabelling of suits (1,755 of them), each with the number of real flops it stands for.
+pub fn canonical_flops() -> Vec<([u8; 3], f64)> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = vec![];
+    for a in 0..52u8 { for b in a + 1..52 { for c in b + 1..52 {
+        let f = [a, b, c];
+        let key = canonical_key(f);
+        if seen.insert(key) { out.push((key, suit_ways(f))); }
+    } } }
+    out
+}
+fn canonical_key(f: [u8; 3]) -> [u8; 3] {
+    let mut best = [255u8; 3];
+    for p in PERMS { let mut g = f.map(|c| (c / 4) * 4 + p[(c % 4) as usize]); g.sort(); if g < best { best = g; } }
+    best
+}
+
 /// The fitted weights and what they achieve.
 pub struct FlopWeights {
     /// weight[class][flop]: adds to 1 over the flops for every class
@@ -197,34 +224,14 @@ pub struct FlopWeights {
 /// stands for; otherwise that is counted from its suits.
 pub fn fit(flops: &[[u8; 3]], ways: Option<&[f64]>) -> FlopWeights {
     let by_class = hands_by_class();
-    let nf = flops.len();
     let ways: Vec<f64> = match ways { Some(w) => w.to_vec(), None => flops.iter().map(|f| suit_ways(*f)).collect() };
     let mut out = FlopWeights { weight: vec![], plain: vec![], truth: vec![], plain_profile: vec![], fitted_profile: vec![] };
     for class in 0..NC {
         let q = true_profile(class);
         let prof: Vec<([f64; NF], f64)> = flops.iter().map(|f| flop_profile(&by_class[class], *f)).collect();
-        let mut base: Vec<f64> = (0..nf).map(|f| ways[f] * prof[f].1).collect();
-        let total: f64 = base.iter().sum();
-        if total <= 0.0 { base = vec![1.0 / nf as f64; nf]; } else { for b in base.iter_mut() { *b /= total; } }
-        let mix = |w: &[f64]| { let mut m = [0f64; NF]; for f in 0..nf { for k in 0..NF { m[k] += w[f] * prof[f].0[k]; } } m };
-        // Least squares on the feature frequencies, kept close to the plain count where the features
-        // leave a choice; multiplicative steps keep every weight positive and the total at 1.
-        let mut w = base.clone();
-        let tau = 0.002;
-        let eta = 0.25;
-        for _ in 0..6000 {
-            let m = mix(&w);
-            let mut g = vec![0f64; nf];
-            for f in 0..nf {
-                if base[f] <= 0.0 { continue; }
-                let mut s = 0.0;
-                for k in 0..NF { s += 2.0 * LAMBDA[k] * (m[k] - q[k]) * prof[f].0[k]; }
-                g[f] = s + tau * ((w[f].max(1e-300) / base[f]).ln() + 1.0);
-            }
-            let mut sum = 0.0;
-            for f in 0..nf { if base[f] > 0.0 { w[f] *= (-eta * g[f]).exp(); sum += w[f]; } else { w[f] = 0.0; } }
-            for f in 0..nf { w[f] /= sum; }
-        }
+        let refs: Vec<&([f64; NF], f64)> = prof.iter().collect();
+        let (base, w) = fit_class(&q, &refs, &ways, 6000);
+        let mix = |w: &[f64]| { let mut m = [0f64; NF]; for f in 0..flops.len() { for k in 0..NF { m[k] += w[f] * prof[f].0[k]; } } m };
         out.plain_profile.push(mix(&base));
         out.fitted_profile.push(mix(&w));
         out.truth.push(q);
@@ -232,6 +239,35 @@ pub fn fit(flops: &[[u8; 3]], ways: Option<&[f64]>) -> FlopWeights {
         out.weight.push(w);
     }
     out
+}
+
+/// One class: the plain-count weights and the fitted ones, from the class's true feature
+/// frequencies `q` and its feature frequencies and hand count on each sample flop.
+pub fn fit_class(q: &[f64; NF], prof: &[&([f64; NF], f64)], ways: &[f64], iterations: usize) -> (Vec<f64>, Vec<f64>) {
+    let nf = prof.len();
+    let mut base: Vec<f64> = (0..nf).map(|f| ways[f] * prof[f].1).collect();
+    let total: f64 = base.iter().sum();
+    if total <= 0.0 { base = vec![1.0 / nf as f64; nf]; } else { for b in base.iter_mut() { *b /= total; } }
+    // Least squares on the feature frequencies, kept close to the plain count where the features
+    // leave a choice; multiplicative steps keep every weight positive and the total at 1.
+    let mut w = base.clone();
+    let (tau, eta) = (0.002, 0.25);
+    let mut g = vec![0f64; nf];
+    for _ in 0..iterations {
+        let mut r = [0f64; NF];
+        for f in 0..nf { let wf = w[f]; if wf > 0.0 { for k in 0..NF { r[k] += wf * prof[f].0[k]; } } }
+        for k in 0..NF { r[k] = 2.0 * LAMBDA[k] * (r[k] - q[k]); }
+        let mut sum = 0.0;
+        for f in 0..nf {
+            if base[f] <= 0.0 { w[f] = 0.0; continue; }
+            let mut s = 0.0;
+            for k in 0..NF { s += r[k] * prof[f].0[k]; }
+            g[f] = s + tau * ((w[f].max(1e-300) / base[f]).ln() + 1.0);
+            w[f] *= (-eta * g[f]).exp(); sum += w[f];
+        }
+        for f in 0..nf { w[f] /= sum; }
+    }
+    (base, w)
 }
 
 #[cfg(test)]

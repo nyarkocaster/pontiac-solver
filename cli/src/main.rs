@@ -701,6 +701,26 @@ fn main() {
         })(),
         Some("preflop") => (|| -> Result<Value, String> {
             let num = |name: &str| -> Result<Option<f64>, String> { match flag(name) { Some(x) => x.parse::<f64>().map(Some).map_err(|_| format!("{name} needs a number")), None => Ok(None) } };
+            // --check <result.json>: is the chart in order hand by hand? (no solving)
+            if let Some(path) = flag("--check") {
+                let text = std::fs::read_to_string(&path).map_err(|e| format!("could not read {path}: {e}"))?;
+                let v: Value = serde_json::from_str(&text).map_err(|_| format!("{path} is not a preflop result"))?;
+                let tol = num("--tolerance")?.unwrap_or(0.15);
+                let mut out = vec![];
+                for n in v["nodes"].as_array().ok_or("no decisions in that file")? {
+                    let actions: Vec<String> = n["actions"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+                    let Some(fold) = actions.iter().position(|a| a == "Fold") else { continue };
+                    let reach = n["reach"].as_f64().unwrap_or(0.0);
+                    if reach < 0.05 { continue; }
+                    let folds: Vec<f64> = n["strategy"][fold].as_array().map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default();
+                    if folds.len() != 169 { continue; }
+                    let plays: Vec<f64> = folds.iter().map(|f| 1.0 - f).collect();
+                    out.push(json!({"decision": n["situation"], "path": n["path"], "reach": reach, "check": pushfold::chartcheck::check(&plays, tol)}));
+                }
+                return Ok(json!({"ok": true, "version": version_string(), "file": path,
+                    "note": "For each decision with a fold: pairs of hands where a clearly stronger hand of the same kind is played less often than a weaker one, by more than the tolerance. A sound chart has none or very few. Only the first decision is over every hand; later ones are judged over all 169 classes even where few of them get there.",
+                    "decisions": out}));
+            }
             let mut spec = json!({"stack": match num("--stack")? { Some(x) => x, None => args.get(1).and_then(|x| x.parse::<f64>().ok()).ok_or("give the stack in big blinds, e.g. pontiac preflop --stack 20")? }});
             for (flag_name, key) in [("--sb", "small_blind"), ("--ante", "ante"), ("--reraise", "reraise"), ("--iterations", "iterations")] { if let Some(x) = num(flag_name)? { spec[key] = json!(x); } }
             if let Some(t) = flag("--open") { spec["open_sizes"] = json!(t.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| "--open needs numbers separated by commas, e.g. --open 2,2.5".to_string())).collect::<Result<Vec<_>, _>>()?); }
@@ -710,9 +730,18 @@ fn main() {
             let spec: pushfold::preflop::PreSpec = serde_json::from_value(spec).map_err(|e| e.to_string())?;
             let r = if args.iter().any(|a| a == "--accurate") {
                 // real flop solves for every common line, fed back in and repeated
-                const FLOPS: [(&str, f64); 16] = [("As7d2c", 24.0), ("Ks8s3d", 12.0), ("QhJh6c", 12.0), ("Ts9s8d", 12.0), ("7s6d5c", 24.0), ("KsKd4c", 12.0), ("8s3d2c", 24.0), ("Jh9h5h", 4.0),
-                    ("AsKdTc", 24.0), ("Qs7d2c", 24.0), ("9c6c4d", 12.0), ("7s7d4d", 12.0), ("Ah8h5c", 12.0), ("Jd7d4s", 12.0), ("Ts6d2c", 24.0), ("As5d5c", 12.0)];
-                let nflops = (num("--flops")?.unwrap_or(8.0) as usize).clamp(1, FLOPS.len());
+                // The flops: a built-in sample (the first --flops of it), or the ones named with --flop-list.
+                // Each hand class weights them by how it connects with all flops (--plain-flops: by plain count, as the first accurate runs did).
+                let flop_names: Vec<String> = match flag("--flop-list") {
+                    Some(t) => t.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
+                    None => pushfold::flopweights::sample((num("--flops")?.unwrap_or(8.0) as usize).max(1)).iter().map(|x| x.to_string()).collect(),
+                };
+                let flop_cards: Vec<[u8; 3]> = flop_names.iter().map(|x| pushfold::flopweights::parse_flop(x)).collect::<Result<_, _>>()?;
+                let nflops = flop_cards.len();
+                if nflops == 0 { return Err("--flop-list needs at least one flop, e.g. --flop-list As7d2c,Ks8s3d".into()); }
+                let plain_flops = args.iter().any(|a| a == "--plain-flops");
+                let flop_fit = pushfold::flopweights::fit(&flop_cards, None);
+                let flop_ways: Vec<f64> = flop_cards.iter().map(|f| pushfold::flopweights::suit_ways(*f)).collect();
                 let passes = (num("--passes")?.unwrap_or(3.0) as usize).clamp(1, 12);
                 let min_freq = num("--min-line")?.unwrap_or(0.02);
                 let accuracy = num("--flop-accuracy")?.unwrap_or(1.0) as f32;
@@ -724,7 +753,7 @@ fn main() {
                 let mut eval = |l: &pushfold::preflop::FlopLine, pass: usize| -> Result<pushfold::preflop::LineValues, String> {
                     let (mut num_v, mut den_v) = ([vec![0f64; 169], vec![0f64; 169]], [vec![0f64; 169], vec![0f64; 169]]);
                     let mut worst = 0f64;
-                    for (k, (board, ways)) in FLOPS.iter().take(nflops).enumerate() {
+                    for (k, board) in flop_names.iter().enumerate() {
                         let sp = study_core::StudySpec {
                             oop_range: l.big_blind_range.clone(), ip_range: l.button_range.clone(),
                             board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
@@ -734,7 +763,7 @@ fn main() {
                         let (vals, acc, mass) = study_core::class_values(&sp, &prog)?;
                         worst = worst.max(acc);
                         // vals[0] is the big blind (first to act after the flop), vals[1] the button; chips are tenths of a big blind
-                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; let k = ways * mass[theirs][c]; if x.is_finite() && k > 0.0 { num_v[mine][c] += k * x / 10.0; den_v[mine][c] += k; } } }
+                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; let k = if plain_flops { flop_ways[k] * mass[theirs][c] } else { flop_fit.weight[c][k] }; if x.is_finite() && k > 0.0 { num_v[mine][c] += k * x / 10.0; den_v[mine][c] += k; } } }
                         say(format!("pass {pass} | {} | flop {} of {nflops} ({board}) | {:.0}s, within {:.2}% of the pot | {:.0} min so far", l.path, k + 1, t.elapsed().as_secs_f64(), acc, t0.elapsed().as_secs_f64() / 60.0));
                     }
                     let out = [0, 1].map(|p| (0..169).map(|c| if den_v[p][c] > 0.0 { num_v[p][c] / den_v[p][c] } else { f64::NAN }).collect::<Vec<f64>>());
@@ -757,7 +786,7 @@ fn main() {
                 let want_resume = args.iter().any(|a| a == "--resume");
                 if want_resume && save.is_none() { return Err("--resume needs --save <file>: the run's progress is kept beside that file".into()); }
                 let cp_path = save.as_ref().map(|p| format!("{p}.resume"));
-                let settings = json!({"spec": serde_json::to_value(&spec).map_err(|e| e.to_string())?, "flops": nflops, "min_line": min_freq, "flop_accuracy": accuracy});
+                let settings = json!({"spec": serde_json::to_value(&spec).map_err(|e| e.to_string())?, "flops": nflops, "flop_list": flop_names, "flop_weights": if plain_flops { "plain" } else { "fitted" }, "min_line": min_freq, "flop_accuracy": accuracy});
                 let mut start: Option<pushfold::preflop::Checkpoint> = None;
                 if want_resume {
                     if let Some(text) = cp_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
