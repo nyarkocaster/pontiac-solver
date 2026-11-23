@@ -1,6 +1,12 @@
-# Pontiac Solver 0.13.5
+# Pontiac Solver 0.13.6
 
-**New since 0.13.0, hand review:**
+**New since 0.13.0, hand histories from more sites:**
+
+- The hand-history paste box now reads hands as these sites save them, not only the PokerStars layout: GGPoker, Winamax, 888poker, partypoker, Americas Cardroom and the other Winning network sites, Ignition, Bovada and Bodog, iPoker sites (bet365, Betfair and others, whose files are XML), and PokerNow game logs. Paste the hand as it is; the app says which layout it recognised. Everything that worked for PokerStars hands, including the hand review below, works for all of them.
+- A PokerNow log does not say which player you are. If the hand reached a showdown your seat is found from the cards you showed; otherwise pick your seat yourself.
+- Checked against real sample hands for 888poker, partypoker, Winamax, the Winning network, iPoker, Ignition and PokerStars. The GGPoker and PokerNow layouts were written from their published descriptions and have not yet been tried on a file saved by those sites; if one does not load, please send it.
+
+**Hand review:**
 
 - Paste a hand history for a two-player pot and the result page now reviews it: each of your decisions after the flop, what the solve does with your exact hand, what each action is worth, and how much the action you took gave up. "Show" opens the result at that decision. Bets in sizes the solve does not have are matched to the closest size and marked.
 

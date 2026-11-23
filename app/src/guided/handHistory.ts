@@ -1,10 +1,13 @@
-// Reads a pasted hand history (the PokerStars text layout, which most sites and converters can
-// export) and turns it into the spot builder's inputs: table, each seat's preflop action, the
-// board, and the hero's cards.
+// Reads a pasted hand history and turns it into the spot builder's inputs: table, each seat's
+// preflop action, the board, and the hero's cards. handFormats.ts first rewrites whatever layout
+// was pasted into the PokerStars text layout, which is what this file reads.
+import { toStarsLayout } from "./handFormats";
 import { seatsFor, type Act, type SeatInput, type TableSetup } from "./preflop";
 
 export interface ParsedHand {
   table: TableSetup; seats: SeatInput[]; hero: string; heroHand: string; board: number[];
+  /** the layout the paste was recognised as, e.g. "PokerStars", "888poker", "Ignition" */
+  site: string;
   /** things the reader should know: guesses made and anything the setup cannot express */
   notes: string[];
   /** what happened from the flop on, in order: bets (the player's total on that street, in the setup's units) and the cards dealt */
@@ -16,12 +19,13 @@ const num = (s: string) => Number(s.replace(/[$€£,]/g, ""));
 const cardId = (c: string) => RANKS.indexOf(c[0].toUpperCase()) * 4 + SUITS.indexOf(c[1].toLowerCase());
 const SIZES = [2, 3, 6, 8, 9];
 
-export function parseHandHistory(text: string): ParsedHand {
-  const lines = text.replace(/\r/g, "").split("\n").map((l) => l.trim()).filter(Boolean);
+export function parseHandHistory(pasted: string): ParsedHand {
+  const norm = toStarsLayout(pasted);
+  const lines = norm.text.split("\n").map((l) => l.trim()).filter(Boolean);
   if (!lines.length) throw new Error("Paste a hand history first.");
-  const notes: string[] = [];
+  const notes: string[] = [...norm.notes];
   const holeAt = lines.findIndex((l) => /^\*+\s*HOLE CARDS/i.test(l) || /^Dealt to /i.test(l));
-  if (holeAt < 0) throw new Error("This does not look like a hand history: there is no \"*** HOLE CARDS ***\" line. Export the hand in PokerStars text format and paste the whole thing.");
+  if (holeAt < 0) throw new Error("This does not look like a hand history: the layout was not recognised. Paste the whole hand as the site saved it (PokerStars, GGPoker, Winamax, 888poker, partypoker, Americas Cardroom, Ignition or Bovada, iPoker, or a PokerNow log).");
   const head = lines.slice(0, holeAt), rest = lines.slice(holeAt);
   const tourney = /tournament|sit\s*&?\s*go|level\s+[ivxl\d]+/i.test(head.slice(0, 2).join(" "));
 
@@ -137,5 +141,5 @@ export function parseHandHistory(text: string): ParsedHand {
     const shown = board.slice(3).map((c) => RANKS[c >> 2] + "♣♦♥♠"[c & 3]).join(" then ");
     notes.push(`The study starts on the flop. The hand went on to ${shown}: with two players, the result page reviews each of your decisions; otherwise click the actions that were taken and deal ${board.length > 4 ? "those cards" : "that card"} to follow it.`);
   }
-  return { table, seats: all, hero: seatOf.get(heroName)!, heroHand, board: board.slice(0, 3), notes, later };
+  return { table, seats: all, hero: seatOf.get(heroName)!, heroHand, board: board.slice(0, 3), site: norm.site, notes, later };
 }

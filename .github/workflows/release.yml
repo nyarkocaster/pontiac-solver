@@ -114,6 +114,7 @@ jobs:
         shell: bash
         run: |
           npm ci
+          node scripts/test_hand_formats.mjs
           npm run tauri build -- ${{ matrix.tauri_args }}
 
       - name: Collect the files

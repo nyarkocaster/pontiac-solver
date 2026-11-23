@@ -16,11 +16,11 @@
       <p v-if="fromPreflop" class="mt-3 rounded-lg border border-mine bg-mine-light px-3 py-2 text-sm">Loaded from the heads-up preflop solver: both ranges in step 3 are its ranges for this line. Pick a flop in step 4 and solve. <button class="underline font-bold" @click="fromPreflop = ''">Dismiss</button></p>
       <section v-if="hhOpen" class="panel mt-4">
         <h2 class="font-bold">Load a hand you played</h2>
-        <p class="hint mt-1">Paste the hand's text (PokerStars layout; most sites and trackers can export it). The table, each player's preflop action, the stacks, the flop and your cards are filled in below for you to check.</p>
-        <textarea v-model="hhText" rows="7" class="input w-full mt-2 font-mono text-xs" placeholder="PokerStars Hand #…: Hold'em No Limit ($1/$2 USD)…" aria-label="Hand history text"></textarea>
+        <p class="hint mt-1">Paste the hand's text as the site saved it. PokerStars, GGPoker, Winamax, 888poker, partypoker, Americas Cardroom, Ignition and Bovada, iPoker sites and PokerNow logs are read. The table, each player's preflop action, the stacks, the flop and your cards are filled in below for you to check.</p>
+        <textarea v-model="hhText" rows="7" class="input w-full mt-2 font-mono text-xs" placeholder="Paste one hand here, from its first line to its last" aria-label="Hand history text"></textarea>
         <div class="mt-2 flex items-center gap-3">
           <button class="btn-quiet" :disabled="!hhText.trim()" @click="loadHistory">Load this hand</button>
-          <span v-if="hhDone" class="text-sm font-bold text-felt">Loaded. Check steps 1 to 4 below{{ heroHand ? `; your hand ${heroHand} will be tracked on the result` : "" }}.</span>
+          <span v-if="hhDone" class="text-sm font-bold text-felt">Loaded{{ hhSite ? ` (${hhSite} hand)` : "" }}. Check steps 1 to 4 below{{ heroHand ? `; your hand ${heroHand} will be tracked on the result` : "" }}.</span>
         </div>
         <p v-if="hhError" class="mt-2 text-sm font-bold text-danger">{{ hhError }}</p>
         <ul v-if="hhNotes.length" class="mt-2 space-y-1 text-sm">
@@ -548,6 +548,7 @@ watch(() => store.preflopLine, async (l) => {
 // a pasted hand history fills the whole setup in
 const hhOpen = ref(false); const hhText = ref(""); const hhError = ref(""); const hhNotes = ref<string[]>([]); const hhDone = ref(false);
 const heroHand = ref("");
+const hhSite = ref("");
 const hhLater = ref<LaterStep[]>([]); const hhFlop = ref("");
 /** The pasted hand's play after the flop, for the two players in the solve; nothing if anyone else acted or the flop was changed. */
 function reviewLine(oopSeat: string, ipSeat: string, k: number): ReviewStep[] | undefined {
@@ -569,7 +570,7 @@ async function loadHistory() {
     seats.splice(0, seats.length, ...h.seats);
     hero.value = h.hero;
     await nextTick();
-    board.value = [...h.board]; heroHand.value = h.heroHand; hhNotes.value = h.notes; hhDone.value = true;
+    board.value = [...h.board]; heroHand.value = h.heroHand; hhNotes.value = h.notes; hhSite.value = h.site; hhDone.value = true;
     hhLater.value = h.later; hhFlop.value = h.board.join();
   } catch (e) { hhError.value = String((e as Error).message ?? e); }
 }
