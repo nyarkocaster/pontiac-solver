@@ -18,11 +18,15 @@ export interface Spec3 {
   flop_bet_sizes: string; flop_max_raises: number; turn_bet_sizes: string; turn_max_raises: number; turn_cards: number; river_cards: number; bet_sizes: string; raise_sizes: string; max_raises: number; allin_spr: number; threads: number;
   accuracy_pct: number; max_iter: number; leaks: Leak3[];
   stacks?: [number, number, number] | null; rake_rate?: number; rake_cap?: number;
+  /** play for tournament prize money: prizes (first place first) and the stacks of players not in the hand, in the spot's chips */
+  icm_payouts?: number[]; icm_others?: number[];
 }
 export interface Summary3 {
   base_ev: number[]; base_gain_pct: number[]; base_secs: number; base_iters: number;
   locked: boolean; locked_ev: number[]; locked_gain_pct: number[]; locked_secs: number; locked_iters: number;
   locked_nodes: number; combos: number[]; nodes: number; memory_mb: number; cancelled: boolean; error: string | null;
+  /** share of the prize pool (percent) per player, when solved for prize money */
+  icm?: { base_share: number[]; locked_share: number[]; split: number[] } | null;
 }
 export interface Cell3 { full: number; weight: number; freqs: number[]; equity: number; ev: number }
 export interface Bucket3 { name: string; share: number; freqs: number[] }

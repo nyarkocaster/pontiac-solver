@@ -12,12 +12,21 @@
       <div v-if="step === 'results' && node && summary">
         <div class="flex items-center justify-between gap-4">
           <button class="btn-quiet" @click="newSpot">New spot</button>
-          <button class="btn-quiet ml-2" :disabled="saveState === 'busy'" title="Keeps the spot. Three-player solves are run again when opened." @click="saveSpot">{{ saveState === "done" ? "Saved to library ✓" : "Save to library" }}</button>
+          <button class="btn-quiet ml-2" :disabled="saveState === 'busy'" title="Keeps this solve, so it opens again without solving." @click="saveSpot">{{ saveState === "done" ? "Saved to library ✓" : "Save to library" }}</button>
           <span v-if="saveError" class="ml-2 text-xs font-bold text-danger">{{ saveError }}</span>
           <div v-if="summary.locked" class="seg" role="group" aria-label="Which solution to show">
             <button :class="which === 'base' ? 'seg-on' : ''" @click="setWhich('base')">Normal strategy</button>
             <button :class="which === 'locked' ? 'seg-on' : ''" @click="setWhich('locked')">Vs {{ players[habitSolved].name }}'s habit</button>
           </div>
+        </div>
+
+        <div v-if="summary.icm" class="rounded-xl border border-felt bg-felt-light p-3 text-sm mt-4">
+          <b>Solved for prize money.</b>
+          After this spot {{ players[heroSolved].name === "You" || players[heroSolved].name.startsWith("You ") ? "you hold" : players[heroSolved].name + " holds" }}
+          <b>{{ (which === "locked" && summary.locked ? summary.icm.locked_share : summary.icm.base_share)[heroSolved].toFixed(2) }}%</b> of the prize pool on average,
+          against {{ summary.icm.split[heroSolved].toFixed(2) }}% if the pot were shared out now.
+          <span class="text-muted">Others: {{ [0, 1, 2].filter((i) => i !== heroSolved).map((i) => `${players[i].name} ${(which === "locked" && summary!.locked ? summary!.icm!.locked_share : summary!.icm!.base_share)[i].toFixed(2)}%`).join(", ") }}.</span>
+          Amounts won and lost on this screen are prize money in chip-sized units, so the three shares of the pot add up to less than the pot: players outside the hand gain when these three clash, and a player who folds still gains or loses by how the others finish.
         </div>
 
         <div class="panel mt-4 flex flex-wrap items-center gap-6">
@@ -324,6 +333,8 @@ async function countCombos() {
   }
 }
 
+/** Set when the spot on screen is played for prize money (only from Study a spot, tournaments). */
+const icm = ref<{ payouts: number[]; others: number[] } | null>(null);
 const leaks = computed<api.Leak3[]>(() => {
   if (habitSeat.value < 0 || habitSeat.value === hero.value) return [];
   const prof = PROFILES.find((p) => p.id === profileId.value);
@@ -342,6 +353,7 @@ const spec = computed<api.Spec3>(() => {
     bet_sizes: s.bet, raise_sizes: s.raise, max_raises: s.max, allin_spr: 1.0, threads: 0,
     turn_cards: detail.value.turn, river_cards: board.value.length === 5 ? 0 : detail.value.river,
     accuracy_pct: [0.5, 0.3, 0.1][board.value.length - 3] ?? 0.1, max_iter: [400, 300, 600][board.value.length - 3] ?? 600, leaks: leaks.value,
+    ...(icm.value ? { icm_payouts: icm.value.payouts, icm_others: icm.value.others.map((x) => x * scale.value) } : {}),
   };
 });
 const problem = computed(() => {
@@ -393,7 +405,7 @@ const progressPct = computed(() => {
   const byIter = progress.value[2] ? progress.value[1] / progress.value[2] : 0;
   return Math.round(100 * Math.max(byAccuracy, byIter));
 });
-type Custom3 = { format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[]; rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string };
+type Custom3 = { format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[]; rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string; icm?: { payouts: number[]; others: number[] } };
 /** Size and time of a spot from the spot builder, without touching what is on this screen. */
 async function previewCustom(p: Custom3): Promise<{ text: string; problem: string }> {
   const sz = SIZINGS3.find((x) => x.id === p.sizingId) ?? SIZINGS3[0];
@@ -406,11 +418,12 @@ async function previewCustom(p: Custom3): Promise<{ text: string; problem: strin
     flop_bet_sizes: sz.flop, flop_max_raises: sz.turnMax, turn_bet_sizes: sz.turn, turn_max_raises: sz.turnMax, bet_sizes: sz.bet, raise_sizes: sz.raise, max_raises: sz.max,
     turn_cards: d.turn, river_cards: p.board.length === 5 ? 0 : d.river, leaks: [],
     accuracy_pct: [0.5, 0.3, 0.1][p.board.length - 3] ?? 0.1, max_iter: [400, 300, 600][p.board.length - 3] ?? 600,
+    icm_payouts: p.icm?.payouts ?? [], icm_others: (p.icm?.others ?? []).map((x) => x * k),
   };
   try {
     const e = await api.mwEstimate(sp);
     await refreshMemory();
-    const secs = e.secs_per_iter * (e.start === 3 ? 250 : e.start === 4 ? 130 : 200) * 1.2 * (p.habitSeat >= 0 ? 1.6 : 1);
+    const secs = e.secs_per_iter * (e.start === 3 ? 250 : e.start === 4 ? 130 : 200) * 1.2 * (p.habitSeat >= 0 ? 1.6 : 1) * (p.icm ? 1.6 : 1);
     const free = memory.availMb ? memory.availMb + memory.heldThreeMb : 0;
     const problem = free && e.memory_mb >= 0.8 * free ? `This needs about ${gb(e.memory_mb)} of memory and about ${gb(free)} of your ${gb(memory.totalMb)} is free right now. Choose simpler bet sizes or a smaller card sample, or close other programs.` : "";
     const size = e.memory_mb >= 1024 ? gb(e.memory_mb) : `${Math.max(1, Math.round(e.memory_mb))} MB`;
@@ -428,25 +441,52 @@ async function saveSpot() {
   try { await api2.librarySaveThree(`${lastPayload.names.join(", ")} · ${cards}`, { payload: lastPayload }); saveState.value = "done"; }
   catch (e) { saveError.value = String((e as Error).message ?? e); saveState.value = ""; }
 }
-async function loadCustom(p: Custom3): Promise<{ ok: boolean; error: string }> {
+/** Puts a spot from the spot builder on this screen, ready to solve or to show a stored solve. */
+async function applyCustom(p: Custom3) {
   lastPayload = p; saveState.value = "";
   fromBuilder.value = true; format.value = p.format;
   p.names.forEach((n, i) => { players[i].name = n; players[i].preset = ""; players[i].range = p.ranges[i]; });
   hero.value = p.hero; pot.value = p.pot; stacks.splice(0, 3, p.stacks[0], p.stacks[1], p.stacks[2]);
   board.value = [...p.board]; rakePct.value = p.rakePct; rakeCap.value = p.rakeCap;
-  habitSeat.value = p.habitSeat;
+  habitSeat.value = p.habitSeat; icm.value = p.icm && p.format === "tourney" ? { payouts: [...p.icm.payouts], others: [...p.icm.others] } : null;
   if (p.profile && PROFILES.some((x) => x.id === p.profile)) profileId.value = p.profile;
   await nextTick();
   sizingId.value = p.sizingId;
   if (detailOptions.value.some((x) => x.id === p.laterId)) detailId.value = p.laterId;
   step.value = "setup"; error.value = "";
   await nextTick();
+}
+async function loadCustom(p: Custom3): Promise<{ ok: boolean; error: string }> {
+  await applyCustom(p);
   try { estimate.value = await api.mwEstimate(spec.value); } catch { /* the solve reports it */ }
   if (memoryProblem.value) return { ok: false, error: memoryProblem.value };
   await solve();
   return { ok: (step.value as string) === "results" && !error.value, error: error.value };
 }
-defineExpose({ loadCustom, previewCustom });
+/** Shows a three-player solve kept in the library, without solving again. */
+async function openSaved(e: api2.LibraryEntry): Promise<{ ok: boolean; error: string }> {
+  const p = e.meta.payload as Custom3 | undefined;
+  if (!p) return { ok: false, error: "That entry is missing its spot." };
+  try {
+    await applyCustom(p);
+    const s = await api2.libraryOpenThree<api.Summary3>(e.id);
+    solvedScale.value = scale.value;
+    await showSolved(s);
+    saveState.value = "done";
+    return { ok: true, error: "" };
+  } catch (x) { step.value = "setup"; return { ok: false, error: String((x as Error).message ?? x) }; }
+}
+/** Switches the screen to a solve the engine now holds. */
+async function showSolved(s: api.Summary3) {
+  summary.value = s;
+  startLen.value = board.value.length;
+  heroSolved.value = hero.value; habitSolved.value = Math.max(habitSeat.value, 0);
+  which.value = s.locked ? "locked" : "base";
+  history.value = []; line.value = []; selected.value = null; exactAt.value = null; exactSummary.value = null; resolveError.value = "";
+  await load();
+  step.value = "results";
+}
+defineExpose({ loadCustom, previewCustom, openSaved });
 async function solve() {
   await refreshMemory();
   if (memoryProblem.value) return;
@@ -458,13 +498,7 @@ async function solve() {
     const s = await api.mwSolve(spec.value);
     solvedScale.value = usedScale;
     if (s.error) { error.value = s.error; return; }
-    summary.value = s;
-    startLen.value = board.value.length;
-    heroSolved.value = hero.value; habitSolved.value = Math.max(habitSeat.value, 0);
-    which.value = s.locked ? "locked" : "base";
-    history.value = []; line.value = []; selected.value = null; exactAt.value = null; exactSummary.value = null; resolveError.value = "";
-    await load();
-    step.value = "results";
+    await showSolved(s);
   } catch (e) { error.value = String((e as Error).message ?? e); }
   finally { window.clearInterval(timer); solving.value = false; }
 }

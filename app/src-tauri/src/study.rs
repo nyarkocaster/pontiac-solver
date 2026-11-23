@@ -99,8 +99,20 @@ pub fn library_save_two(state: tauri::State<Mutex<StudyState>>, name: String, me
     state.lock().unwrap().library_save(&name, meta)
 }
 
-#[tauri::command]
-pub fn library_save_three(name: String, meta: serde_json::Value) -> Result<LibraryEntry, String> { library_save_spot(&name, meta) }
+#[tauri::command(async)]
+pub fn library_save_three(state: tauri::State<std::sync::RwLock<multiway::study::State3>>, name: String, meta: serde_json::Value) -> Result<LibraryEntry, String> {
+    crate::study_core::library_save_three(Some(&state.read().unwrap()), &name, meta)
+}
+
+/// Puts a stored three-player solve on the three-player screen. Returns its summary.
+#[tauri::command(async)]
+pub fn library_open_three(state: tauri::State<std::sync::RwLock<multiway::study::State3>>, id: String) -> Result<multiway::study::Summary3, String> {
+    *state.write().unwrap() = Default::default(); // free the solve on screen before reading the next
+    let st = crate::study_core::library_open_three(&id)?;
+    let summary = st.summary.clone().unwrap_or_default();
+    *state.write().unwrap() = st;
+    Ok(summary)
+}
 
 #[tauri::command(async)]
 pub fn library_open_two(state: tauri::State<Mutex<StudyState>>, id: String) -> Result<LibraryEntry, String> {

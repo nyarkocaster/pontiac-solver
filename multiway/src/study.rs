@@ -108,7 +108,15 @@ pub struct Summary3 {
     pub memory_mb: f64,
     pub cancelled: bool,
     pub error: Option<String>,
+    /// present when the spot was played for prize money
+    #[serde(default)]
+    pub icm: Option<IcmSummary3>,
 }
+
+/// Each player's expected share of the prize pool (percent) after the spot: in the normal solve,
+/// in the locked or habit solve (zeros without one), and if the pot were simply shared out.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct IcmSummary3 { pub base_share: [f64; 3], pub locked_share: [f64; 3], pub split: [f64; 3] }
 
 #[derive(Serialize, Default, Clone)]
 pub struct Cell3 { /// combos of this class the board leaves possible
@@ -593,6 +601,10 @@ fn solve_cfg(cfg: &Config, spec: &Spec3, leaks: &[Leak3], locks: &[NodeLock3], p
         sum.locked_secs = t1.elapsed().as_secs_f64(); sum.locked_nodes = count; sum.cancelled = cancelled;
         sum.memory_mb += lg.memory_bytes() as f64 / 1e6;
         locked = Some(lg);
+    }
+    if let Some(icm) = &base.icm {
+        let of = |ev: &[f64; 3]| [icm.share_pct(0, ev[0]), icm.share_pct(1, ev[1]), icm.share_pct(2, ev[2])];
+        sum.icm = Some(IcmSummary3 { base_share: of(&sum.base_ev), locked_share: if sum.locked { of(&sum.locked_ev) } else { [0.0; 3] }, split: [icm.split_pct(0), icm.split_pct(1), icm.split_pct(2)] });
     }
     Ok((base, locked, sum))
 }

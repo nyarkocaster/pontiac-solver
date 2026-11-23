@@ -15,7 +15,7 @@
     </div>
 
     <div v-show="store.navView === 'library'" style="height: calc(100% - 2.5rem)">
-      <Library :active="store.navView === 'library'" :open2="open2" :open3="run3" @done="showResult" />
+      <Library :active="store.navView === 'library'" :open2="open2" :open3="run3" :open3saved="open3saved" @done="showResult" />
     </div>
 
     <div v-show="store.navView === 'pushfold'" style="height: calc(100% - 2.5rem)">
@@ -106,6 +106,7 @@ const preview2 = async (p: Solve2) => (await guided.value?.previewCustom(p)) ?? 
 const preview3 = async (p: Solve3) => (await threeway.value?.previewCustom(p)) ?? { text: "", problem: "" };
 const quickFlop = async (p: Solve2, flop: number[]) => { if (store.lastResult === "guided") store.lastResult = ""; if (!guided.value) throw new Error(fail.error); return guided.value.quickFlop(p, flop); };
 const open2 = async (e: LibraryEntry) => (await guided.value?.openSaved(e)) ?? fail;
+const open3saved = async (e: LibraryEntry) => (await threeway.value?.openSaved(e)) ?? fail;
 const showResult = (kind: "guided" | "threeway") => { store.lastResult = kind; store.navView = kind; };
 
 const store = useStore();

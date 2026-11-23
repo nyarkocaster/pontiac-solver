@@ -101,6 +101,7 @@ fn main() {
             library_save_two,
             library_save_three,
             library_open_two,
+            library_open_three,
             study_hand,
             study_range_grid,
             mw_progress,

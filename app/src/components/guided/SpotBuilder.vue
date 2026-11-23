@@ -271,7 +271,7 @@
           <p v-if="spot.players.length" class="hint mt-1">Listed in the order they act after the flop.</p>
           <div class="mt-3 text-sm font-bold">{{ engineText }}</div>
           <p v-if="stackNote" class="hint mt-1">{{ stackNote }}</p>
-          <div v-if="table.game === 'tourney' && spot.players.length === 2" class="mt-3 rounded-xl border border-rule p-3 text-sm">
+          <div v-if="table.game === 'tourney' && (spot.players.length === 2 || spot.players.length === 3)" class="mt-3 rounded-xl border border-rule p-3 text-sm">
             <label class="flex items-center gap-2 font-bold"><input v-model="icmOn" type="checkbox" class="accent-current" /> Play for prize money, not chips</label>
             <template v-if="icmOn">
               <label class="field mt-2"><span>Prizes, first place first</span><input v-model="icmPayouts" class="input w-full" placeholder="50, 30, 20" aria-label="Prizes, first place first" /></label>
@@ -325,6 +325,8 @@ export interface Solve2 { res: ScenarioResult; format: "live" | "hu"; board: num
 export interface Solve3 {
   format: "cash" | "tourney"; names: string[]; ranges: string[]; hero: number; pot: number; stacks: number[]; board: number[];
   rakePct: number; rakeCap: number; habitSeat: number; profile: string | null; sizingId: string; laterId: string;
+  /** play for prize money: prizes (first place first) and the stacks, in big blinds, of players not in the hand */
+  icm?: { payouts: number[]; others: number[] };
 }
 const emit = defineEmits<{ (e: "done", kind: "guided" | "threeway"): void }>();
 
@@ -455,7 +457,7 @@ const rakePct = ref(0); const rakeCap = ref(0);
 const icmOn = ref(false); const icmPayouts = ref("50, 30, 20"); const icmExtra = ref("");
 const numList = (t: string) => t.split(/[,\s]+/).map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
 const icmOthers = computed(() => [...pre.value.out.map((x) => x.behind), ...spot.value.left.map((x) => x.behind), ...numList(icmExtra.value)].filter((x) => x > 0));
-const icmActive = computed(() => icmOn.value && table.game === "tourney" && spot.value.players.length === 2);
+const icmActive = computed(() => icmOn.value && table.game === "tourney" && (spot.value.players.length === 2 || spot.value.players.length === 3));
 const icmProblem = computed(() => {
   if (!icmActive.value) return "";
   if (!numList(icmPayouts.value).length) return "Enter at least one prize.";
@@ -511,6 +513,7 @@ function payload(): { two?: Solve2; three?: Solve3 } {
   return { three: {
     format: table.game, names: ps.map((p) => p.name), ranges: ps.map((p) => edits[p.seat]), hero: ps.findIndex((p) => p.hero), pot: pre.value.pot, stacks: ps.map((p) => p.behind),
     board: [...board.value], rakePct: tourney ? 0 : rakePct.value, rakeCap: tourney ? 0 : rakeCap.value, habitSeat: hab ? ps.indexOf(hab) : -1, profile, sizingId: sizing3.value, laterId: later3.value,
+    ...(icmActive.value && icmOthers.value.length && numList(icmPayouts.value).length ? { icm: { payouts: numList(icmPayouts.value), others: [...icmOthers.value] } } : {}),
   } };
 }
 

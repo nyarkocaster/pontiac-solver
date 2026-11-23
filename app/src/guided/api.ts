@@ -62,3 +62,5 @@ export const libraryRemove = (id: string) => call<void>("library_remove", { id }
 export const librarySaveTwo = (name: string, meta: Record<string, unknown>) => call<LibraryEntry>("library_save_two", { name, meta });
 export const librarySaveThree = (name: string, meta: Record<string, unknown>) => call<LibraryEntry>("library_save_three", { name, meta });
 export const libraryOpenTwo = (id: string) => call<LibraryEntry>("library_open_two", { id });
+/** Puts a stored three-player solve on the three-player screen; answers with its summary (see api3 Summary3). */
+export const libraryOpenThree = <T>(id: string) => call<T>("library_open_three", { id });

@@ -1001,7 +1001,8 @@ pub struct LibraryEntry {
     pub id: String,
     pub name: String,
     pub saved_at: u64,
-    /// "two" keeps the solve itself; "three" keeps the spot and is solved again when opened
+    /// "two" or "three" players. Three-player entries made before 0.13.4 keep the spot only
+    /// (`meta.solved` is absent or false) and are solved again when opened.
     pub kind: String,
     pub bytes: u64,
     #[serde(default)]
@@ -1050,11 +1051,29 @@ fn write_entry(e: &LibraryEntry, dir: &std::path::Path) -> Result<(), String> {
     std::fs::write(dir.join("entry.json"), serde_json::to_string(e).map_err(|x| x.to_string())?).map_err(|x| format!("Could not write to the library: {x}"))
 }
 
-/// Keeps a spot only (three-player solves are run again when opened).
-pub fn library_save_spot(name: &str, meta: serde_json::Value) -> Result<LibraryEntry, String> {
-    let (e, dir) = new_entry(name, "three", meta)?;
-    write_entry(&e, &dir)?;
+/// Keeps a three-player spot. When a finished solve is given it is stored whole and reopens
+/// without solving (`meta.solved` says so); otherwise only the spot is kept.
+pub fn library_save_three(st: Option<&multiway::study::State3>, name: &str, mut meta: serde_json::Value) -> Result<LibraryEntry, String> {
+    let solved = st.map_or(false, |s| s.base.is_some() && s.summary.is_some());
+    if let Some(m) = meta.as_object_mut() { m.insert("solved".into(), serde_json::Value::Bool(solved)); }
+    let (mut e, dir) = new_entry(name, "three", meta)?;
+    let result = (|| -> Result<(), String> {
+        if let (true, Some(st)) = (solved, st) {
+            let target = dir.join("solve.p3");
+            multiway::save::save_file(st, "", &target.to_string_lossy()).map_err(|x| format!("Could not save the solve: {x}"))?;
+            e.bytes = std::fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+        }
+        write_entry(&e, &dir)
+    })();
+    if let Err(x) = result { let _ = std::fs::remove_dir_all(&dir); return Err(x); }
     Ok(e)
+}
+
+/// Reads a stored three-player solve back.
+pub fn library_open_three(id: &str) -> Result<multiway::study::State3, String> {
+    let file = safe_id(id)?.join("solve.p3");
+    if !file.exists() { return Err("That entry keeps the spot only; it has to be solved again.".into()); }
+    Ok(multiway::save::load_file(&file.to_string_lossy()).map_err(|x| format!("That saved solve could not be opened: {x}"))?.0)
 }
 
 impl StudyState {
