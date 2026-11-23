@@ -12,7 +12,7 @@ use crate::tables::class_of;
 
 pub const NC: usize = 169;
 /// Number of connection features.
-pub const NF: usize = 31;
+pub const NF: usize = 32;
 
 /// Names of the features, for reports.
 pub const FEATURE_NAMES: [&str; NF] = [
@@ -22,7 +22,7 @@ pub const FEATURE_NAMES: [&str; NF] = [
     "board paired", "board two-tone", "board one suit", "board ace-high", "board K- or Q-high", "board J- to 9-high", "board connected",
     "flush", "flush draw, both cards", "flush draw, one card", "backdoor flush draw",
     "straight", "eight-out straight draw", "gutshot",
-    "kicker plays", "pocket pair, board paired",
+    "kicker plays", "pocket pair, board paired", "board three of a kind",
 ];
 
 /// How much each feature counts when the weights are fitted.
@@ -30,19 +30,31 @@ const LAMBDA: [f64; NF] = [
     4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0,
     4.0, 4.0,
     2.0, 2.0, 2.0, 3.0, 3.0, 3.0,
-    1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+    2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
     3.0, 3.0, 2.0, 1.0,
     3.0, 2.0, 2.0,
-    1.0, 1.0,
+    1.0, 1.0, 4.0,
 ];
 
 /// The sample used up to 0.13.3, in its original order (the first eight were the short sample).
 pub const SAMPLE_16: [&str; 16] = ["As7d2c", "Ks8s3d", "QhJh6c", "Ts9s8d", "7s6d5c", "KsKd4c", "8s3d2c", "Jh9h5h",
     "AsKdTc", "Qs7d2c", "9c6c4d", "7s7d4d", "Ah8h5c", "Jd7d4s", "Ts6d2c", "As5d5c"];
 
-/// The built-in sample of `n` flops.
+/// Samples chosen by the `flopsample` tool: with the fitted weights, every hand class's all-in equity
+/// against a random hand, against the strongest 12% of hands and against the weakest half comes out
+/// close to the exact figure over all boards (mean error 0.36, 0.65 and 0.45 points for the 24;
+/// 0.24, 0.52 and 0.30 for the 32; the 16 above manage 1.2, 1.6 and 1.5).
+pub const SAMPLE_24: [&str; 24] = ["JdJc2c", "9c8d4c", "AcJd2c", "KcJd3c", "Qd8d6c", "Qc7c5c", "6c2d2c", "8h7d5c", "8h5d3c", "KcQd6c", "Jd4c2c", "Th4d3c", "Qh9d5c", "6d6c2c", "AdQc4c", "9d6c5c", "Th7d6c", "Ac9c6c", "Qc7d3c", "AdAcTc", "Th6d4c", "7d7c6c", "8h5d4c", "AhQdJc"];
+pub const SAMPLE_32: [&str; 32] = ["AdTd3c", "9h6d2c", "AhJdTc", "QdQc9c", "9d6c5c", "6h6d6c", "QhJd2c", "Qd4c2c", "AdJd9c", "Td8c2c", "Qh8d6c", "Tc2d2c", "AcKdKc", "AhQdTc", "Jh7d5c", "8h5d3c", "Th7d6c", "QhJd8c", "Jd8d3c", "Kd6c3c", "Qd9d3c", "AcTdTc", "7h4d3c", "Ac9d8c", "8h8d7c", "8h5d2c", "KhQd5c", "9d9c5c", "Tc5d5c", "KhTd8c", "Kc5d4c", "9h4d4c"];
+
+/// The built-in sample of `n` flops: the chosen 24 or 32 when asked for exactly that many,
+/// otherwise the first `n` of the original 16.
 pub fn sample(n: usize) -> Vec<&'static str> {
-    SAMPLE_16.iter().take(n.min(SAMPLE_16.len())).copied().collect()
+    match n {
+        24 => SAMPLE_24.to_vec(),
+        32 => SAMPLE_32.to_vec(),
+        _ => SAMPLE_16.iter().take(n.min(SAMPLE_16.len())).copied().collect(),
+    }
 }
 
 pub fn parse_card(s: &str) -> Result<u8, String> {
@@ -120,6 +132,7 @@ pub fn features(hole: [u8; 2], flop: [u8; 3]) -> [f32; NF] {
     }
     // the board on its own
     if board_pair { x[15] = 1.0; }
+    if board_trips { x[31] = 1.0; }
     let suits_same = (bs[0] == bs[1]) as usize + (bs[0] == bs[2]) as usize + (bs[1] == bs[2]) as usize;
     if suits_same == 1 { x[16] = 1.0; } else if suits_same == 3 { x[17] = 1.0; }
     if top == 12 { x[18] = 1.0; } else if top >= 10 { x[19] = 1.0; } else if top >= 7 { x[20] = 1.0; }
@@ -304,6 +317,19 @@ mod tests {
         let q = true_profile(class_of(parse_card("Jc").unwrap(), parse_card("Tc").unwrap()));
         assert!((q[name("flush draw, both cards")] - 0.1094).abs() < 0.002);
         assert!((q[name("flush")] - 0.0084).abs() < 0.0005);
+    }
+    #[test]
+    fn built_in_samples_fit() {
+        let name = |n: &str| FEATURE_NAMES.iter().position(|x| *x == n).unwrap();
+        for n in [16, 24, 32] {
+            let flops: Vec<[u8; 3]> = sample(n).iter().map(|f| parse_flop(f).unwrap()).collect();
+            assert_eq!(flops.len(), n);
+            let fw = fit(&flops, None);
+            let c = class_of(parse_card("7c").unwrap(), parse_card("2d").unwrap());
+            assert!((fw.weight[c].iter().sum::<f64>() - 1.0).abs() < 1e-9);
+            // 7-2 offsuit pairs on a third of all flops, whatever the sample happens to hold
+            assert!((fw.fitted_profile[c][name("pair or better")] - 0.324).abs() < 0.02, "{n} flops: {}", fw.fitted_profile[c][name("pair or better")]);
+        }
     }
     #[test]
     fn suit_ways_counts() {
