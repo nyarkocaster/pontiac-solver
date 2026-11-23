@@ -63,7 +63,7 @@ export const studyRangeGrid = (range: string) => call<number[]>("study_range_gri
 
 // hand-made locks and the saved-solve library
 export interface ManualLock { history: number[]; cells: number[]; freqs: number[]; label?: string }
-export interface LibraryEntry { id: string; name: string; saved_at: number; kind: "two" | "three"; bytes: number; summary: StudySummary | null; confidence: number; meta: Record<string, unknown> }
+export interface LibraryEntry { id: string; name: string; saved_at: number; kind: "two" | "three" | "flop"; bytes: number; summary: StudySummary | null; confidence: number; meta: Record<string, unknown> }
 export const studyRelock = (spec: StudySpec, locks: ManualLock[]) => call<StudySummary>("study_relock", { spec, locks: locks.map((l) => ({ history: l.history, cells: l.cells, freqs: l.freqs })) });
 export const libraryEntries = () => call<LibraryEntry[]>("library_entries");
 export const libraryRemove = (id: string) => call<void>("library_remove", { id });
@@ -72,3 +72,16 @@ export const librarySaveThree = (name: string, meta: Record<string, unknown>) =>
 export const libraryOpenTwo = (id: string) => call<LibraryEntry>("library_open_two", { id });
 /** Puts a stored three-player solve on the three-player screen; answers with its summary (see api3 Summary3). */
 export const libraryOpenThree = <T>(id: string) => call<T>("library_open_three", { id });
+
+// library files: a flop solve small enough to share; turns are solved when a card is picked
+/** How a turn solved from a library file went. Chips are the file's own. `stored_*`: what the whole solve said about the same card. */
+export interface TurnSolve { card: string; secs: number; iterations: number; expl_pct: number; pot: number; ev: [number, number]; stored_ev: [number, number]; bet: number; stored_bet: number }
+export interface CardNote { id: number; ev: [number, number]; equity: [number, number]; bet: number }
+/** `studyNode` and `studyHand` fail with this when a library file's turn card has not been solved yet. */
+export const TURN_NOT_SOLVED = "TURN_NOT_SOLVED";
+export const libraryShare = (name: string, meta: Record<string, unknown>) => call<LibraryEntry>("library_share", { name, meta });
+export const libraryExportFile = (id: string) => call<number[]>("library_export_file", { id });
+export const libraryImportFile = (bytes: number[], fileName: string) => call<LibraryEntry>("library_import_file", { bytes, fileName });
+export const studyTurn = (history: number[], accuracyPct: number, maxSeconds: number, threads: number) => call<TurnSolve | null>("study_turn", { history, accuracyPct, maxSeconds, threads });
+export const studyCards = (history: number[]) => call<CardNote[]>("study_cards", { history });
+export const studyTurnNote = (history: number[]) => call<TurnSolve | null>("study_turn_note", { history });

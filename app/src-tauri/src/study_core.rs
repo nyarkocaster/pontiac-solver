@@ -6,6 +6,7 @@
 // same as the upstream desktop-postflop / postflop-solver projects.
 
 use postflop_solver::*;
+use plib::Solved;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
@@ -38,7 +39,13 @@ pub struct StudyState {
     pub swap_mode: bool,
     pub cache: HashMap<(bool, Vec<usize>), NodeView>,
     pub confidence: f32,
+    /// a library file on screen: the flop read from the file, turns solved when asked for
+    pub lib: Option<plib::LibGame>,
 }
+
+/// What `view` answers when a library file's turn card has not been solved yet. The screen then
+/// asks for that turn to be solved (`solve_turn`) and looks again.
+pub const TURN_NOT_SOLVED: &str = "TURN_NOT_SOLVED";
 
 /// Per-process scratch folder for parked solves, so two open copies never collide.
 /// Folders left behind by copies that are no longer running are removed after a day.
@@ -68,7 +75,7 @@ pub fn work_dir() -> PathBuf {
 impl StudyState {
     /// Memory held by the solves kept for browsing (released when the next solve starts).
     pub fn held_bytes(&self) -> u64 {
-        [self.base.as_ref(), self.locked.as_ref()].iter().flatten().map(|g| g.memory_usage().1).sum()
+        [self.base.as_ref(), self.locked.as_ref()].iter().flatten().map(|g| g.memory_usage().1).sum::<u64>() + self.lib.as_ref().map_or(0, |l| l.held_bytes())
     }
 
     pub fn reset(&mut self) {
@@ -78,6 +85,7 @@ impl StudyState {
         self.base_file = None;
         self.locked_file = None;
         self.swap_mode = false;
+        self.lib = None;
         self.cache.clear();
         if let Ok(rd) = std::fs::read_dir(work_dir()) {
             for e in rd.flatten() {
@@ -133,6 +141,12 @@ impl StudyState {
         let key = (locked, history.to_vec());
         if let Some(v) = self.cache.get(&key) {
             return Ok(v.clone());
+        }
+        if let Some(lib) = self.lib.as_mut() {
+            if lib.needs_turn(history)?.is_some() { return Err(TURN_NOT_SOLVED.into()); }
+            let v = node_view(lib, history)?;
+            self.cache.insert(key, v.clone());
+            return Ok(v);
         }
         let v = node_view(self.game(locked)?, history)?;
         self.cache.insert(key, v.clone());
@@ -796,16 +810,16 @@ fn action_label(a: &Action) -> (String, i32) {
     }
 }
 
-pub fn node_view(game: &mut PostFlopGame, history: &[usize]) -> Result<NodeView, String> {
+pub fn node_view<G: Solved>(game: &mut G, history: &[usize]) -> Result<NodeView, String> {
     game.back_to_root();
     game.apply_history(history);
     let mut v = NodeView::default();
     v.board = game.current_board().iter().map(|&c| card_to_string(c).unwrap_or_default()).collect();
     let tb = game.total_bet_amount();
     v.bets = tb;
-    let base_pot = game.tree_config().starting_pot;
+    let base_pot = game.starting_pot();
     v.pot = base_pot + 2 * tb[0].min(tb[1]);
-    v.stack = game.tree_config().effective_stack;
+    v.stack = game.effective_stack();
     if game.is_terminal_node() {
         v.kind = "terminal".into();
         return Ok(v);
@@ -833,7 +847,7 @@ pub fn node_view(game: &mut PostFlopGame, history: &[usize]) -> Result<NodeView,
     v.kind = "player".into();
     let p = game.current_player();
     v.player = p;
-    v.locked = game.current_locking_strategy().is_some();
+    v.locked = game.is_locked();
     let actions = game.available_actions();
     for a in &actions {
         let (l, amt) = action_label(a);
@@ -919,7 +933,7 @@ pub struct HandView {
 }
 
 /// Exact numbers for one specific hand (e.g. "AsKd") at a node.
-pub fn hand_view(game: &mut PostFlopGame, history: &[usize], player: usize, hand: &str) -> Result<HandView, String> {
+pub fn hand_view<G: Solved>(game: &mut G, history: &[usize], player: usize, hand: &str) -> Result<HandView, String> {
     let h = hand.trim();
     if h.len() != 4 {
         return Err("Enter a hand like AsKd".into());
@@ -1016,7 +1030,7 @@ pub struct Review {
 /// Follows a played hand through the solve and prices each of `hero`'s decisions for the exact
 /// hand held: the value of every action available, how often the solve takes it, and what the
 /// action actually taken gave up.
-pub fn review(game: &mut PostFlopGame, hero: usize, hand: &str, steps: &[ReviewStep]) -> Result<Review, String> {
+pub fn review<G: Solved>(game: &mut G, hero: usize, hand: &str, steps: &[ReviewStep]) -> Result<Review, String> {
     let h = hand.trim();
     if h.len() != 4 { return Err("The review needs the two cards that were held, like AsKd.".into()); }
     let c1 = card_from_str(&h[..2]).map_err(|e| e.to_string())?;
@@ -1031,6 +1045,7 @@ pub fn review(game: &mut PostFlopGame, hero: usize, hand: &str, steps: &[ReviewS
             let card = card_from_str(st.card.trim()).map_err(|_| format!("'{}' is not a card", st.card))?;
             if !game.is_chance_node() { out.stopped = Some("The hand history deals a card where the solve still has betting to do: the two disagree on the bets before it.".into()); break; }
             if card == c1 || card == c2 || game.possible_cards() & (1u64 << card) == 0 { out.stopped = Some(format!("The {} cannot come in this solve (it is in a hand or on the board).", st.card)); break; }
+            if let Err(e) = game.prepare_card(card as usize) { out.stopped = Some(e); break; }
             history.push(card as usize);
             game.play(card as usize);
             continue;
@@ -1063,7 +1078,7 @@ pub fn review(game: &mut PostFlopGame, hero: usize, hand: &str, steps: &[ReviewS
         let mut row = ReviewRow {
             history: history.clone(), street: ["flop", "turn", "river"][game.current_board().len().clamp(3, 5) - 3].to_string(),
             board: game.current_board().iter().map(|&c| card_to_string(c).unwrap_or_default()).collect(),
-            pot: (game.tree_config().starting_pot + game.total_bet_amount().iter().sum::<i32>()) as f64,
+            pot: (game.starting_pot() + game.total_bet_amount().iter().sum::<i32>()) as f64,
             hero: player == hero, actions: labels.iter().map(|l| l.0.clone()).collect(), amounts: labels.iter().map(|l| l.1).collect(),
             chosen, played_as, ..Default::default()
         };
@@ -1077,6 +1092,7 @@ pub fn review(game: &mut PostFlopGame, hero: usize, hand: &str, steps: &[ReviewS
             // The hand itself may have no weight left (the solve would have played it differently
             // earlier); its actions can still be priced as long as some of the player's hands get here.
             let w = game.normalized_weights(player);
+            let w = &w[..];
             if !w.iter().any(|&x| x > 0.0) {
                 out.stopped = Some("The solve never gets to this point: an action before it is one the solve never takes, so there is nothing sound to compare with from here on.".into());
                 break;
@@ -1119,9 +1135,15 @@ pub fn range_grid(range: &str) -> Result<Vec<f32>, String> {
 
 impl StudyState {
     pub fn hand(&mut self, locked: bool, history: &[usize], player: usize, hand: &str) -> Result<HandView, String> {
+        if let Some(lib) = self.lib.as_mut() {
+            if lib.needs_turn(history)?.is_some() { return Err(TURN_NOT_SOLVED.into()); }
+            return hand_view(lib, history, player, hand);
+        }
         hand_view(self.game(locked)?, history, player, hand)
     }
     pub fn review(&mut self, locked: bool, hero: usize, hand: &str, steps: &[ReviewStep]) -> Result<Review, String> {
+        // with a library file each turn the hand reaches is solved on the way
+        if let Some(lib) = self.lib.as_mut() { return review(lib, hero, hand, steps); }
         review(self.game(locked)?, hero, hand, steps)
     }
 }
@@ -1205,6 +1227,7 @@ pub fn relock(mut base: PostFlopGame, spec: &StudySpec, locks: &[ManualLock], pr
 impl StudyState {
     /// Takes the normal solve out for a re-solve with locks; `finish_relock` puts things back.
     pub fn begin_relock(&mut self) -> Result<(PostFlopGame, StudySummary), String> {
+        if self.lib.is_some() { return Err("A library file holds the flop only, so it cannot be solved again with a lock. Solve the spot yourself from Study a spot to lock it.".into()); }
         let summary = self.summary.clone().ok_or("No solved game yet")?;
         self.game(false)?;
         self.locked = None;
@@ -1235,7 +1258,8 @@ pub struct LibraryEntry {
     pub id: String,
     pub name: String,
     pub saved_at: u64,
-    /// "two" or "three" players. Three-player entries made before 0.13.4 keep the spot only
+    /// "two" or "three" players, or "flop": a small library file (two players, flop only).
+    ///  Three-player entries made before 0.13.4 keep the spot only
     /// (`meta.solved` is absent or false) and are solved again when opened.
     pub kind: String,
     pub bytes: u64,
@@ -1310,9 +1334,112 @@ pub fn library_open_three(id: &str) -> Result<multiway::study::State3, String> {
     Ok(multiway::save::load_file(&file.to_string_lossy()).map_err(|x| format!("That saved solve could not be opened: {x}"))?.0)
 }
 
+/// What a library file's whole solve said about each card at a point where a card is dealt.
+#[derive(Serialize, Clone, Debug)]
+pub struct CardNote { pub id: usize, pub ev: [f32; 2], pub equity: [f32; 2], pub bet: f32 }
+
+/// How a turn solved from a library file went, for the screen.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct TurnSolve { pub card: String, pub secs: f64, pub iterations: u32, pub expl_pct: f64, pub pot: i32, pub ev: [f64; 2], pub stored_ev: [f64; 2], pub bet: f64, pub stored_bet: f64 }
+
+impl From<&plib::ResolveInfo> for TurnSolve {
+    fn from(i: &plib::ResolveInfo) -> Self { TurnSolve { card: card_to_string(i.card).unwrap_or_default(), secs: i.seconds, iterations: i.iterations, expl_pct: i.accuracy_pct, pot: i.pot, ev: i.ev, stored_ev: i.stored_ev, bet: i.bet, stored_bet: i.stored_bet } }
+}
+
+/// Solves the turn a history needs from the library file on screen. The file is taken out of
+/// `take` and handed back through `put`, so the screen's lock is not held while solving.
+pub fn solve_turn(mut lib: plib::LibGame, history: &[usize], accuracy_pct: f32, max_seconds: f64, threads: usize, prog: &StudyProgress) -> (plib::LibGame, Result<Option<TurnSolve>, String>) {
+    let out = (|| -> Result<Option<TurnSolve>, String> {
+        let Some((flop, card)) = lib.needs_turn(history)? else { return Ok(None) };
+        prog.cancel.store(false, Ordering::Relaxed);
+        prog.iter.store(0, Ordering::Relaxed);
+        prog.max_iter.store(1000, Ordering::Relaxed);
+        prog.expl_milli_pct.store(u32::MAX, Ordering::Relaxed);
+        prog.phase.store(1, Ordering::Relaxed);
+        let opts = plib::ResolveOpts { accuracy_pct: if accuracy_pct > 0.0 { accuracy_pct } else { 0.1 }, max_seconds: if max_seconds > 0.0 { max_seconds } else { 60.0 }, max_iterations: 1000 };
+        let report = |it: u32, pct: f32, _secs: f64| -> bool {
+            prog.iter.store(it, Ordering::Relaxed);
+            prog.expl_milli_pct.store((pct * 1000.0).max(0.0) as u32, Ordering::Relaxed);
+            !prog.cancel.load(Ordering::Relaxed)
+        };
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().map_err(|e| e.to_string())?;
+        let info = pool.install(|| lib.solve_turn(&flop, card, &opts, Some(&report)))?;
+        Ok(Some(TurnSolve::from(&info)))
+    })();
+    (lib, out)
+}
+
+impl StudyState {
+    /// At a point of a library file where a card is dealt: what the whole solve said about each card.
+    pub fn card_notes(&mut self, history: &[usize]) -> Result<Vec<CardNote>, String> {
+        let Some(lib) = self.lib.as_mut() else { return Ok(vec![]) };
+        if lib.needs_turn(history)?.is_some() { return Ok(vec![]); }
+        lib.apply_history(history);
+        Ok(lib.card_infos().iter().map(|c| CardNote { id: c.card as usize, ev: c.ev, equity: c.equity, bet: c.bet }).collect())
+    }
+
+    /// How the turn under a history was solved (None on the flop or with a whole solve).
+    pub fn turn_note(&mut self, history: &[usize]) -> Result<Option<TurnSolve>, String> {
+        let Some(lib) = self.lib.as_mut() else { return Ok(None) };
+        if lib.needs_turn(history)?.is_some() { return Ok(None); }
+        lib.apply_history(history);
+        Ok(lib.turn_info().map(TurnSolve::from))
+    }
+
+    /// Keeps the flop of the normal solve on screen as a small library file: flop strategy and
+    /// values only, turn and river solved again when it is opened.
+    pub fn library_share(&mut self, name: &str, meta: serde_json::Value) -> Result<LibraryEntry, String> {
+        let mut summary = self.summary.clone().ok_or("No solved game to save")?;
+        summary.locked = false; summary.locked_nodes = 0; summary.swap_mode = false; summary.payoffs = vec![]; summary.icm = None;
+        let (mut e, dir) = new_entry(name, "flop", meta.clone())?;
+        let result = (|| -> Result<(), String> {
+            let header = serde_json::json!({"made_by": format!("Pontiac Solver {}", env!("CARGO_PKG_VERSION")), "name": e.name, "app": meta, "summary": summary, "created": e.saved_at});
+            let file = plib::pack(self.game(false)?, header)?;
+            e.bytes = file.save(&dir.join("flop.plib").to_string_lossy(), 8)?;
+            e.summary = Some(summary.clone());
+            write_entry(&e, &dir)
+        })();
+        if let Err(x) = result { let _ = std::fs::remove_dir_all(&dir); return Err(x); }
+        Ok(e)
+    }
+}
+
+/// The bytes of a library file kept in the library, to hand to someone else.
+pub fn library_export(id: &str) -> Result<Vec<u8>, String> {
+    std::fs::read(safe_id(id)?.join("flop.plib")).map_err(|_| "That entry has no small file to share. Open it and use \"Save a small file to share\".".to_string())
+}
+
+/// Adds a library file from someone else (or from the headless program) to the library.
+pub fn library_import(bytes: &[u8], file_name: &str) -> Result<LibraryEntry, String> {
+    let file = plib::LibFile::from_bytes(bytes)?;
+    let h = &file.header;
+    let fallback = std::path::Path::new(file_name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let name = h.get("name").and_then(|x| x.as_str()).map(|s| s.to_string()).filter(|s| !s.trim().is_empty()).unwrap_or(fallback);
+    // files from the app carry the screen's own description of the spot; files from the headless
+    // program carry the spot file instead, which the screen turns into the same thing
+    let meta = match h.get("app") { Some(m) if m.is_object() => m.clone(), _ => serde_json::json!({"headless": {"names": h.get("names"), "spot": h.get("spot"), "chips_per_bb": h.get("chips_per_bb"), "board": h.get("board"), "solve": h.get("solve"), "tree": h.get("tree")}}) };
+    let summary: StudySummary = h.get("summary").and_then(|s| serde_json::from_value(s.clone()).ok()).unwrap_or_else(|| {
+        let s = h.get("solve").cloned().unwrap_or_default();
+        let names: Vec<String> = h.get("names").and_then(|n| serde_json::from_value(n.clone()).ok()).unwrap_or_default();
+        let chips = h.get("chips_per_bb").and_then(|x| x.as_f64()).unwrap_or(100.0);
+        let ev = |i: usize| names.get(i).and_then(|n| s.get("ev_bb").and_then(|e| e.get(n)).and_then(|x| x.as_f64())).unwrap_or(0.0) * chips;
+        StudySummary { base_ev: [ev(0), ev(1)], base_expl_pct: s.get("exploitability_pct").and_then(|x| x.as_f64()).unwrap_or(0.0), base_secs: s.get("runtime_seconds").and_then(|x| x.as_f64()).unwrap_or(0.0), ..Default::default() }
+    });
+    let (mut e, dir) = new_entry(if name.is_empty() { "Library file" } else { &name }, "flop", meta)?;
+    let result = (|| -> Result<(), String> {
+        std::fs::write(dir.join("flop.plib"), bytes).map_err(|x| format!("Could not write to the library: {x}"))?;
+        e.bytes = bytes.len() as u64;
+        e.summary = Some(summary);
+        write_entry(&e, &dir)
+    })();
+    if let Err(x) = result { let _ = std::fs::remove_dir_all(&dir); return Err(x); }
+    Ok(e)
+}
+
 impl StudyState {
     /// Writes the solve on screen (and its locked version, if any) to the library.
     pub fn library_save(&mut self, name: &str, meta: serde_json::Value) -> Result<LibraryEntry, String> {
+        if self.lib.is_some() { return Err("This is a library file already; it is in the library.".into()); }
         let summary = self.summary.clone().ok_or("No solved game to save")?;
         let (mut e, dir) = new_entry(name, "two", meta)?;
         let result = (|| -> Result<(), String> {
@@ -1341,6 +1468,15 @@ impl StudyState {
         let text = std::fs::read_to_string(dir.join("entry.json")).map_err(|_| "That saved solve is missing.".to_string())?;
         let e: LibraryEntry = serde_json::from_str(&text).map_err(|x| x.to_string())?;
         let mut summary = e.summary.clone().ok_or("That entry has no solve stored.")?;
+        if e.kind == "flop" {
+            let lib = plib::LibGame::open(&dir.join("flop.plib").to_string_lossy()).map_err(|x| format!("That library file could not be opened: {x}"))?;
+            self.reset();
+            summary.swap_mode = false; summary.locked = false;
+            self.confidence = 1.0;
+            self.summary = Some(summary);
+            self.lib = Some(lib);
+            return Ok(e);
+        }
         if !dir.join("base.bin").exists() { return Err("That saved solve is missing its file.".into()); }
         self.reset();
         summary.swap_mode = false;

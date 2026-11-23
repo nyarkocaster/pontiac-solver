@@ -2,6 +2,7 @@ Folders
   engine/    two-player solver (b-inary postflop-solver, tonyyet nodelock fork, patched)
   cli/       headless command-line program (pontiac solve / query / estimate); scripts/build_cli.sh rebuilds it
   pontiac/   Python package around that program (pip install -e ".[test]" && pytest)
+  library/   library files: the flop of a two-player solve in a small file, turns solved again on demand (docs/LIBRARY_FILES.md)
   multiway/  three-player flop, turn and river solver (original). Other tools: mwexp (sampling accuracy on turn spots), mwsample (sampled vs exact hand values), mwflop (flop size and timing), mwbench (fixed speed benchmark with result fingerprint). `cargo run --release --bin mwcheck` runs its checks.
   app/       Tauri + Vue desktop app
   checks/    test tools and the browser dev server (`cargo run --release --bin devserver`, then `npx vite` in app/)

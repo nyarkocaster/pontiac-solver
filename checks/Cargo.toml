@@ -10,6 +10,7 @@ rayon = "1"
 postflop-solver = { path = "../engine" }
 multiway = { path = "../multiway" }
 pushfold = { path = "../pushfold" }
+plib = { path = "../library" }
 [profile.release]
 debug = false
 

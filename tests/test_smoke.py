@@ -324,3 +324,92 @@ def test_package_carries_examples_guide_and_selftest():
         pontiac.example("no_such_spot")
     r = pontiac.selftest()
     assert r["ok"], r
+
+
+FLOP_SPOT = {
+    "players": ["SB", "BB"], "effective_stack_bb": 18, "pot_bb": 4, "board": "Ks7d2c",
+    "ranges": {"SB": "AA,KK,77,AKs,KQs,KJs,QJs,JTs,T9s,98s,A5s,AKo,KQo", "BB": "QQ-88,22,KTs,K9s,QTs,J9s,T8s,97s,87s,A7s,KJo,KTo"},
+    "bet_tree": {"flop": {"bet": [0.5], "raise": [2.5]}, "turn": {"bet": [0.66], "raise": [2.5]}, "river": {"bet": [0.66], "raise": [2.5]}, "allin_threshold": 0.67},
+    "target_exploitability_pct": 0.1, "max_seconds": 120, "detail": "class",
+}
+
+
+def test_library_file_keeps_the_flop_and_solves_turns_again(tmp_path):
+    whole, lib = tmp_path / "flop.pontiac", tmp_path / "flop.plib"
+    r = pontiac.solve(FLOP_SPOT, save=whole, library=lib)
+    assert r["library"]["saved_to"] == str(lib)
+    # a fraction of a percent of the whole solve's size
+    assert lib.stat().st_size < 60_000 and lib.stat().st_size * 200 < whole.stat().st_size
+    head = pontiac.info(lib)
+    assert head["format"] == 1 and head["names"] == ["BB", "SB"] and head["spot"]["board"] == "Ks7d2c"
+    assert head["solve"]["exploitability_pct"] == r["exploitability_pct"]
+
+    # every flop decision reads the same from the small file as from the whole solve
+    todo, deals, seen = ["flop"], [], 0
+    while todo:
+        path = todo.pop()
+        a = pontiac.query(whole, path, detail="combo")
+        if a["kind"] == "terminal":
+            continue
+        b = pontiac.query(lib, path, detail="combo")
+        assert b["kind"] == a["kind"] and b["source"] == "library file"
+        if a["kind"] == "deal":
+            assert sorted(a["next_paths"]) == sorted(b["next_paths"]) and len(b["cards"]) == len(b["next_paths"])
+            deals.append((path, a["next_paths"]))
+            continue
+        seen += 1
+        assert [x["name"] for x in a["actions"]] == [x["name"] for x in b["actions"]]
+        if not a["reached"]:
+            continue
+        for x, y in zip(a["actions"], b["actions"]):
+            assert abs(x["frequency"] - y["frequency"]) < 0.01, path
+            todo.append(x["path"])
+        assert abs(a["range_ev_bb"] - b["range_ev_bb"]) < 0.02 and abs(a["range_equity"] - b["range_equity"]) < 0.002, path
+        for hand, x in a["by_combo"].items():
+            if x["weight"] < 0.01:
+                continue
+            y = b["by_combo"][hand]
+            assert abs(x["ev_bb"] - y["ev_bb"]) < 0.02 and abs(x["equity"] - y["equity"]) < 0.002, (path, hand)
+            assert all(abs(x["freqs"][k] - y["freqs"][k]) < 0.01 for k in x["freqs"]), (path, hand)
+    assert seen >= 4 and deals
+
+    # the most common way to see a turn: a turn card is solved on the spot and agrees with the whole solve
+    path, cards = max(deals, key=lambda d: pontiac.query(whole, d[1][0])["line_frequency"])
+    turn = next(c for c in cards if c.endswith("=9h"))
+    a = pontiac.query(whole, turn)
+    kept = tmp_path / "turn.pontiac"
+    b = pontiac.query(lib, turn, accuracy=0.05, save_turn=kept)
+    t = b["turn_solve"]
+    assert t["card"] == "9h" and t["exploitability_pct"] <= 0.05 and t["stopped_because"] == "target_reached"
+    assert b["board"] == a["board"] and b["pot_bb"] == a["pot_bb"] and b["player"] == a["player"]
+    assert [x["name"] for x in a["actions"]] == [x["name"] for x in b["actions"]]
+    assert t["ev_difference_pct_of_pot"] < 1.0
+    assert abs(a["range_ev_bb"] - b["range_ev_bb"]) < 0.01 * a["pot_bb"]
+    for x, y in zip(a["actions"], b["actions"]):
+        assert abs(x["frequency"] - y["frequency"]) < 0.08
+    # the kept turn is an ordinary saved solve that starts on the turn
+    again = pontiac.query(kept, "turn")
+    assert again["board"] == b["board"] and freqs(again) == freqs(b)
+    # further down the same turn: a river
+    river = pontiac.query(lib, turn + "/BB_check/SB_check/river=2s", accuracy=0.05)
+    assert river["street"] == "river" and river["kind"] == "decision" and river["pot_bb"] == a["pot_bb"]
+
+    # a whole solve saved earlier packs to the same thing
+    lib2 = tmp_path / "packed.plib"
+    assert pontiac.pack(whole, lib2)["flop_nodes"] == r["library"]["flop_nodes"]
+    assert freqs(pontiac.query(lib2, "flop/BB_check")) == freqs(pontiac.query(lib, "flop/BB_check"))
+
+
+def test_library_file_errors_are_readable(tmp_path):
+    with pytest.raises(pontiac.SolverError, match="flop spots"):
+        pontiac.solve(SPOT, library=tmp_path / "x.plib")
+    with pytest.raises(pontiac.SolverError, match="node_locks"):
+        pontiac.solve({**FLOP_SPOT, "node_locks": [{"node": "flop", "action_freqs": {"check": 1.0}}]}, library=tmp_path / "x.plib")
+    lib = tmp_path / "flop.plib"
+    pontiac.solve({**FLOP_SPOT, "target_exploitability_pct": 2.0}, library=lib)
+    with pytest.raises(pontiac.SolverError, match="cannot come here"):
+        pontiac.query(lib, "flop/BB_check/SB_check/turn=Ks")
+    bad = tmp_path / "cut.plib"
+    bad.write_bytes(lib.read_bytes()[:-200])
+    with pytest.raises(pontiac.SolverError, match="cut short or damaged"):
+        pontiac.query(bad, "flop")

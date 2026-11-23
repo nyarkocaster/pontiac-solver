@@ -37,6 +37,7 @@ The bundled solver program is for Linux x86-64. On Windows or a Mac, download th
 | `pontiac/` | Python package; bundles the Linux solver program in `pontiac/bin/` |
 | `cli/` | Source of that program (Rust): `solve`, `query`, `estimate`, `pushfold` |
 | `engine/` | Two-player solver: b-inary's postflop-solver with tonyyet's node-locking changes, patched |
+| `library/` | Library files (`.plib`): a flop solve cut down to tens of kilobytes, turn and river solved again on demand. Layout in [docs/LIBRARY_FILES.md](docs/LIBRARY_FILES.md) |
 | `multiway/` | Three-player solver, original to this project. `cargo run --release --bin mwcheck` runs its checks |
 | `pushfold/` | Heads-up push/fold calculator and its preflop all-in equity table |
 | `app/` | Desktop app (Tauri + Vue) |
@@ -55,6 +56,7 @@ The bundled solver program is for Linux x86-64. On Windows or a Mac, download th
 - **Preflop**: heads-up push or fold; heads-up with limps, raises and re-raises (all-in pots exact, pots that see a flop estimated, with each line's ranges handed to the flop solver); three-handed push or fold with prize money (ICM).
 - **Hand review**: paste a hand history in Study a spot. For a two-player pot the result page prices each of your decisions after the flop for the exact hand you held and shows what the action you took gave up.
 - **Library**: save a solve from the Result page and open it again later. Solves are stored whole (compressed) and open without solving again.
+- **Small files to share**: "Save small, to share" keeps the flop only, in a file of tens of kilobytes. Opening one shows the flop at once and solves each turn in a few seconds when you pick its card. "Get the file" and "Add a library file" in the Library hand them between people.
 - **Node locks in the app**: at any decision, fix what a player does (whole range or one chart square) and solve again; the normal solve is reused.
 - **Chart views**: actions, value (EV) or chance to win on the hand chart. **Blockers**: which cards in your hand make the other player fold more or less after a bet.
 - **Pick the bet sizes for me**: a rough first solve tries five bet sizes and keeps the two each player uses most, so you do not have to guess which sizes matter on a board.

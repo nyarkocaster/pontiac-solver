@@ -16,8 +16,8 @@ from pathlib import Path
 
 from ._binary import binary
 
-__version__ = "0.13.8"
-__all__ = ["solve", "query", "estimate", "pushfold", "pushfold3", "preflop", "icm", "version", "SolverError", "binary",
+__version__ = "0.13.9"
+__all__ = ["solve", "query", "pack", "info", "estimate", "pushfold", "pushfold3", "preflop", "icm", "version", "SolverError", "binary",
            "example", "examples", "guide", "selftest"]
 
 
@@ -52,8 +52,10 @@ def _spot_file(spot):
     return f.name, True
 
 
-def solve(spot, save=None, timeout=None, progress=False):
+def solve(spot, save=None, timeout=None, progress=False, library=None):
     """Solves a spot. `save`: file to keep the full solve in, for `query`.
+    `library`: also write a library file (two-player flop spots): the flop strategy and values
+    only, a few tens of kilobytes; `query` on it solves a turn again when a path asks for one.
     `timeout`: hard limit in seconds for the whole call (the spot's own `max_seconds`
     is the normal way to bound a solve; it keeps the result reached so far).
     `progress`: show the solver's progress lines."""
@@ -62,24 +64,48 @@ def solve(spot, save=None, timeout=None, progress=False):
         args = ["solve", path]
         if save:
             args += ["--save", str(save)]
+        if library:
+            args += ["--library", str(library)]
         return _run(args, timeout=timeout, progress=progress)
     finally:
         if temp:
             os.unlink(path)
 
 
-def query(saved, node, hand=None, detail="class", normal=False):
+def query(saved, node, hand=None, detail="class", normal=False, accuracy=None, max_seconds=None, save_turn=None):
     """One node of a saved solve. `node` is a path such as
     "flop/BB_check/SB_bet0.33/BB_call/turn=7h". `hand` narrows the answer to one
     exact hand ("AhKd") or one hand class ("AKs"). `detail="combo"` lists every exact hand.
     `normal=True`: for a three-player solve saved with a lock or habit, read the
-    normal solve instead of the locked one."""
+    normal solve instead of the locked one.
+
+    `saved` may be a library file. A path on the flop is answered from the file. A path that goes
+    past a turn card solves that turn (and its rivers) first, from the ranges the stored flop
+    strategy leaves each player, and the answer gains `turn_solve`. `accuracy` (percent of the pot,
+    default 0.1) and `max_seconds` (default 60) bound that solve; `save_turn` keeps it as an
+    ordinary saved solve that starts on the turn, so further questions about it need no solving."""
     args = ["query", str(saved), "--node", node, "--detail", detail]
+    if accuracy is not None:
+        args += ["--accuracy", str(accuracy)]
+    if max_seconds is not None:
+        args += ["--max-seconds", str(max_seconds)]
+    if save_turn:
+        args += ["--save-turn", str(save_turn)]
     if hand:
         args += ["--hand", hand]
     if normal:
         args += ["--normal"]
     return _run(args)
+
+
+def pack(saved, library):
+    """Makes a library file from a whole two-player flop solve saved earlier with `save`."""
+    return _run(["pack", str(saved), "-o", str(library)])
+
+
+def info(library):
+    """What a library file holds (the spot, the bet tree, how it was solved), without unpacking it."""
+    return _run(["info", str(library)])
 
 
 def estimate(spot):

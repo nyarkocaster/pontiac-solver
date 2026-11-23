@@ -132,3 +132,36 @@ pub fn library_open_three(state: tauri::State<std::sync::RwLock<multiway::study:
 pub fn library_open_two(state: tauri::State<Mutex<StudyState>>, id: String) -> Result<LibraryEntry, String> {
     state.lock().unwrap().library_open(&id)
 }
+
+/// Keeps the flop of the solve on screen as a small library file that can be shared.
+#[tauri::command(async)]
+pub fn library_share(state: tauri::State<Mutex<StudyState>>, name: String, meta: serde_json::Value) -> Result<LibraryEntry, String> {
+    state.lock().unwrap().library_share(&name, meta)
+}
+
+/// The bytes of a small library file, to save somewhere or send to someone.
+#[tauri::command(async)]
+pub fn library_export_file(id: String) -> Result<Vec<u8>, String> { library_export(&id) }
+
+/// Adds a library file to the library.
+#[tauri::command(async)]
+pub fn library_import_file(bytes: Vec<u8>, file_name: String) -> Result<LibraryEntry, String> { library_import(&bytes, &file_name) }
+
+/// Solves the turn a history needs, when a library file is on screen. Answers None when nothing had to be solved.
+#[tauri::command(async)]
+pub fn study_turn(state: tauri::State<Mutex<StudyState>>, prog: tauri::State<Arc<StudyProgress>>, history: Vec<usize>, accuracy_pct: f32, max_seconds: f64, threads: usize) -> Result<Option<TurnSolve>, String> {
+    let prog: Arc<StudyProgress> = prog.inner().clone();
+    let lib = state.lock().unwrap().lib.take().ok_or("No library file is open")?;
+    let (lib, out) = solve_turn(lib, &history, accuracy_pct, max_seconds, threads, &prog);
+    prog.phase.store(if out.is_ok() { 4 } else { 5 }, Ordering::Relaxed);
+    let mut st = state.lock().unwrap();
+    st.lib = Some(lib);
+    st.cache.clear();
+    out
+}
+
+#[tauri::command]
+pub fn study_cards(state: tauri::State<Mutex<StudyState>>, history: Vec<usize>) -> Result<Vec<CardNote>, String> { state.lock().unwrap().card_notes(&history) }
+
+#[tauri::command]
+pub fn study_turn_note(state: tauri::State<Mutex<StudyState>>, history: Vec<usize>) -> Result<Option<TurnSolve>, String> { state.lock().unwrap().turn_note(&history) }

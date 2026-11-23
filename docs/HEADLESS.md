@@ -14,7 +14,7 @@ For running the solver with nobody at the keyboard: a JSON spot file goes in, a 
 
   `selftest` solves a river spot and compares it with a stored answer, saves and queries it, and checks push/fold and prize-money values. It prints JSON with `"ok": true` when the solver is working on this machine. From Python: `pontiac.selftest()`.
 - **What gets installed:** a small Python package, `pontiac`, with a prebuilt solver program for Linux x86-64 (3 MB, no dependencies beyond glibc), the sample spots (`pontiac.examples()`, `pontiac.example("hu_sng_flop_20bb")` returns one as a dict to edit) and this guide (`pontiac.guide()`). On Windows or a Mac, download the command-line program for your machine from the project's Releases page and set the environment variable `PONTIAC_BIN` to its path; with Rust installed and a clone of the repository, the package builds it instead.
-- **Working on the code:** clone the repository, then `pip install -e ".[test]" && pytest` (20 tests, about a minute).
+- **Working on the code:** clone the repository, then `pip install -e ".[test]" && pytest` (26 tests, about two minutes).
 - **Where the code lives:** `github.com/nyarkocaster/pontiac-solver` (public). Saved solves (`*.pontiac`) are large and are git-ignored.
 - **How far to trust it** (details in the project notes for 2026-11-20): on a heads-up flop spot, range EVs matched GTO Wizard to the third decimal and responses to a bet within one or two points, with and without a node lock and with prize money; three-handed all-in-or-fold with prize money matched within about one point on all six decisions. Three players after the flop has only internal checks (a full count of showdowns, and agreement between the two engines when one player has folded). Preflop beyond all-in-or-fold is an estimate, not a solution.
 
@@ -48,8 +48,11 @@ pontiac.query("t72.pontiac", "flop/BB_check/SB_bet0.33/BB_call/turn=Ah", hand="Q
 ### Command line
 
 ```
-pontiac solve spot.json [-o result.json] [--save solved.pontiac]
+pontiac solve spot.json [-o result.json] [--save solved.pontiac] [--library spot.plib]
 pontiac query solved.pontiac --node <path> [--hand AhKd | --hand AKs] [--detail class|combo] [--normal]
+pontiac query spot.plib --node <path> [--accuracy 0.1] [--max-seconds 60] [--save-turn turn.pontiac]
+pontiac pack solved.pontiac -o spot.plib
+pontiac info spot.plib
 pontiac estimate spot.json
 pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]
 pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20]
@@ -154,6 +157,26 @@ flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check/SB_bet0.5/BB_call/river=2c
 `pontiac.query(saved, node, hand=None, detail="class")` loads a saved solve and reports one node. `hand` narrows it to one exact hand (`"AhKd"`, either card order) or one class (`"AKs"`). A query takes a few seconds, nearly all of it loading the file. Saved solves are big: the 20 bb flop example is about 1 GB on disk.
 
 Three-player solves save and query the same way. When the spot had a lock or habit the file holds both solves: `query` reports the locked one, and `pontiac.query(..., normal=True)` (command line: `--normal`) reports the normal one. The answer carries `"solve": "locked" | "normal" | "only"`. A reopened solve gives exactly the figures of the original. The file keeps the finished strategies only, so it is smaller than the solve's memory (a three-way turn spot with one size is under 1 MB; a wide flop solve is hundreds of MB).
+
+### Library files: a flop solve small enough to share
+
+```python
+r = pontiac.solve(spot, library="q8h3.plib")            # or pontiac.pack("q8h3.pontiac", "q8h3.plib") from a whole solve
+pontiac.query("q8h3.plib", "flop/BB_check")             # answered from the file, 0.15 s
+t = pontiac.query("q8h3.plib", "flop/BB_check/SB_bet0.33/BB_call/turn=7d/BB_check")   # solves the 7d turn first
+t["turn_solve"]                                          # seconds, exploitability_pct, ev_bb, whole_solve_ev_bb ...
+pontiac.info("q8h3.plib")                                # the spot and bet tree, without unpacking
+```
+
+A library file holds the flop only: both players' strategy at every flop decision and what each action is worth to each hand. The 20 bb flop example is 44 KB as a library file against 1 GB whole. Flop nodes read as from the whole solve (range frequencies within 0.001, hand values within 0.001 bb on average).
+
+A path that goes past a turn card solves that turn, with its rivers, from the ranges the stored flop strategy leaves each player. On the example that takes about 1 second on average and 7 at most on 2 cores, at the default accuracy of 0.1% of the pot. The answer gains `turn_solve`, which sets the new solve beside what the whole solve said about the same card (`whole_solve_ev_bb`, `whole_solve_first_bet_frequency`), so a turn that came out differently can be spotted. A node where the turn card is dealt lists `cards`: per card, both ranges' value and chance to win and how often the first player bets, as the whole solve had them, with nothing solved.
+
+Each `query` is a separate program run, so each turn question solves that turn again. To ask several questions about one turn, pass `save_turn="turn.pontiac"` (command line `--save-turn`) once and query that file: it is an ordinary saved solve that starts on the turn, with paths beginning `turn/...`.
+
+How close a re-solved turn is to the whole solve's own turn: on the example, 33 turn spots weighted by how often they come up, range frequencies differed by 1.2 points on average (7 at worst) and each hand's strategy by 3.9 points; range value by 0.04% of the pot (0.4% at worst). Two solves of the same turn to different accuracy differ from each other by about as much, so this is the ordinary noise between two solves, not something lost in the file. On lines the flop solve takes under 1% of the time the gap can be several times larger: a whole solve spends little effort there.
+
+Limits: two players, a spot that starts on the flop, a normal solve (no `node_locks`, `habits` or `icm`), no separate turn lead sizes (`donk` on the turn). The layout is in [LIBRARY_FILES.md](LIBRARY_FILES.md).
 
 ## 3. Node locking
 

@@ -1,0 +1,16 @@
+[package]
+name = "plib"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Pontiac Solver library files: a flop solve small enough to share, with the turn and river solved again on demand"
+
+[dependencies]
+postflop-solver = { path = "../engine" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+zstd = { version = "0.12.4", default-features = false }
+# pins the derive macros to the version the engine was written for
+bincode_derive = "=2.0.0-rc.3"
+
+[profile.release]
+opt-level = 3

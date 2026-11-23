@@ -41,7 +41,10 @@
         <div class="flex items-end justify-between gap-6">
           <div>
             <h1 class="font-display font-extrabold text-2xl leading-tight">{{ built.description }}</h1>
-            <p class="text-sm text-muted mt-1">
+            <p v-if="fromFile" class="text-sm text-muted mt-1">
+              From a library file.<template v-if="summary?.base_expl_pct"> Its flop was solved to within {{ summary.base_expl_pct.toFixed(2) }}% of the pot.</template>
+            </p>
+            <p v-else class="text-sm text-muted mt-1">
               Accurate to within {{ summary?.base_expl_pct.toFixed(2) }}% of the pot. Solved in {{ secs(summary?.base_secs ?? 0) }}<template v-if="summary?.locked">, exploit solve {{ secs(summary.locked_secs) }}</template>.
             </p>
             <p v-if="pickedText" class="text-sm text-muted mt-1 max-w-[110ch]">{{ pickedText }}</p>
@@ -49,9 +52,11 @@
           <div class="shrink-0 text-right">
             <div v-if="saveOpen" class="flex items-center gap-2">
               <input v-model="saveName" class="input !w-72" aria-label="Name for this solve" @keyup.enter="saveNow" />
-              <button class="btn-quiet" :disabled="saveBusy || !saveName.trim()" @click="saveNow">{{ saveBusy ? "Saving…" : "Save" }}</button>
+              <button class="btn-quiet" :disabled="saveBusy || !saveName.trim()" title="Keeps the whole solve: every turn and river as solved. A large file." @click="saveNow">{{ saveBusy ? "Saving…" : "Save whole" }}</button>
+              <button class="btn-quiet" :disabled="saveBusy || !saveName.trim()" title="Keeps the flop only, in a file small enough to send to someone. Turn and river are solved again in a few seconds when a card is picked." @click="shareNow">Save small, to share</button>
               <button class="text-xs text-muted underline" @click="saveOpen = false">Cancel</button>
             </div>
+            <span v-else-if="fromFile" class="text-xs text-muted">Library file: the flop is stored, each turn is solved when you pick its card.</span>
             <button v-else class="btn-quiet" @click="openSave">{{ savedId ? "Saved to library ✓" : "Save to library" }}</button>
             <p v-if="saveError" class="text-xs font-bold text-danger mt-1">{{ saveError }}</p>
           </div>
@@ -172,7 +177,11 @@
                   </button>
                 </div>
 
-                <details class="mt-3 rounded-lg border border-rule px-3 py-2" :open="lockOpen" @toggle="lockOpen = ($event.target as HTMLDetailsElement).open">
+                <p v-if="turnNote" class="hint mt-3">
+                  The {{ turnNote.card[0] === "T" ? "10" : turnNote.card[0] }}{{ SUIT_SYMBOL[turnNote.card[1]] }} turn was solved on this computer in {{ turnNote.secs < 10 ? turnNote.secs.toFixed(1) : Math.round(turnNote.secs) }}s, to within {{ turnNote.expl_pct.toFixed(2) }}% of the pot.
+                  The stored flop solve valued this card at {{ fmt(Math.round(turnNote.stored_ev[heroIdx] * 10) / 10) }} for {{ heroIdx === 0 ? built.oopName : built.ipName }}; this solve says {{ fmt(Math.round(turnNote.ev[heroIdx] * 10) / 10) }}.
+                </p>
+                <details v-if="!fromFile" class="mt-3 rounded-lg border border-rule px-3 py-2" :open="lockOpen" @toggle="lockOpen = ($event.target as HTMLDetailsElement).open">
                   <summary class="cursor-pointer text-sm font-bold">Change how {{ actorName }} plays here (node lock){{ manualLocks.length ? ` · ${manualLocks.length} set` : "" }}</summary>
                   <div v-if="lockOpen" class="mt-2 text-sm">
                     <p class="hint">Fix what this player does at this exact point, then solve again to see how everyone should adjust. Use it for reads like "this player never raises here".</p>
@@ -224,7 +233,9 @@
 
               <template v-else-if="node.kind === 'chance'">
                 <h2 class="font-display font-extrabold text-xl">Deal the {{ node.board.length === 3 ? 'turn' : 'river' }}</h2>
-                <p class="text-sm text-muted mt-1">Pick the card that came. Pot {{ fmt(node.pot) }}.</p>
+                <p class="text-sm text-muted mt-1">Pick the card that came. Pot {{ fmt(node.pot) }}.<template v-if="fromFile && node.board.length === 3"> This is a library file: the turn you pick is solved here first, usually in a few seconds.</template></p>
+                <p v-if="turnBusy" class="text-sm font-bold text-felt mt-2" role="status">Solving the {{ turnBusy }} turn… {{ iter }} steps<template v-if="expl < 100">, within {{ expl.toFixed(2) }}% of the pot</template> <button class="ml-2 text-xs underline" @click="cancel">Stop</button></p>
+                <p v-if="turnError" class="text-sm font-bold text-danger mt-2">{{ turnError }}</p>
                 <div class="mt-4 inline-grid gap-1" style="grid-template-columns: repeat(13, 2.25rem)">
                   <template v-for="s in [3, 2, 1, 0]" :key="s">
                     <button
@@ -454,8 +465,10 @@ const pickScenario = (id: string) => {
   else { if (stackIn.value < 40) stackIn.value = 200; if (sizingId.value === "hu") sizingId.value = "clp"; }
 };
 const seatLabel = (s: string) => SEAT_LABEL[s] ?? (s === "BB" ? "Big blind" : s);
+/** chips per big blind in the spot on screen: 10 for spots set up here, 100 for library files made by the headless program */
+const chipsPerBb = ref(10);
 const fmt = (chips: number) =>
-  fmtKind.value === "hu" ? `${(chips / 10).toFixed(1)}bb` : `$${Number.isInteger(chips) ? chips : chips.toFixed(1)}`;
+  fmtKind.value === "hu" ? `${(chips / chipsPerBb.value).toFixed(1)}bb` : `$${Number.isInteger(chips) ? chips : chips.toFixed(1)}`;
 const secs = (s: number) => (s < 90 ? `${Math.round(s)}s` : `${Math.round(s / 60)} min`);
 
 // a spot handed over by the spot builder replaces the built-in scenarios
@@ -495,6 +508,7 @@ async function previewCustom(p: Custom2): Promise<{ text: string; problem: strin
 }
 /** Takes a spot from the spot builder and solves it. Resolves when the solve is over. */
 async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
+  fromFile.value = false; chipsPerBb.value = 10; turnNote.value = null;
   lastPayload = p; manualLocks.value = []; lockStale.value = false; savedId.value = "";
   custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
   autoSizes.value = !!p.autoSizes; picked.value = null;
@@ -592,7 +606,7 @@ async function relockNow() {
   finally { window.clearInterval(t); relocking.value = false; }
 }
 /** the other player's hands and replies after one of this player's actions */
-async function loadReply(action: number) { const v = await api.studyNode(view.value, [...history.value, action]); return { actions: v.actions, combos: v.kind === "player" ? v.combos : [] }; }
+async function loadReply(action: number) { const v = await nodeAt(view.value, [...history.value, action]); return { actions: v.actions, combos: v.kind === "player" ? v.combos : [] }; }
 
 const saveOpen = ref(false); const saveName = ref(""); const saveBusy = ref(false); const saveError = ref(""); const savedId = ref("");
 function openSave() { saveName.value = `${built.value.description} · ${boardText(node.value?.board.slice(0, 3) ?? [])}`; saveError.value = ""; saveOpen.value = true; }
@@ -603,12 +617,54 @@ async function saveNow() {
   catch (e) { saveError.value = String((e as Error).message ?? e); }
   finally { saveBusy.value = false; }
 }
+/** Keeps the flop of this solve as a small library file (see the Library page to get the file itself). */
+async function shareNow() {
+  if (!lastPayload) { saveError.value = "Only spots set up in Study a spot can be saved."; return; }
+  saveBusy.value = true; saveError.value = "";
+  try { const e = await api.libraryShare(saveName.value, { payload: lastPayload, board: boardStr.value }); savedId.value = e.id; saveOpen.value = false; }
+  catch (e) { saveError.value = String((e as Error).message ?? e); }
+  finally { saveBusy.value = false; }
+}
+
+// ---------- library files: the flop is stored, a turn is solved when its card is picked ----------
+const fromFile = ref(false);
+const turnBusy = ref(""); const turnError = ref("");
+let pendingCard = "";
+const turnNote = ref<api.TurnSolve | null>(null);
+/** A node of the solve on screen. With a library file, a turn that is not solved yet is solved first. */
+async function nodeAt(v: "base" | "locked", hist: number[]): Promise<api.NodeView> {
+  try { return await api.studyNode(v, hist); }
+  catch (e) {
+    if (!fromFile.value || !String((e as Error).message ?? e).includes(api.TURN_NOT_SOLVED)) throw e;
+    await solveTurn(hist);
+    return await api.studyNode(v, hist);
+  }
+}
+async function solveTurn(hist: number[]) {
+  turnError.value = ""; iter.value = 0; expl.value = 100; turnBusy.value = pendingCard || "next";
+  const t = window.setInterval(async () => { try { const [, it, , ex] = await api.studyProgress(); iter.value = it; expl.value = ex > 1e5 || it === 0 ? 100 : ex; } catch { /* ignore */ } }, 300);
+  try { await api.studyTurn(hist, 0.1, 60, threads.value); }
+  catch (e) { const m = String((e as Error).message ?? e); turnError.value = m.includes("cancelled") ? "Stopped. Pick a card to try again." : m; throw e; }
+  finally { window.clearInterval(t); turnBusy.value = ""; }
+}
+/** The setup the result page needs, made from a library file written by the headless program. */
+function payloadFromHeadless(h: Record<string, unknown>): Custom2 | null {
+  const names = h.names as string[] | undefined; const spot = h.spot as { ranges?: Record<string, string> } | undefined; const tree = h.tree as { starting_pot?: number; effective_stack?: number } | undefined; const b = String(h.board ?? "");
+  if (!names || names.length !== 2 || !spot?.ranges || !tree?.starting_pot || b.length !== 6) return null;
+  const ids = [0, 2, 4].map((i) => RANK_CHARS.indexOf(b[i]) * 4 + SUIT_CHARS.indexOf(b[i + 1]));
+  const res: ScenarioResult = { heroIsOop: false, pfrIsOop: false, oopRange: spot.ranges[names[0]] ?? "", ipRange: spot.ranges[names[1]] ?? "", pot: tree.starting_pot, stack: tree.effective_stack ?? 0,
+    description: `${seatLabel(names[1])} against ${seatLabel(names[0]).toLowerCase()}`, oopName: seatLabel(names[0]), ipName: seatLabel(names[1]) };
+  return { res, format: "hu", board: ids, profile: null, overrides: {} };
+}
+
 /** Re-opens a solve from the library without solving again. */
 async function openSaved(e: api.LibraryEntry): Promise<{ ok: boolean; error: string }> {
-  const p = e.meta.payload as Custom2 | undefined;
+  const headless = e.meta.headless as Record<string, unknown> | undefined;
+  const p = (e.meta.payload as Custom2 | undefined) ?? (headless ? payloadFromHeadless(headless) ?? undefined : undefined);
   if (!p || !e.summary) return { ok: false, error: "That entry cannot be opened." };
   try {
     await api.libraryOpenTwo(e.id);
+    fromFile.value = e.kind === "flop"; chipsPerBb.value = headless ? Number(headless.chips_per_bb) || 100 : 10; turnNote.value = null; turnError.value = "";
     lastPayload = p; custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
     if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
     await nextTick();
@@ -789,10 +845,11 @@ const dismissIntro = () => { introDismissed.value = true; persist("ns-intro", "1
 const load = async () => {
   busy.value = true;
   try {
-    node.value = await api.studyNode(view.value, history.value);
+    node.value = await nodeAt(view.value, history.value);
     compareNode.value = summary.value?.locked && compareOn.value
       ? await api.studyNode(view.value === "locked" ? "base" : "locked", history.value)
       : null;
+    turnNote.value = fromFile.value && node.value.board.length > 3 ? await api.studyTurnNote(history.value) : null;
     await refreshMyHand();
   } finally { busy.value = false; }
   if (!takeaway.value) takeaway.value = await suggestTakeaway();
@@ -806,7 +863,13 @@ const play = async (action: number, label: string) => {
   probs.value = [...probs.value, p];
   crumbs.value = [...crumbs.value, actor ? `${actor}: ${label}` : `${v.board.length === 3 ? "Turn" : "River"} ${label}`];
   selectedCell.value = null;
-  await load();
+  pendingCard = v.kind === "chance" ? label : "";
+  try { await load(); }
+  catch (e) {
+    // a library file's turn could not be solved (or was stopped): stay where the card is picked
+    if (!(fromFile.value && v.kind === "chance")) throw e;
+    history.value = history.value.slice(0, -1); probs.value = probs.value.slice(0, -1); crumbs.value = crumbs.value.slice(0, -1);
+  }
 };
 const goTo = async (n: number) => {
   history.value = history.value.slice(0, n);
@@ -858,8 +921,16 @@ const suitColor = (id: number) => SUIT_COLOR[SUIT_CHARS[id & 3]];
 const RANK_ORDER = "23456789TJQKA";
 const sortFlop = (b: string[]) => [...b.slice(0, 3).sort((x, y) => RANK_ORDER.indexOf(y[0]) - RANK_ORDER.indexOf(x[0])), ...b.slice(3)];
 /** what the next player does, and who is ahead, if this card comes */
+let cardNotes: { key: string; notes: Map<number, api.CardNote> } | null = null;
 async function loadCard(id: number): Promise<CardRow> {
-  const v = await api.studyNode(view.value, [...history.value, id]);
+  if (fromFile.value && node.value?.board.length === 3) {
+    // a library file keeps what the whole solve said about every turn card, so none has to be solved for this
+    const key = history.value.join(",");
+    if (cardNotes?.key !== key) cardNotes = { key, notes: new Map((await api.studyCards(history.value)).map((c) => [c.id, c])) };
+    const c = cardNotes.notes.get(id);
+    if (c) return { actor: built.value.oopName, bet: c.bet, equity: [...c.equity] };
+  }
+  const v = await nodeAt(view.value, [...history.value, id]);
   const bet = v.actions.reduce((a, name, i) => a + (/^(Bet|Raise|All-in)/.test(name) ? v.action_freqs[i] : 0), 0);
   return { actor: v.player === 0 ? built.value.oopName : built.value.ipName, bet, equity: [...v.equity] };
 }

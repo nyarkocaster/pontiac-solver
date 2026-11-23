@@ -9,3 +9,4 @@ checks/*.log
 winbuild.log
 target
 node_modules
+*.plib

@@ -123,6 +123,22 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
             *mstate.write().unwrap() = st;
             Ok(serde_json::to_value(s).unwrap())
         }
+        "library_share" => Ok(serde_json::to_value(state.lock().unwrap().library_share(args["name"].as_str().unwrap_or(""), args["meta"].clone())?).unwrap()),
+        "library_export_file" => Ok(json!(library_export(args["id"].as_str().unwrap_or(""))?)),
+        "library_import_file" => {
+            let bytes: Vec<u8> = serde_json::from_value(args["bytes"].clone()).map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(library_import(&bytes, args["fileName"].as_str().unwrap_or(""))?).unwrap())
+        }
+        "study_turn" => {
+            let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default();
+            let lib = state.lock().unwrap().lib.take().ok_or("No library file is open")?;
+            let (lib, out) = solve_turn(lib, &hist, args["accuracyPct"].as_f64().unwrap_or(0.1) as f32, args["maxSeconds"].as_f64().unwrap_or(60.0), args["threads"].as_u64().unwrap_or(2) as usize, &prog);
+            prog.phase.store(if out.is_ok() { 4 } else { 5 }, Ordering::Relaxed);
+            let mut st = state.lock().unwrap(); st.lib = Some(lib); st.cache.clear();
+            Ok(serde_json::to_value(out?).unwrap())
+        }
+        "study_cards" => { let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default(); Ok(serde_json::to_value(state.lock().unwrap().card_notes(&hist)?).unwrap()) }
+        "study_turn_note" => { let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default(); Ok(serde_json::to_value(state.lock().unwrap().turn_note(&hist)?).unwrap()) }
         "library_open_two" => Ok(serde_json::to_value(state.lock().unwrap().library_open(args["id"].as_str().unwrap_or(""))?).unwrap()),
         "study_review" => {
             let which = args["which"].as_str().unwrap_or("base").to_string();

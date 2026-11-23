@@ -1,6 +1,15 @@
-# Pontiac Solver 0.13.8
+# Pontiac Solver 0.13.9
 
-**New since 0.13.0, load a whole session:**
+**New since 0.13.0, flop solves small enough to share:**
+
+- A whole flop solve is about 1 GB. "Save small, to share" on the Result page keeps the flop only: both players' flop strategy and what every action is worth to every hand. The same 20 bb flop is 44 KB. From the command line and Python: `solve --library spot.plib`, or `pack` on a whole solve saved earlier.
+- Opening a small file shows the flop at once. When you pick a turn card, that turn and its rivers are solved on your computer first, from the ranges the flop strategy leaves each player: about 1 second on average and 7 at most on a 2-core machine for the 20 bb example. "Which cards matter" works without solving anything, because the file keeps a line per turn card.
+- In the Library, "Get the file" hands a small entry over as one `.plib` file and "Add a library file" takes one in, from another person or from the headless program.
+- How close a turn solved this way is to the whole solve's own turn, on the 20 bb example (33 turn spots, weighted by how often they come up): how often each action is taken differed by 1.2 points on average and 7 at worst; the value of each player's range by 0.04% of the pot on average and 0.4% at worst. Two solves of the same turn differ from each other by about as much. On lines the flop solve takes under 1% of the time the gap can be several times larger.
+- Not in a small file: node locks and habits (solve the spot yourself to lock it), prize money, and spots with separate turn lead sizes. Checked in the browser development build and from the command line; not yet tried in the Windows app.
+- Fixed: on a long line, the step tiles above the result were squeezed and their text ran over "Back one step". They now keep their width and the strip scrolls to the newest step.
+
+**Load a whole session:**
 
 - Paste a whole session of hands into the hand-history box, or use "Open a file", and you get a list of the hands that can be studied: your cards, seat, board, how many players saw the flop, and how much you put in after the flop, biggest first. Click "Study" on a row to load that hand. Hands that ended before the flop, that you folded, or that the solvers do not cover are counted and left out, with the reason.
 - Works for every layout the box reads. In a PokerNow log, one hand where you showed your cards is enough to find your seat in all the others.

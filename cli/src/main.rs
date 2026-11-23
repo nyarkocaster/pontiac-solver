@@ -8,6 +8,7 @@ mod three;
 use postflop_solver::*;
 use serde_json::{json, Map, Value};
 use std::time::Instant;
+use plib::Solved;
 use study_core::{collect_locks, Leak};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -175,11 +176,11 @@ fn icm_setup(spot: &Spot) -> Result<Option<Icm>, String> {
 /// Where a path leads, plus what is needed to name actions there.
 struct Cursor { history: Vec<usize>, street_start: [i32; 2] }
 
-fn pot_now(game: &PostFlopGame) -> i32 { let t = game.total_bet_amount(); game.tree_config().starting_pot + t[0] + t[1] }
+fn pot_now<G: Solved>(game: &G) -> i32 { let t = game.total_bet_amount(); game.starting_pot() + t[0] + t[1] }
 
 /// Canonical action names at the current node: check, fold, call, allin, bet0.33 (share of the
 /// pot), raise2.5 (multiple of the bet being raised). Ties get the amount appended.
-fn action_names(game: &PostFlopGame, street_start: [i32; 2]) -> Vec<String> {
+fn action_names<G: Solved>(game: &G, street_start: [i32; 2]) -> Vec<String> {
     let acts = game.available_actions();
     let t = game.total_bet_amount();
     let me = game.current_player();
@@ -204,7 +205,7 @@ fn action_amount(a: &Action) -> f64 { match a { Action::Bet(x) | Action::Raise(x
 
 /// Walks a path like "flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check". Street words and
 /// player prefixes are optional; a bet or raise matches the closest available size.
-fn walk(game: &mut PostFlopGame, names: &[String; 2], path: &str) -> Result<Cursor, String> {
+fn walk<G: Solved>(game: &mut G, names: &[String; 2], path: &str) -> Result<Cursor, String> {
     game.back_to_root();
     let mut cur = Cursor { history: vec![], street_start: [0, 0] };
     for tok in path.split('/').map(|t| t.trim()).filter(|t| !t.is_empty()) {
@@ -215,6 +216,7 @@ fn walk(game: &mut PostFlopGame, names: &[String; 2], path: &str) -> Result<Curs
             let cs = low.split(['=', ':']).last().unwrap_or("");
             let card = parse_card(cs).ok_or(format!("path '{path}': expected a card such as turn=7h, got '{tok}'"))?;
             if game.possible_cards() & (1u64 << card) == 0 { return Err(format!("path '{path}': card {cs} cannot come here")); }
+            game.prepare_card(card as usize)?;
             game.play(card as usize); cur.history.push(card as usize);
             cur.street_start = game.total_bet_amount();
             continue;
@@ -267,10 +269,10 @@ fn walk(game: &mut PostFlopGame, names: &[String; 2], path: &str) -> Result<Curs
 
 // ------------------------------------------------------------------ reports
 
-fn street_of(game: &PostFlopGame) -> &'static str { match game.current_board().len() { 3 => "flop", 4 => "turn", _ => "river" } }
+fn street_of<G: Solved>(game: &G) -> &'static str { match game.current_board().len() { 3 => "flop", 4 => "turn", _ => "river" } }
 
 /// Everything known about the current node. `detail`: "combo" adds every exact hand.
-fn report(game: &mut PostFlopGame, names: &[String; 2], cur: &Cursor, path: &str, detail: &str, only: Option<&str>) -> Value {
+fn report<G: Solved>(game: &mut G, names: &[String; 2], cur: &Cursor, path: &str, detail: &str, only: Option<&str>) -> Value {
     let board: Vec<String> = game.current_board().iter().map(|&c| card_name(c)).collect();
     let pot = pot_now(game) as f64 / CHIPS;
     let mut o = Map::new();
@@ -302,7 +304,7 @@ fn report(game: &mut PostFlopGame, names: &[String; 2], cur: &Cursor, path: &str
     let ev = game.expected_values(me);
     let total: f64 = w.iter().map(|&x| x as f64).sum();
     o.insert("kind".into(), json!("decision")); o.insert("player".into(), json!(names[me]));
-    o.insert("locked".into(), json!(game.current_locking_strategy().is_some()));
+    o.insert("locked".into(), json!(game.is_locked()));
     o.insert("reached".into(), json!(reached));
     let mut freq = vec![0f64; na]; let (mut evs, mut eqs) = (0f64, 0f64);
     for h in 0..n { let x = w[h] as f64; evs += x * ev[h] as f64; eqs += x * eq[h] as f64; for a in 0..na { freq[a] += x * strat[a * n + h] as f64; } }
@@ -345,7 +347,7 @@ fn report(game: &mut PostFlopGame, names: &[String; 2], cur: &Cursor, path: &str
 }
 
 /// How often play reaches the node: the product of the range-wide frequency of each action taken.
-fn line_frequency(game: &mut PostFlopGame, history: &[usize]) -> f64 {
+fn line_frequency<G: Solved>(game: &mut G, history: &[usize]) -> f64 {
     game.back_to_root();
     let mut p = 1.0f64;
     for &h in history {
@@ -364,7 +366,7 @@ fn line_frequency(game: &mut PostFlopGame, history: &[usize]) -> f64 {
 }
 
 /// Canonical paths of every decision on the starting street (stops where a card is dealt).
-fn first_street_paths(game: &mut PostFlopGame, names: &[String; 2], limit: usize) -> Vec<String> {
+fn first_street_paths<G: Solved>(game: &mut G, names: &[String; 2], limit: usize) -> Vec<String> {
     let start = street_of(game).to_string();
     let mut out = vec![];
     let mut stack: Vec<(Vec<usize>, String)> = vec![(vec![], start)];
@@ -383,9 +385,9 @@ fn first_street_paths(game: &mut PostFlopGame, names: &[String; 2], limit: usize
 
 // ------------------------------------------------------------------ solving
 
-struct Solved { iterations: u32, exploit: f32, seconds: f64, stopped: &'static str }
+struct Ran { iterations: u32, exploit: f32, seconds: f64, stopped: &'static str }
 
-fn run(game: &mut PostFlopGame, spot: &Spot, budget: f64, label: &str) -> Solved {
+fn run(game: &mut PostFlopGame, spot: &Spot, budget: f64, label: &str) -> Ran {
     let t0 = Instant::now();
     let pot = spot.tree.starting_pot as f32;
     let target = pot * spot.target_pct as f32 / 100.0;
@@ -400,7 +402,7 @@ fn run(game: &mut PostFlopGame, spot: &Spot, budget: f64, label: &str) -> Solved
         if t0.elapsed().as_secs_f64() >= budget { stopped = "max_seconds"; if it % 10 != 0 { expl = compute_exploitability(game); } break; }
     }
     finalize(game);
-    Solved { iterations: it, exploit: expl, seconds: t0.elapsed().as_secs_f64(), stopped }
+    Ran { iterations: it, exploit: expl, seconds: t0.elapsed().as_secs_f64(), stopped }
 }
 
 fn root_evs(game: &mut PostFlopGame) -> [f64; 2] {
@@ -503,7 +505,7 @@ fn needs_baseline(spot: &Spot, game: &mut PostFlopGame) -> Result<bool, String> 
     Ok(two)
 }
 
-fn summary(spot: &Spot, game: &mut PostFlopGame, s: &Solved) -> Value {
+fn summary(spot: &Spot, game: &mut PostFlopGame, s: &Ran) -> Value {
     let pot = spot.tree.starting_pot as f32;
     let ev = root_evs(game);
     let unres = compute_exploitability_unrestricted(game);
@@ -645,10 +647,11 @@ fn three_players(raw: &Value) -> Option<Vec<String>> {
     if p.len() == 3 && p[0] != p[1] && p[1] != p[2] && p[0] != p[2] { Some(p) } else { None }
 }
 
-fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Result<Value, String> {
+fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>, lib_path: Option<&str>, bits: u8) -> Result<Value, String> {
     let text = std::fs::read_to_string(spot_path).map_err(|e| format!("cannot read {spot_path}: {e}"))?;
     let raw: Value = serde_json::from_str(&text).map_err(|e| format!("{spot_path} is not valid JSON: {e}"))?;
     if let Some(three) = three_players(&raw) {
+        if lib_path.is_some() { return Err("--library is for two-player flop spots".into()); }
         let v = three::solve(&raw, &three, save_path)?;
         if let Some(p) = out_path { std::fs::write(p, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| format!("cannot write {p}: {e}"))?; }
         return Ok(v);
@@ -666,6 +669,11 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
     let habits: Vec<Value> = raw.get("habits").and_then(|x| x.as_array()).cloned().unwrap_or_default();
     let icm = icm_setup(&spot)?;
     if icm.is_some() && save_path.is_some() { return Err("--save is not available with icm yet (the prize-money payoffs are not stored in the file)".into()); }
+    if lib_path.is_some() {
+        if !locks.is_empty() || !habits.is_empty() { return Err("--library keeps a normal solve: remove node_locks and habits".into()); }
+        if icm.is_some() { return Err("--library is not available with icm yet".into()); }
+        if spot.tree.initial_state != BoardState::Flop { return Err("--library is for flop spots (a 3-card board); turn and river solves are small enough to keep whole with --save".into()); }
+    }
     let mut game = build(&spot)?;
     let (mem_full, mem_small) = game.memory_usage();
     // 16-bit storage halves memory for a small loss of precision; used automatically for big trees
@@ -762,16 +770,85 @@ fn solve(spot_path: &str, out_path: Option<&str>, save_path: Option<&str>) -> Re
         save_data_to_file(&game, &memo, p, None)?;
         result.insert("saved_to".into(), json!(p));
     }
+    if let Some(p) = lib_path {
+        let solve_info = json!({"exploitability_pct": result.get("exploitability_pct"), "iterations": result.get("iterations"), "runtime_seconds": result.get("runtime_seconds"), "ev_bb": result.get("ev_bb"), "stopped_because": result.get("stopped_because")});
+        result.insert("library".into(), write_library(&mut game, &spot.names, &raw, solve_info, p, bits)?);
+    }
     let v = Value::Object(result);
     if let Some(p) = out_path { std::fs::write(p, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| format!("cannot write {p}: {e}"))?; }
     Ok(v)
 }
 
-fn query(save: &str, node: &str, only: Option<&str>, detail: &str, normal: bool) -> Result<Value, String> {
+// ------------------------------------------------------------------ library files
+
+/// Writes the flop of a finished solve as a library file and reports its size.
+fn write_library(game: &mut PostFlopGame, names: &[String; 2], raw: &Value, solve_info: Value, path: &str, bits: u8) -> Result<Value, String> {
+    let created = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let header = json!({"made_by": version_string(), "names": names, "chips_per_bb": CHIPS, "spot": raw, "solve": solve_info, "created": created});
+    let file = plib::pack(game, header)?;
+    let bytes = file.save(path, bits)?;
+    Ok(json!({"saved_to": path, "bytes": bytes, "flop_nodes": file.nodes.len(), "strategy_bits": bits,
+        "note": "Holds the flop strategy and values. Turn and river are solved again when a turn card is asked for: pontiac query <file> --node \"flop/.../turn=7h\""}))
+}
+
+/// Makes a library file from a whole flop solve saved earlier with --save.
+fn pack_saved(save: &str, out: &str, bits: u8) -> Result<Value, String> {
+    let (mut game, memo): (PostFlopGame, String) = load_data_from_file(save, None)?;
+    let m: Value = serde_json::from_str(&memo).map_err(|_| "this file was not saved by pontiac".to_string())?;
+    let names: [String; 2] = [m["names"][0].as_str().unwrap_or("OOP").to_string(), m["names"][1].as_str().unwrap_or("IP").to_string()];
+    let spot = m.get("spot").cloned().unwrap_or(Value::Null);
+    for k in ["node_locks", "habits"] { if spot.get(k).and_then(|x| x.as_array()).map_or(false, |a| !a.is_empty()) { return Err("a library file keeps a normal solve: this one was made with node_locks or habits".into()); } }
+    let mut r = write_library(&mut game, &names, &spot, json!({"from": "a whole solve saved earlier", "solved_by": m.get("version")}), out, bits)?;
+    r["ok"] = json!(true);
+    Ok(r)
+}
+
+fn library_opts(accuracy: Option<&str>, max_seconds: Option<&str>) -> Result<plib::ResolveOpts, String> {
+    let mut o = plib::ResolveOpts::default();
+    if let Some(x) = accuracy { o.accuracy_pct = x.parse::<f32>().ok().filter(|v| *v > 0.0).ok_or("--accuracy needs a positive number (percent of the pot)")?; }
+    if let Some(x) = max_seconds { o.max_seconds = x.parse::<f64>().ok().filter(|v| *v > 0.0).ok_or("--max-seconds needs a positive number")?; }
+    Ok(o)
+}
+
+/// Answers a node of a library file. A path that goes past a turn card solves that turn first.
+fn query_library(path: &str, node: &str, only: Option<&str>, detail: &str, opts: plib::ResolveOpts, save_turn: Option<&str>) -> Result<Value, String> {
+    let mut g = plib::LibGame::open(path)?;
+    g.opts = opts;
+    let head = g.file.header.clone();
+    let names: [String; 2] = [head["names"][0].as_str().unwrap_or("OOP").to_string(), head["names"][1].as_str().unwrap_or("IP").to_string()];
+    let cur = walk(&mut g, &names, node)?;
+    let mut r = report(&mut g, &names, &cur, node.trim_matches('/'), detail, only);
+    r["version"] = head["made_by"].clone();
+    r["source"] = json!("library file");
+    g.apply_history(&cur.history);
+    if let Some(info) = g.turn_info() {
+        eprintln!("turn {} solved here in {:.1}s ({} steps, within {:.2}% of the pot)", plib_card(info.card), info.seconds, info.iterations, info.accuracy_pct);
+        r["turn_solve"] = info.to_json(&names, CHIPS);
+    } else if g.is_chance_node() {
+        // what the whole solve said about every card, without solving any of them
+        let cards: Map<String, Value> = g.card_infos().iter().map(|c| (plib_card(c.card), json!({
+            "ev_bb": {names[0].clone(): round(c.ev[0] as f64 / CHIPS, 3), names[1].clone(): round(c.ev[1] as f64 / CHIPS, 3)},
+            "equity": {names[0].clone(): round(c.equity[0] as f64, 4), names[1].clone(): round(c.equity[1] as f64, 4)},
+            "first_bet_frequency": round(c.bet as f64, 4)}))).collect();
+        r["cards"] = Value::Object(cards);
+    }
+    if let Some(p) = save_turn {
+        if !g.in_turn() { return Err("--save-turn needs a path that goes past a turn card".into()); }
+        let memo = json!({"version": version_string(), "names": names, "spot": {"from_library_file": path, "line": node}}).to_string();
+        g.save_turn(p, &memo)?;
+        r["turn_saved_to"] = json!(p);
+    }
+    Ok(r)
+}
+
+fn plib_card(c: u8) -> String { card_name(c) }
+
+fn query(save: &str, node: &str, only: Option<&str>, detail: &str, normal: bool, lib_opts: plib::ResolveOpts, save_turn: Option<&str>) -> Result<Value, String> {
     // three-player solves have their own file layout
     let mut first = [0u8; 8];
     let three = std::fs::File::open(save).map_err(|e| format!("could not open {save}: {e}")).map(|mut f| { use std::io::Read; f.read_exact(&mut first).is_ok() && multiway::save::is_three_player(&first) })?;
     if three { return three::query(save, node, only, detail, normal); }
+    if plib::is_library_file(&first) { return query_library(save, node, only, detail, lib_opts, save_turn); }
     if normal { return Err("--normal is for three-player solves saved with a lock or habit".into()); }
     let (mut game, memo): (PostFlopGame, String) = load_data_from_file(save, None)?;
     let m: Value = serde_json::from_str(&memo).map_err(|_| "this file was not saved by pontiac".to_string())?;
@@ -783,7 +860,7 @@ fn query(save: &str, node: &str, only: Option<&str>, detail: &str, normal: bool)
 }
 
 fn usage() -> String {
-    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac]\n  pontiac query <solved.pontiac> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo] [--normal]\n  pontiac estimate <spot.json>\n  pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]\n  pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 6] [--sb 0.5] [--ante 0] [--bb-ante 1]\n  pontiac icm --stacks 5000,3000,2000 --payouts 50,30,20\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
+    format!("{}\n\nusage:\n  pontiac solve <spot.json> [-o result.json] [--save solved.pontiac] [--library spot.plib]\n  pontiac query <solved.pontiac | spot.plib> --node <path> [--hand AhKd | --hand AKs] [--detail class|combo] [--normal]\n      on a library file: [--accuracy 0.1] [--max-seconds 60] [--save-turn turn.pontiac]\n  pontiac pack <solved.pontiac> -o spot.plib\n  pontiac info <spot.plib>\n  pontiac estimate <spot.json>\n  pontiac pushfold --stack 10 [--sb 0.5] [--ante 0]\n  pontiac pushfold --stacks 12,8,15 [--payouts 50,30,20] [--others 6] [--sb 0.5] [--ante 0] [--bb-ante 1]\n  pontiac icm --stacks 5000,3000,2000 --payouts 50,30,20\n  pontiac version\n\nNode paths look like: flop/BB_check/SB_bet0.33/BB_call/turn=7h/BB_check", version_string())
 }
 
 fn main() {
@@ -795,11 +872,14 @@ fn main() {
     }));
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(|s| s.as_str());
+    let bits = || -> Result<u8, String> { match flag("--strategy-bits") { None => Ok(8), Some("8") => Ok(8), Some("16") => Ok(16), Some(_) => Err("--strategy-bits is 8 or 16".to_string()) } };
     let res: Result<Value, String> = match args.first().map(|s| s.as_str()) {
         Some("version") | Some("--version") | Some("-V") => { println!("{}", version_string()); return; }
-        Some("solve") if args.len() >= 2 => solve(&args[1], flag("-o").or(flag("--out")), flag("--save")).map(|v| if flag("-o").or(flag("--out")).is_some() {
-            json!({"ok": true, "written": flag("-o").or(flag("--out")), "exploitability_pct": v["exploitability_pct"], "runtime_seconds": v["total_seconds"], "saved_to": v.get("saved_to")}) } else { v }),
-        Some("query") if args.len() >= 2 => query(&args[1], flag("--node").unwrap_or(""), flag("--hand").or(flag("--combo")), flag("--detail").unwrap_or("class"), args.iter().any(|a| a == "--normal")),
+        Some("solve") if args.len() >= 2 => bits().and_then(|b| solve(&args[1], flag("-o").or(flag("--out")), flag("--save"), flag("--library"), b)).map(|v| if flag("-o").or(flag("--out")).is_some() {
+            json!({"ok": true, "written": flag("-o").or(flag("--out")), "exploitability_pct": v["exploitability_pct"], "runtime_seconds": v["total_seconds"], "saved_to": v.get("saved_to"), "library": v.get("library")}) } else { v }),
+        Some("pack") if args.len() >= 2 => bits().and_then(|b| pack_saved(&args[1], flag("-o").or(flag("--out")).ok_or("say where to write it: pontiac pack solved.pontiac -o spot.plib")?, b)),
+        Some("info") if args.len() >= 2 => std::fs::File::open(&args[1]).map_err(|e| format!("could not open {}: {e}", args[1])).and_then(plib::LibFile::read_header),
+        Some("query") if args.len() >= 2 => query(&args[1], flag("--node").unwrap_or(""), flag("--hand").or(flag("--combo")), flag("--detail").unwrap_or("class"), args.iter().any(|a| a == "--normal"), match library_opts(flag("--accuracy"), flag("--max-seconds")) { Ok(o) => o, Err(e) => { println!("{}", json!({"ok": false, "error": e})); std::process::exit(1); } }, flag("--save-turn")),
         Some("estimate") if args.len() >= 2 => std::fs::read_to_string(&args[1]).map_err(|e| e.to_string())
             .and_then(|t| serde_json::from_str::<Value>(&t).map_err(|e| e.to_string())).and_then(|raw| {
                 if let Some(three) = three_players(&raw) { return three::estimate3(&raw, &three); }
