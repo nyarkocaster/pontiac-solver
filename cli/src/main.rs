@@ -946,7 +946,7 @@ fn main() {
                 let mut keep = |c: &pushfold::preflop::Checkpoint| {
                     if let Some(p) = &cp_path { let tmp = format!("{p}.part"); if std::fs::write(&tmp, json!({"settings": settings, "checkpoint": c}).to_string()).is_ok() { let _ = std::fs::rename(&tmp, p); } }
                 };
-                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: 8, start: start_sigmas, floor, floor_share };
+                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: num("--min-rounds")?.map(|x| (x as usize).clamp(4, 40)).unwrap_or(8), start: start_sigmas, floor, floor_share };
                 pushfold::preflop::solve_accurate_opts(&spec, passes, min_freq, &mut eval, &mut report, start, &mut keep, &opts)?
             } else { pushfold::preflop::solve(&spec)? };
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
