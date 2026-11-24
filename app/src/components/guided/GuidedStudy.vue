@@ -141,6 +141,12 @@
         <!-- line -->
         <ActionBar class="mt-4" start="Flop" :board="displayBoard" :steps="steps" :now="nowText" :pot="node ? fmt(node.pot) : ''" @goto="goTo" />
 
+        <!-- the spot as a table -->
+        <div class="mt-3">
+          <button class="text-xs text-muted underline" :aria-expanded="tableOn" @click="toggleTable">{{ tableOn ? "Hide the table" : "Show the table" }}</button>
+          <TableView v-if="tableOn" class="mt-1" :board="node.board" :pot="node.pot" :bets="node.bets" :stack="node.stack" :acting="node.kind === 'player' ? node.player : -1" :names="[built.oopName, built.ipName]" :hero="heroIdx" :hero-hand="lastHeroHand" :ev="node.ev" :equity="node.equity" :fmt="fmt" />
+        </div>
+
         <div class="mt-4 grid grid-cols-12 gap-5">
           <!-- decision -->
           <div class="col-span-7 min-[1500px]:col-span-5">
@@ -373,6 +379,12 @@
             </section>
           </div>
         </div>
+
+        <!-- every exact hand, full width so all the columns fit -->
+        <section v-if="node.kind === 'player' && node.combos.length" class="panel mt-4">
+          <h3 class="font-bold">Every hand {{ actorName }} can hold</h3>
+          <HandsTable class="mt-2" :combos="node.combos" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" :pot="node.pot" :selected="selectedCell" :fmt-ev="fmt" @select="selectCell" />
+        </section>
       </div>
 
       <div v-if="error" class="mt-6 bg-danger/10 border border-danger/40 text-danger rounded-lg p-3" role="alert">{{ error }}</div>
@@ -413,6 +425,8 @@ import EquityGraph from "./EquityGraph.vue";
 import ChartMode from "./ChartMode.vue";
 import Blockers from "./Blockers.vue";
 import HandTypes from "./HandTypes.vue";
+import HandsTable from "./HandsTable.vue";
+import TableView from "./TableView.vue";
 import CardReport, { type CardRow } from "./CardReport.vue";
 import PlayingCard from "./PlayingCard.vue";
 import RangePreview from "./RangePreview.vue";
@@ -967,6 +981,10 @@ const suitMarks = computed(() => {
   lo.forEach((a, cell) => { const b = hi.get(cell)!; if (a.some((x, i) => b[i] - x >= 0.2)) out.add(cell); });
   return out;
 });
+// the table drawing can be hidden; the choice is remembered on this computer
+const tableOn = ref(true);
+try { tableOn.value = localStorage.getItem("pontiac.table") !== "off"; } catch { /* no storage: keep it on */ }
+function toggleTable() { tableOn.value = !tableOn.value; try { localStorage.setItem("pontiac.table", tableOn.value ? "on" : "off"); } catch { /* not remembered */ } }
 const selectCell = (i: number) => { selectedCell.value = selectedCell.value === i ? null : i; };
 
 // ---------- your hand ----------

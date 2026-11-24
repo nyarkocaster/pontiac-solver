@@ -1,6 +1,12 @@
-# Pontiac Solver 0.13.9
+# Pontiac Solver 0.13.10
 
-**New since 0.13.0, flop solves small enough to share:**
+**New since 0.13.0, more on the Result page:**
+
+- A table drawing above the charts: both seats with what each has behind and has put in, the board, the pot, whose turn it is, and each range's chance to win and value. Your cards are shown when a hand history was loaded. "Hide the table" puts it away and is remembered.
+- "Every hand ... can hold", under the charts: each exact hand still in the deciding player's range with how much of it is left, how often it takes each action, what it is worth, its chance to win, and "share kept" (value against chance to win times the pot). Click a column to sort, type to filter (AK, 7h, s), click a row to select its square in the chart.
+- Checked in the browser development build; not yet tried in the Windows app.
+
+**Flop solves small enough to share (0.13.9):**
 
 - A whole flop solve is about 1 GB. "Save small, to share" on the Result page keeps the flop only: both players' flop strategy and what every action is worth to every hand. The same 20 bb flop is 44 KB. From the command line and Python: `solve --library spot.plib`, or `pack` on a whole solve saved earlier.
 - Opening a small file shows the flop at once. When you pick a turn card, that turn and its rivers are solved on your computer first, from the ranges the flop strategy leaves each player: about 1 second on average and 7 at most on a 2-core machine for the 20 bb example. "Which cards matter" works without solving anything, because the file keeps a line per turn card.
