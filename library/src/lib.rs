@@ -205,6 +205,8 @@ pub fn pack(game: &mut PostFlopGame, mut header: Value) -> Result<LibFile, Strin
     if tree.initial_state != BoardState::Flop || cards.turn != NOT_DEALT { return Err("A library file holds a flop spot: this solve starts on the turn or river, which is small enough to keep whole.".into()); }
     if tree.turn_donk_sizes.is_some() { return Err("A library file cannot hold a spot with separate turn lead (donk) sizes yet: the turn is solved again on its own, where those sizes would not apply.".into()); }
     if game.has_custom_payoffs() { return Err("A library file cannot hold a prize-money (ICM) solve yet.".into()); }
+    if !game.added_lines().is_empty() || !game.removed_lines().is_empty() { return Err("A library file cannot hold a spot whose bet tree was changed by hand: the turn is solved again from the bet sizes alone, and the changes would be lost.".into()); }
+    if game.is_bunching_enabled() { return Err("A library file cannot hold a solve that counts the folded players' cards yet.".into()); }
     game.back_to_root();
     let hands = [PostFlopGame::private_cards(game, 0).to_vec(), PostFlopGame::private_cards(game, 1).to_vec()];
     let initial = [PostFlopGame::weights(game, 0).to_vec(), PostFlopGame::weights(game, 1).to_vec()];

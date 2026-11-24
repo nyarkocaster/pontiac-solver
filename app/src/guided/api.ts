@@ -20,7 +20,18 @@ export interface StudySpec {
   oop_range: string; ip_range: string; board: string; pot: number; stack: number;
   oop_flop_bet: string; ip_flop_bet: string; turn_bet: string; river_bet: string; raise: string;
   allin_threshold: number; accuracy_pct: number; max_iter: number; leaks: Leak[]; threads: number; low_memory: boolean; freeze_rest: boolean; confidence: number;
+  /** sizes the first player may lead with after calling on the street before; empty: the ordinary bet sizes */
+  turn_lead?: string; river_lead?: string;
+  /** rake: percent of the pot, and the cap in chips */
+  rake_pct?: number; rake_cap?: number;
+  /** hand-made changes to the bet tree, in order: "-X-B13" takes a line out, "+X-B20" adds a bet */
+  tree_edits?: string[];
+  /** hands folded before the flop by players no longer in the hand (at most 4) */
+  folded_ranges?: string[];
 }
+export interface TreeAction { code: string; kind: string; amount: number; ends: boolean }
+export interface TreeLook { actions: TreeAction[]; over: boolean; street: string; player: number; pot: number; street_bets: [number, number]; bets: [number, number]; stack: number; lines: number }
+export const studyTreeLook = (spec: StudySpec, line: string[]) => call<TreeLook>("study_tree_look", { spec, line });
 export interface StudySummary {
   base_ev: [number, number]; base_expl_pct: number; base_secs: number;
   locked: boolean; locked_ev: [number, number]; locked_expl_pct: number; locked_secs: number;

@@ -30,7 +30,7 @@ fn main() {
                 oop_range: sp.oop.into(), ip_range: sp.ip.into(), board: sp.board.into(), pot: sp.pot, stack: sp.stack,
                 oop_flop_bet: sp.flop_oop.into(), ip_flop_bet: sp.flop_ip.into(), turn_bet: sp.turn.into(), river_bet: sp.river.into(),
                 raise: "3x".into(), allin_threshold: 1.5, accuracy_pct: 0.75, max_iter: 600,
-                leaks: vec![Leak { player: vill, street: "all".into(), effect: eff.into(), strength: 0.6 }], threads: 2, low_memory: true, freeze_rest: std::env::var("NOFREEZE").is_err(), confidence: std::env::var("CONF").ok().and_then(|x| x.parse().ok()).unwrap_or(1.0), icm: None,
+                leaks: vec![Leak { player: vill, street: "all".into(), effect: eff.into(), strength: 0.6 }], threads: 2, low_memory: true, freeze_rest: std::env::var("NOFREEZE").is_err(), confidence: std::env::var("CONF").ok().and_then(|x| x.parse().ok()).unwrap_or(1.0), icm: None, ..Default::default()
             };
             let t = std::time::Instant::now();
             let out = match solve_inner(&spec, &StudyProgress::default()) { Ok(o) => o, Err(e) => { writeln!(log, "{} | {eff} | ERROR {e}", sp.name).unwrap(); continue; } };

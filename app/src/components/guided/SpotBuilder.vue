@@ -249,6 +249,47 @@
                   <span><b>Pick the bet sizes for me.</b> <span class="hint">A rough first solve tries 33, 50, 75, 100 and 150% of the pot on the {{ board.length === 3 ? "flop" : board.length === 4 ? "turn" : "river" }} and keeps the two each player uses most; the real solve then uses those instead of the sizes typed above for that street. Later streets keep the sizes above. Adds time, and the first solve needs more memory than the figure shown.</span></span>
                 </label>
               </div>
+              <details v-if="route.kind === 'two' || spot.players.length === 2" class="mt-4 rounded-lg border border-rule px-3 py-2" :open="advOpen" @toggle="advOpen = ($event.target as HTMLDetailsElement).open">
+                <summary class="cursor-pointer font-bold text-sm">More control over the tree{{ advCount ? ` (${advCount} set)` : "" }}</summary>
+                <div class="mt-3 space-y-5">
+                  <div v-if="table.game === 'cash'">
+                    <h4 class="font-bold text-sm">Rake</h4>
+                    <div class="flex flex-wrap items-end gap-4 mt-1">
+                      <label class="field"><span>Rake (% of pot)</span><input v-model.number="adv.rakePct" type="number" min="0" max="20" step="0.5" class="input w-24" /></label>
+                      <label class="field"><span>Rake cap ($)</span><input v-model.number="adv.rakeCap" type="number" min="0" class="input w-24" /></label>
+                    </div>
+                    <p class="hint mt-1">What the house takes from a pot that sees a flop. 0% means none, which is what two-player solves here have always used. A cap of 0 means no cap.</p>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-sm">Lead sizes</h4>
+                    <div class="flex flex-wrap items-end gap-4 mt-1">
+                      <label class="field"><span>Turn leads</span><input v-model="adv.turnLead" class="input w-28" placeholder="e.g. 33%" /></label>
+                      <label class="field"><span>River leads</span><input v-model="adv.riverLead" class="input w-28" placeholder="e.g. 33%" /></label>
+                    </div>
+                    <p class="hint mt-1">Sizes the first player to act may bet on the turn or river after calling a bet on the street before. Left empty, the ordinary turn and river sizes apply there too.</p>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-sm">Change the tree line by line</h4>
+                    <TreeLines v-if="advOpen && treeSpec" class="mt-1" :spec="treeSpec" :edits="adv.edits" :names="[spot.players[0].name, spot.players[1].name]" :fmt="(c: number) => amt(c / chipK)" :scale="chipK" :unit="table.game === 'tourney' ? 'bb' : '$'" @update:edits="adv.edits = $event" />
+                    <p v-else class="hint mt-1">Finish steps 1 to 4 first: the tree needs the pot, the stacks and the flop.</p>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-sm">Cards the folded players took</h4>
+                    <p class="hint mt-1">Players who folded before the flop mostly folded weak hands, so the good cards are a little more likely to be with the two players left. Type what each folded player folds (up to four) and the solve counts it. This makes the solve several times slower: a spot that takes 20 seconds took 2 minutes with one or two folded players in our test.</p>
+                    <div class="space-y-1.5 mt-2">
+                      <div v-for="(_r, i) in adv.folded" :key="i" class="flex items-center gap-2">
+                        <input v-model="adv.folded[i]" class="input flex-1 min-w-0" :aria-label="`Hands folded by folded player ${i + 1}`" placeholder="e.g. A9o-A2o, K9o-K2o, 72o+ …" />
+                        <button class="text-xs underline text-muted" @click="adv.folded.splice(i, 1)">Remove</button>
+                      </div>
+                    </div>
+                    <div class="flex gap-3 mt-2 text-sm">
+                      <button class="btn-quiet" :disabled="adv.folded.length >= 4" @click="adv.folded.push(TYPICAL_FOLDS)">Add a folded player (typical folds)</button>
+                      <button v-if="adv.folded.length" class="underline text-muted" @click="adv.folded.splice(0)">Clear</button>
+                    </div>
+                    <p v-if="adv.folded.length && icmActive" class="text-sm font-bold text-danger mt-1">Folded players' cards cannot be combined with prize money. Clear one of the two.</p>
+                  </div>
+                </div>
+              </details>
               <div v-else-if="spot.players.length === 3" class="flex flex-wrap items-end gap-4 mt-4">
                 <label class="field"><span>Bet sizes</span>
                   <select v-model="sizing3" class="input w-80" @change="touched3 = true">
@@ -338,6 +379,8 @@ import { useStore } from "../../store";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
 import { parseRange, rangePercent } from "../../guided/rangeTools";
 import { studyCancel, studyProgress } from "../../guided/api";
+import type { StudySpec } from "../../guided/api";
+import TreeLines from "./TreeLines.vue";
 import { mwCancel, mwProgress } from "../../guided/api3";
 import { PLAYER_TYPES, SEAT_NAME, TABLE_SIZES, buildPreflop, fmtAmt, routeFor, seatsFor, spotFor, type Act, type SeatInput, type TableSetup, type TypeId } from "../../guided/preflop";
 
@@ -475,6 +518,26 @@ function randomBoard(kind: string) {
 const exploitSeat = ref("");
 watch(() => opponentsInSpot.value.map((p) => p.seat).join(","), () => { if (!opponentsInSpot.value.some((p) => p.seat === exploitSeat.value)) exploitSeat.value = ""; });
 const sizes = reactive({ pfrFlop: "33%, 66%", callerFlop: "33%", turn: "75%", river: "75%", raise: "3x" });
+// what the old Classic solver tab had and this page did not: lead sizes, hand-made tree changes, folded players' cards
+const advOpen = ref(false);
+const adv = reactive({ turnLead: "", riverLead: "", edits: [] as string[], folded: [] as string[], rakePct: 0, rakeCap: 0 });
+const advCount = computed(() => (table.game === "cash" && adv.rakePct > 0 ? 1 : 0) + (adv.turnLead.trim() ? 1 : 0) + (adv.riverLead.trim() ? 1 : 0) + adv.edits.length + adv.folded.filter((r) => r.trim()).length);
+/** hands outside a roughly 30% opening range: what a typical player folds first in */
+const TYPICAL_FOLDS = "A9o-A2o,K9o-K2o,Q9o-Q2o,J9o-J2o,T8o-T2o,98o-92o,87o-82o,76o-72o,65o-62o,54o-52o,43o,42o,32o,K8s-K2s,Q8s-Q2s,J7s-J2s,T6s-T2s,95s-92s,84s-82s,74s-72s,63s-62s,53s-52s,43s,42s,32s";
+const chipK = computed(() => (table.game === "tourney" ? 10 : 1));
+const advOverrides = () => ({
+  ...(table.game === "cash" && adv.rakePct > 0 ? { rake_pct: adv.rakePct, rake_cap: adv.rakeCap > 0 ? adv.rakeCap : 0 } : {}),
+  ...(adv.turnLead.trim() ? { turn_lead: adv.turnLead.trim() } : {}), ...(adv.riverLead.trim() ? { river_lead: adv.riverLead.trim() } : {}),
+  ...(adv.edits.length ? { tree_edits: [...adv.edits] } : {}), ...(adv.folded.some((r) => r.trim()) ? { folded_ranges: adv.folded.filter((r) => r.trim()) } : {}),
+});
+/** the spot as the tree editor needs it: everything but the hand-made changes */
+const treeSpec = computed<StudySpec | null>(() => {
+  if (pre.value.errors.length || spot.value.players.length !== 2 || board.value.length !== 3 || spot.value.players.some((p) => !(pctOf(p.seat) > 0))) return null;
+  const two = payload().two; if (!two) return null;
+  const o = { ...two.overrides } as Record<string, unknown>; delete o.tree_edits; delete o.folded_ranges; delete o.icm;
+  return { oop_range: two.res.oopRange, ip_range: two.res.ipRange, board: two.board.map(cardStr).join(""), pot: two.res.pot, stack: two.res.stack,
+    oop_flop_bet: "", ip_flop_bet: "", turn_bet: "", river_bet: "", raise: "", allin_threshold: 1.5, accuracy_pct: 1, max_iter: 1, leaks: [], threads: 1, low_memory: false, freeze_rest: true, confidence: 1, ...o } as StudySpec;
+});
 const accuracyPct = ref(0.5);
 const autoSizes = ref(false);
 const sizing3 = ref("simple"); const later3 = ref("fast");
@@ -517,6 +580,8 @@ const problem = computed(() => {
   if (icmActive.value && icmProblem.value && icmOthers.value.length) return icmProblem.value;
   if (ps.some((p) => !(pctOf(p.seat) > 0))) return "Every player needs at least one hand in their range.";
   if (ps.length === 2 && board.value.length !== 3) return "Pick the three flop cards in step 4.";
+  if (ps.length === 2 && autoSizes.value && adv.edits.length) return "\"Pick the bet sizes for me\" changes the sizes your tree changes were made for. Turn one of the two off.";
+  if (ps.length === 2 && adv.folded.some((r) => r.trim()) && icmActive.value && icmOthers.value.length) return "Folded players' cards cannot be combined with prize money. Clear one of the two.";
   if (ps.length === 3 && board.value.length < 3) return "Pick at least three board cards in step 4.";
   return "";
 });
@@ -536,7 +601,7 @@ function payload(): { two?: Solve2; three?: Solve3 } {
         description: pre.value.story + left, oopName: oop.name, ipName: ip.name,
       },
       format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value, line: reviewLine(oop.seat, ip.seat, k), autoSizes: autoSizes.value,
-      overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value,
+      overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value, ...advOverrides(),
         ...(icmActive.value && icmOthers.value.length && numList(icmPayouts.value).length ? { icm: { payouts: numList(icmPayouts.value), oop_stack: Math.round(oop.behind * k), ip_stack: Math.round(ip.behind * k), others: icmOthers.value.map((x) => Math.round(x * k)) } } : {}) },
     } };
   }

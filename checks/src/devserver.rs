@@ -137,6 +137,11 @@ fn handle(mut req: tiny_http::Request, state: Arc<Mutex<StudyState>>, prog: Arc<
             let mut st = state.lock().unwrap(); st.lib = Some(lib); st.cache.clear();
             Ok(serde_json::to_value(out?).unwrap())
         }
+        "study_tree_look" => {
+            let spec: StudySpec = serde_json::from_value(args["spec"].clone()).map_err(|e| e.to_string())?;
+            let line: Vec<String> = serde_json::from_value(args["line"].clone()).unwrap_or_default();
+            Ok(serde_json::to_value(tree_look(&spec, &line)?).unwrap())
+        }
         "study_cards" => { let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default(); Ok(serde_json::to_value(state.lock().unwrap().card_notes(&hist)?).unwrap()) }
         "study_turn_note" => { let hist: Vec<usize> = serde_json::from_value(args["history"].clone()).unwrap_or_default(); Ok(serde_json::to_value(state.lock().unwrap().turn_note(&hist)?).unwrap()) }
         "library_open_two" => Ok(serde_json::to_value(state.lock().unwrap().library_open(args["id"].as_str().unwrap_or(""))?).unwrap()),

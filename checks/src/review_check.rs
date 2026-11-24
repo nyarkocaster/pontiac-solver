@@ -9,7 +9,7 @@ fn main() {
         ip_range: "22+,A2s+,K2s+,Q4s+,J6s+,T6s+,96s+,85s+,75s+,64s+,54s,A2o+,K5o+,Q8o+,J8o+,T8o+,98o".into(),
         board: "Js7c2d9h".into(), pot: 40, stack: 100,
         oop_flop_bet: "33%".into(), ip_flop_bet: "33%".into(), turn_bet: "50%".into(), river_bet: "75%".into(),
-        raise: "3x".into(), allin_threshold: 1.5, accuracy_pct: 0.3, max_iter: 500, leaks: vec![], threads: 2, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None,
+        raise: "3x".into(), allin_threshold: 1.5, accuracy_pct: 0.3, max_iter: 500, leaks: vec![], threads: 2, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None, ..Default::default()
     };
     let out = solve_inner(&spec, &StudyProgress::default()).unwrap();
     let mut st = StudyState::default();

@@ -84,3 +84,7 @@ function sortBy(k: string) { if (sortKey.value === k) sortDown.value = !sortDown
 // a different decision has different actions: an action column that no longer exists falls back to value
 watch(() => props.actions.length, (n) => { if (sortKey.value.startsWith("a") && Number(sortKey.value.slice(1)) >= n) sortKey.value = "ev"; });
 </script>
+
+<style scoped>
+.hint { @apply text-sm text-muted; }
+</style>

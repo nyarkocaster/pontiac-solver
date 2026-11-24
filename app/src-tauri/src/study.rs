@@ -165,3 +165,7 @@ pub fn study_cards(state: tauri::State<Mutex<StudyState>>, history: Vec<usize>) 
 
 #[tauri::command]
 pub fn study_turn_note(state: tauri::State<Mutex<StudyState>>, history: Vec<usize>) -> Result<Option<TurnSolve>, String> { state.lock().unwrap().turn_note(&history) }
+
+/// One point of a spot's bet tree, for the line-by-line editor in Study a spot.
+#[tauri::command]
+pub fn study_tree_look(spec: StudySpec, line: Vec<String>) -> Result<TreeLook, String> { tree_look(&spec, &line) }

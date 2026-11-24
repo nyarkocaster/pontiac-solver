@@ -9,6 +9,7 @@ use postflop_solver::*;
 use plib::Solved;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use std::sync::Mutex;
 
 use std::time::Instant;
 use std::collections::HashMap;
@@ -170,7 +171,7 @@ pub struct Leak {
     pub strength: f32,  // 0..1, share of the targeted frequency that is moved
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Default, Deserialize, Clone, Debug)]
 pub struct StudySpec {
     pub oop_range: String,
     pub ip_range: String,
@@ -198,6 +199,26 @@ pub struct StudySpec {
     /// Play for tournament prize money instead of chips (two-player pot, other players sitting out).
     #[serde(default)]
     pub icm: Option<IcmSpec>,
+    /// Sizes the first player may lead with on the turn / river after calling a bet on the street
+    /// before ("donk" sizes). Empty: the ordinary bet sizes apply there too.
+    #[serde(default)]
+    pub turn_lead: String,
+    #[serde(default)]
+    pub river_lead: String,
+    /// Hand-made changes to the bet tree, applied in order. "-X-B13" takes the line check, bet 13
+    /// out of the tree; "+X-B20" adds a bet of 20 after a check. Actions: F fold, X check, C call,
+    /// B bet, R raise (to), A all-in; amounts in chips for the street; card deals are left out.
+    #[serde(default)]
+    pub tree_edits: Vec<String>,
+    /// Rake: percent of the pot taken, and the most that is taken (chips). 0 for none.
+    #[serde(default)]
+    pub rake_pct: f64,
+    #[serde(default)]
+    pub rake_cap: f64,
+    /// Ranges of hands folded before the flop by players no longer in the hand (at most 4). The
+    /// solve then counts which cards those players are likely to have taken out of the deck.
+    #[serde(default)]
+    pub folded_ranges: Vec<String>,
 }
 
 /// Prize-money setup, in the same chip units as `pot` and `stack`.
@@ -316,30 +337,155 @@ fn parse_board(board: &str) -> Result<(  [Card; 3], Card, Card, BoardState), Str
     Ok((flop, turn, river, state))
 }
 
-pub fn build_game(spec: &StudySpec) -> Result<PostFlopGame, String> {
-    let (flop, turn, river, state) = parse_board(&spec.board)?;
-    let oop: Range = spec.oop_range.parse().map_err(|e: String| format!("Out-of-position range: {e}"))?;
-    let ip: Range = spec.ip_range.parse().map_err(|e: String| format!("In-position range: {e}"))?;
-    let card_config = CardConfig { range: [oop, ip], flop, turn, river };
+// ---------------------------------------------------------------- bet tree, with hand-made changes
+
+fn line_code(a: &Action) -> String {
+    match *a { Action::Fold => "F".into(), Action::Check => "X".into(), Action::Call => "C".into(), Action::Bet(x) => format!("B{x}"), Action::Raise(x) => format!("R{x}"), Action::AllIn(x) => format!("A{x}"), _ => "?".into() }
+}
+fn line_action(code: &str) -> Result<Action, String> {
+    let bad = || format!("'{code}' is not an action");
+    let amount = || code[1..].parse::<i32>().ok().filter(|x| *x > 0).ok_or_else(bad);
+    Ok(match code.chars().next() { Some('F') if code.len() == 1 => Action::Fold, Some('X') if code.len() == 1 => Action::Check, Some('C') if code.len() == 1 => Action::Call,
+        Some('B') => Action::Bet(amount()?), Some('R') => Action::Raise(amount()?), Some('A') => Action::AllIn(amount()?), _ => return Err(bad()) })
+}
+fn parse_line(line: &str) -> Result<Vec<Action>, String> { line.split('-').filter(|x| !x.is_empty()).map(line_action).collect() }
+fn show_line(line: &[Action]) -> String { if line.is_empty() { "at the very start".into() } else { line.iter().map(line_code).collect::<Vec<_>>().join("-") } }
+
+/// The bet tree of a spot: sizes, lead sizes, then the hand-made changes in order.
+pub fn build_tree(spec: &StudySpec) -> Result<ActionTree, String> {
+    let (_, _, _, state) = parse_board(&spec.board)?;
     let bs = |b: &str| BetSizeOptions::try_from((b, spec.raise.as_str())).map_err(|e| format!("Bet sizes '{b}': {e}"));
+    let lead = |b: &str, street: &str| -> Result<Option<DonkSizeOptions>, String> {
+        if b.trim().is_empty() { Ok(None) } else { DonkSizeOptions::try_from(b).map(Some).map_err(|e| format!("Lead sizes on the {street} '{b}': {e}")) }
+    };
     let tree_config = TreeConfig {
         initial_state: state,
         starting_pot: spec.pot,
         effective_stack: spec.stack,
-        rake_rate: 0.0,
-        rake_cap: 0.0,
+        rake_rate: (spec.rake_pct / 100.0).clamp(0.0, 1.0),
+        rake_cap: if spec.rake_pct > 0.0 { if spec.rake_cap > 0.0 { spec.rake_cap } else { 1e12 } } else { 0.0 }, // no cap given: none
         flop_bet_sizes: [bs(&spec.oop_flop_bet)?, bs(&spec.ip_flop_bet)?],
         turn_bet_sizes: [bs(&spec.turn_bet)?, bs(&spec.turn_bet)?],
         river_bet_sizes: [bs(&spec.river_bet)?, bs(&spec.river_bet)?],
-        turn_donk_sizes: None,
-        river_donk_sizes: None,
+        turn_donk_sizes: lead(&spec.turn_lead, "turn")?,
+        river_donk_sizes: lead(&spec.river_lead, "river")?,
         add_allin_threshold: spec.allin_threshold,
         force_allin_threshold: 0.15,
         merging_threshold: 0.1,
     };
-    let tree = ActionTree::new(tree_config)?;
-    let mut game = PostFlopGame::with_config(card_config, tree)?;
+    let mut tree = ActionTree::new(tree_config)?;
+    for (i, edit) in spec.tree_edits.iter().enumerate() {
+        let (add, rest) = match edit.chars().next() { Some('+') => (true, &edit[1..]), Some('-') => (false, &edit[1..]), _ => return Err(format!("Tree change {} ('{edit}') must start with + or -", i + 1)) };
+        let line = parse_line(rest).map_err(|e| format!("Tree change {} ('{edit}'): {e}", i + 1))?;
+        if line.is_empty() { return Err(format!("Tree change {} is empty", i + 1)); }
+        let r = if add { tree.add_line(&line) } else { tree.remove_line(&line) };
+        r.map_err(|e| format!("Tree change {} ('{edit}') does not fit the tree any more: {e}. Undo it, or undo the change before it.", i + 1))?;
+    }
+    let dead = tree.invalid_terminals();
+    if let Some(l) = dead.first() { return Err(format!("After your tree changes the line {} has no action left. Put one back or remove that line too.", show_line(l))); }
+    Ok(tree)
+}
+
+/// One action open at a point of the bet tree.
+#[derive(Serialize, Clone, Debug)]
+pub struct TreeAction { pub code: String, pub kind: String, pub amount: i32, pub ends: bool }
+
+/// A point of the bet tree, for the line-by-line editor.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct TreeLook {
+    pub actions: Vec<TreeAction>,
+    pub over: bool,
+    /// "flop" | "turn" | "river"
+    pub street: String,
+    /// who acts: 0 first to act, 1 last to act
+    pub player: usize,
+    pub pot: i32,
+    /// chips each has put in on this street, and since the start
+    pub street_bets: [i32; 2],
+    pub bets: [i32; 2],
+    pub stack: i32,
+    /// number of decision points in the whole tree, to show what a change does to its size
+    pub lines: usize,
+}
+
+fn count_decisions(tree: &mut ActionTree, line: &mut Vec<Action>, cap: usize, n: &mut usize) {
+    if *n >= cap || tree.apply_history(line).is_err() || tree.is_terminal_node() { return; }
+    *n += 1;
+    for a in tree.available_actions().to_vec() { line.push(a); count_decisions(tree, line, cap, n); line.pop(); }
+}
+
+/// Looks at one point of a spot's bet tree. `line` is the way there, as action codes.
+pub fn tree_look(spec: &StudySpec, line: &[String]) -> Result<TreeLook, String> {
+    let mut tree = build_tree(spec)?;
+    let mut out = TreeLook { stack: spec.stack, ..Default::default() };
+    let mut street = match spec.board.chars().filter(|c| !c.is_whitespace()).count() { 6 => 0, 8 => 1, _ => 2 };
+    let mut start = [0i32; 2];
+    for code in line {
+        if tree.is_chance_node() { street += 1; start = tree.total_bet_amount(); }
+        tree.play(line_action(code)?).map_err(|_| "That line is not in the tree any more.".to_string())?;
+    }
+    if tree.is_chance_node() { street += 1; start = tree.total_bet_amount(); }
+    let tb = tree.total_bet_amount();
+    out.bets = tb; out.street_bets = [tb[0] - start[0], tb[1] - start[1]];
+    out.pot = spec.pot + tb[0] + tb[1];
+    out.street = ["flop", "turn", "river"][street.min(2)].into();
+    out.over = tree.is_terminal_node();
+    // who acts: the first player opens a street; after that whoever has put in less, or the other one after a check
+    let mut actor = 0usize; let mut probe = build_tree(spec)?;
+    for code in line { if probe.is_chance_node() { actor = 0; } probe.play(line_action(code)?).ok(); actor = 1 - actor; }
+    if probe.is_chance_node() { actor = 0; }
+    out.player = actor;
+    let here: Vec<Action> = line.iter().filter_map(|c| line_action(c).ok()).collect();
+    for a in tree.available_actions().to_vec() {
+        let mut next = here.clone(); next.push(a);
+        let ends = tree.apply_history(&next).is_ok() && tree.is_terminal_node();
+        tree.apply_history(&here).ok();
+        let (kind, amount) = match a { Action::Fold => ("fold", 0), Action::Check => ("check", 0), Action::Call => ("call", 0), Action::Bet(x) => ("bet", x), Action::Raise(x) => ("raise", x), Action::AllIn(x) => ("allin", x), _ => ("", 0) };
+        out.actions.push(TreeAction { code: line_code(&a), kind: kind.into(), amount, ends });
+    }
+    let mut n = 0; count_decisions(&mut tree, &mut vec![], 20000, &mut n); out.lines = n;
+    Ok(out)
+}
+
+// ---------------------------------------------------------------- cards the folded players took
+
+/// The last bunching table worked out, kept because it takes a while and a locked solve needs it again.
+static BUNCHING: Mutex<Option<(String, BunchingData)>> = Mutex::new(None);
+
+/// Makes the game count the cards the folded players are likely to hold.
+fn apply_bunching(spec: &StudySpec, game: &mut PostFlopGame) -> Result<(), String> {
+    let texts: Vec<&String> = spec.folded_ranges.iter().filter(|r| !r.trim().is_empty()).collect();
+    if texts.is_empty() { return Ok(()); }
+    if texts.len() > 4 { return Err("At most four folded players can be counted.".into()); }
+    let (flop, _, _, _) = parse_board(&spec.board)?;
+    let key = format!("{:?}|{:?}", texts, flop);
+    let mut kept = BUNCHING.lock().unwrap();
+    if kept.as_ref().map_or(true, |(k, _)| *k != key) {
+        let mut ranges = vec![];
+        for (i, t) in texts.iter().enumerate() { ranges.push(t.parse::<Range>().map_err(|e: String| format!("Folded player {}: {e}", i + 1))?); }
+        let mut data = BunchingData::new(&ranges, flop)?;
+        data.phase1_prepare(); while data.progress_percent() < 100 { data.phase1_proceed_by_percent(); }
+        data.phase2_prepare(); while data.progress_percent() < 100 { data.phase2_proceed_by_percent(); }
+        data.phase3_prepare(); while data.progress_percent() < 100 { data.phase3_proceed_by_percent(); }
+        *kept = Some((key, data));
+    }
+    game.set_bunching_effect(&kept.as_ref().unwrap().1)
+}
+
+/// The game without the folded players' cards counted: enough to measure memory.
+fn build_game_bare(spec: &StudySpec) -> Result<PostFlopGame, String> {
+    let (flop, turn, river, _) = parse_board(&spec.board)?;
+    let oop: Range = spec.oop_range.parse().map_err(|e: String| format!("Out-of-position range: {e}"))?;
+    let ip: Range = spec.ip_range.parse().map_err(|e: String| format!("In-position range: {e}"))?;
+    let card_config = CardConfig { range: [oop, ip], flop, turn, river };
+    let mut game = PostFlopGame::with_config(card_config, build_tree(spec)?)?;
     if let Some(icm) = pot_icm(spec)? { game.set_custom_payoffs(icm.table(&game.terminal_amounts()))?; }
+    Ok(game)
+}
+
+pub fn build_game(spec: &StudySpec) -> Result<PostFlopGame, String> {
+    let mut game = build_game_bare(spec)?;
+    apply_bunching(spec, &mut game)?;
     Ok(game)
 }
 
@@ -547,7 +693,7 @@ pub fn collect_locks(base: &mut PostFlopGame, leaks: &[Leak], freeze_rest: bool,
 
 /// Rough peak memory need in MB: (normal mode, memory-saver mode).
 pub fn memory_estimate(spec: &StudySpec) -> Result<(f64, f64), String> {
-    let game = build_game(spec)?;
+    let game = build_game_bare(spec)?;
     let (uncompressed, compressed) = game.memory_usage();
     let one = compressed as f64 / 1_048_576.0;
     if spec.leaks.is_empty() {

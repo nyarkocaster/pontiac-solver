@@ -61,11 +61,11 @@
           <span class="pl-3">Preflop</span>
         </button>
         <button
-          :class="'flex relative w-40 items-center justify-center font-semibold transition-colors hover:bg-white/10 hover:text-white ' + (store.navView === 'solver' || store.navView === 'results' ? 'nav-on text-white' : '')"
-          @click="store.navView = 'solver'"
+          :class="'flex relative w-32 items-center justify-center font-semibold transition-colors hover:bg-white/10 hover:text-white ' + (store.navView === 'about' ? 'nav-on text-white' : '')"
+          @click="store.navView = 'about'"
         >
-          <UserGroupIcon class="w-6 h-6" />
-          <span class="pl-3">Classic solver</span>
+          <InformationCircleIcon class="w-6 h-6" />
+          <span class="pl-3">About</span>
         </button>
       </div>
     </div>
@@ -74,7 +74,7 @@
 
 <script setup lang="ts">
 import { useStore } from "../store";
-import { ComputerDesktopIcon, ChartBarIcon, AcademicCapIcon, UserGroupIcon, BoltIcon, SunIcon, MoonIcon, BookmarkIcon } from "@heroicons/vue/24/solid";
+import { ComputerDesktopIcon, ChartBarIcon, AcademicCapIcon, InformationCircleIcon, BoltIcon, SunIcon, MoonIcon, BookmarkIcon } from "@heroicons/vue/24/solid";
 
 const store = useStore();
 const applyTheme = () => { document.documentElement.classList.toggle("dark", store.theme === "dark"); };

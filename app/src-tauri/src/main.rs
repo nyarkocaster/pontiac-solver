@@ -108,6 +108,7 @@ fn main() {
             study_turn,
             study_cards,
             study_turn_note,
+            study_tree_look,
             library_open_three,
             study_hand,
             study_review,

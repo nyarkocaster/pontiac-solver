@@ -245,6 +245,12 @@ impl PostFlopGame {
         Ok(())
     }
 
+    /// Returns whether the bunching effect (cards held by folded players) is in force.
+    #[inline]
+    pub fn is_bunching_enabled(&self) -> bool {
+        self.bunching_num_dead_cards > 0
+    }
+
     /// Resets the bunching effect configuration. The current node will also be reset to the root.
     #[inline]
     pub fn reset_bunching_effect(&mut self) {

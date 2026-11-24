@@ -929,7 +929,7 @@ fn main() {
                             oop_range: l.big_blind_range.clone(), ip_range: l.button_range.clone(),
                             board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
                             oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
-                            allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None };
+                            allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None, ..Default::default() };
                         let t = std::time::Instant::now();
                         let (vals, acc, mass) = study_core::class_values(&sp, &prog)?;
                         worst = worst.max(acc);

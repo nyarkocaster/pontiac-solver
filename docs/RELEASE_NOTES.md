@@ -1,6 +1,17 @@
-# Pontiac Solver 0.13.10
+# Pontiac Solver 0.13.11
 
-**New since 0.13.0, more on the Result page:**
+**New since 0.13.0, the Classic solver tab is gone:**
+
+- Study a spot now has everything the Classic solver tab had and it did not, under "More control over the tree" (two-player spots):
+  - **Lead sizes**: what the first player may bet on the turn or river after calling on the street before.
+  - **Change the tree line by line**: walk to any decision, take an action out there or add a bet or raise of an exact amount, and undo any change. The count of decision points shows what a change does to the size of the tree.
+  - **Cards the folded players took**: type what up to four folded players fold and the solve counts it. Much slower: a spot that took 20 seconds took 2 minutes with one or two folded players; four was stopped unfinished after 8 minutes.
+  - **Rake** for two-player cash games (percent and cap).
+- The tab itself is replaced by About (version, licence, credits).
+- A solve with hand-made tree changes or folded players' cards cannot be saved as a small library file; "Save whole" works.
+- Checked in the browser development build; not yet tried in the Windows app.
+
+**More on the Result page (0.13.10):**
 
 - A table drawing above the charts: both seats with what each has behind and has put in, the board, the pot, whose turn it is, and each range's chance to win and value. Your cards are shown when a hand history was loaded. "Hide the table" puts it away and is remembered.
 - "Every hand ... can hold", under the charts: each exact hand still in the deciding player's range with how much of it is left, how often it takes each action, what it is worth, its chance to win, and "share kept" (value against chance to win times the pot). Click a column to sort, type to filter (AK, 7h, s), click a row to select its square in the chart.

@@ -1,5 +1,5 @@
 <template>
-  <p>Pontiac Solver v0.13.10</p>
+  <p>Pontiac Solver v0.13.11</p>
   <p>Free and open source under the AGPL-3.0-or-later licence.</p>
   <p>
     <a target="_blank" class="link" href="https://github.com/nyarkocaster/pontiac-solver">
