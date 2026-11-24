@@ -269,8 +269,19 @@ impl Game {
 }
 
 /// Range text for the flop solver with at least `floor` of every hand, so each hand gets a value.
+/// The presence every hand is lifted to in one player's range for a flop line. `floor` is a fixed
+/// amount; `share` caps it so the lifted hands together make up at most that fraction of the
+/// range (a narrow line gets a smaller floor). Zero when neither is asked for.
+pub fn line_floor(w: &[f64], floor: f64, share: f64) -> f64 {
+    if share <= 0.0 { return floor.max(0.0); }
+    let cap = if floor > 0.0 { floor } else { 0.05 };
+    let present: f64 = (0..N).filter(|&i| w[i] >= 0.005).map(|i| combos(i) * w[i]).sum();
+    let absent: f64 = (0..N).filter(|&i| w[i] < 0.005).map(|i| combos(i)).sum();
+    if absent <= 0.0 { return cap.min(0.001); }
+    (share * present / absent).min(cap).max(0.0001)
+}
 pub fn range_with_floor(w: &[f64], floor: f64) -> String {
-    (0..N).map(|i| { let x = w[i].max(floor).min(1.0); if x > 0.995 { class_name(i) } else { format!("{}:{:.3}", class_name(i), x) } }).collect::<Vec<_>>().join(",")
+    (0..N).map(|i| { let x = w[i].max(floor).min(1.0); if x > 0.995 { class_name(i) } else { format!("{}:{:.4}", class_name(i), x) } }).collect::<Vec<_>>().join(",")
 }
 fn range_text(w: &[f64]) -> String {
     (0..N).filter(|&i| w[i] >= 0.005).map(|i| if w[i] > 0.995 { class_name(i) } else { format!("{}:{:.2}", class_name(i), w[i]) }).collect::<Vec<_>>().join(",")
@@ -324,8 +335,12 @@ pub struct AccurateOpts {
     pub min_rounds: usize,
     /// start from another run's strategy (its `sigmas`), which then counts as one round already done
     pub start: Option<Vec<Vec<f64>>>,
+    /// the flop solves gave every hand at least this much presence (see `line_floor`), so the
+    /// check that the two players' values add to the pot must weight by the same ranges
+    pub floor: f64,
+    pub floor_share: f64,
 }
-impl Default for AccurateOpts { fn default() -> Self { AccurateOpts { step: StepRule::Fixed(0.35), settled_points: None, min_rounds: 6, start: None } } }
+impl Default for AccurateOpts { fn default() -> Self { AccurateOpts { step: StepRule::Fixed(0.35), settled_points: None, min_rounds: 6, start: None, floor: 0.0, floor_share: 0.0 } } }
 
 /// Have the button's totals stopped moving? True when, over the last three rounds (four readings),
 /// no total's highest and lowest reading differ by `points` or more.
@@ -407,10 +422,13 @@ pub fn solve_accurate_opts(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
             // players' solved values add up to slightly more than the pot. Scale both back so they add up.
             {
                 let mut share = [0.0f64; 2];
+                // the ranges the flops were solved with: the line's own, lifted to the floor if one was used
+                let solved_reach: [Vec<f64>; 2] = [0, 1].map(|p| { let f = line_floor(&l.reach[p], opts.floor, opts.floor_share); l.reach[p].iter().map(|&x| if f > 0.0 { x.max(f).min(1.0) } else { x }).collect() });
+                let cut = |p: usize| if line_floor(&l.reach[p], opts.floor, opts.floor_share) > 0.0 { 0.0 } else { 0.005 };
                 for p in 0..2 { let (mut num, mut den) = (0.0, 0.0);
-                    for i in 0..N { if !(vals[p][i].is_finite() && l.reach[p][i] > 0.005) { continue; }
-                        let w: f64 = (0..N).filter(|&j| vals[1 - p][j].is_finite() && l.reach[1 - p][j] > 0.005).map(|j| cp[i * N + j] * l.reach[1 - p][j]).sum();
-                        let m = combos(i) * l.reach[p][i] * w; num += m * vals[p][i]; den += m; }
+                    for i in 0..N { if !(vals[p][i].is_finite() && solved_reach[p][i] > cut(p)) { continue; }
+                        let w: f64 = (0..N).filter(|&j| vals[1 - p][j].is_finite() && solved_reach[1 - p][j] > cut(1 - p)).map(|j| cp[i * N + j] * solved_reach[1 - p][j]).sum();
+                        let m = combos(i) * solved_reach[p][i] * w; num += m * vals[p][i]; den += m; }
                     share[p] = if den > 0.0 { num / den / l.pot_bb } else { 0.5 }; }
                 let total = share[0] + share[1];
                 values_total = total;
@@ -633,7 +651,7 @@ mod tests {
             for x in 0..N { if l.reach[1][x] < 0.005 { continue; } let (mut w, mut s) = (0.0, 0.0); for b in 0..N { if l.reach[0][b] < 0.005 { continue; } let k = cp[x * N + b] * l.reach[0][b]; w += k; s += k * (1.0 - share(b, x)); } if w > 0.0 { v[1][x] = s / w * l.pot_bb; } }
             Ok((v, 1, 0.0))
         };
-        let opts = AccurateOpts { step: StepRule::Rising, settled_points: Some(1.0), min_rounds: 4, start: None };
+        let opts = AccurateOpts { step: StepRule::Rising, settled_points: Some(1.0), min_rounds: 4, start: None, ..Default::default() };
         // an unbroken run stops by itself, well short of the 12 rounds allowed
         let mut cps: Vec<Checkpoint> = vec![];
         let whole = solve_accurate_opts(&spec, 12, 0.02, &mut eval, &mut |_, _| {}, None, &mut |c: &Checkpoint| cps.push(c.clone()), &opts).unwrap();
@@ -646,7 +664,7 @@ mod tests {
         assert_eq!(again.accurate.as_ref().unwrap().len(), hist.len());
         for (a, b) in again.nodes[0].freqs.iter().zip(&whole.nodes[0].freqs) { assert!((a - b).abs() < 1e-9, "{a} vs {b}"); }
         // started from the finished run's strategy, the first round barely moves it
-        let warm = AccurateOpts { step: StepRule::Rising, settled_points: None, min_rounds: 4, start: Some(whole.sigmas.clone()) };
+        let warm = AccurateOpts { step: StepRule::Rising, settled_points: None, min_rounds: 4, start: Some(whole.sigmas.clone()), ..Default::default() };
         let mut first: Option<PassInfo> = None;
         solve_accurate_opts(&spec, 1, 0.02, &mut eval, &mut |i: &PassInfo, _| first = Some(i.clone()), None, &mut |_| {}, &warm).unwrap();
         let first = first.unwrap();

@@ -772,6 +772,7 @@ fn main() {
                 // that has stopped taking a line still gets a real value for it and can come back. Default 0: hands under half a
                 // percent are left out and take the average adjustment of the hands that are in.
                 let floor = num("--floor")?.unwrap_or(0.0).clamp(0.0, 0.2);
+                let floor_share = num("--floor-share")?.unwrap_or(0.0).clamp(0.0, 0.5);
                 // --rounds fixed|average|rising: how the rounds are combined. fixed (default) moves --step (0.35) of the way to
                 // each fresh solve; average keeps the plain average of every round's solve; rising weights later rounds more.
                 let rule = match flag("--rounds").unwrap_or("fixed") {
@@ -834,8 +835,8 @@ fn main() {
                     // by_flop[player][flop][class] in big blinds, button first
                     let mut by_flop: [Vec<Vec<f64>>; 2] = [vec![], vec![]];
                     let make_spec = |board: &str, th: usize| study_core::StudySpec {
-                            oop_range: if floor > 0.0 { pushfold::preflop::range_with_floor(&l.reach[1], floor) } else { l.big_blind_range.clone() },
-                            ip_range: if floor > 0.0 { pushfold::preflop::range_with_floor(&l.reach[0], floor) } else { l.button_range.clone() },
+                            oop_range: if floor > 0.0 || floor_share > 0.0 { pushfold::preflop::range_with_floor(&l.reach[1], pushfold::preflop::line_floor(&l.reach[1], floor, floor_share)) } else { l.big_blind_range.clone() },
+                            ip_range: if floor > 0.0 || floor_share > 0.0 { pushfold::preflop::range_with_floor(&l.reach[0], pushfold::preflop::line_floor(&l.reach[0], floor, floor_share)) } else { l.button_range.clone() },
                             board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
                             oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
                             allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads: th, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None };
@@ -931,6 +932,7 @@ fn main() {
                 if rule != pushfold::preflop::StepRule::Fixed(0.35) { settings["rounds"] = json!(rule); }
                 if let Some(p) = &start_from { settings["start_from"] = json!(p); }
                 if floor > 0.0 { settings["floor"] = json!(floor); }
+                if floor_share > 0.0 { settings["floor_share"] = json!(floor_share); }
                 let mut start: Option<pushfold::preflop::Checkpoint> = None;
                 if want_resume {
                     if let Some(text) = cp_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
@@ -944,7 +946,7 @@ fn main() {
                 let mut keep = |c: &pushfold::preflop::Checkpoint| {
                     if let Some(p) = &cp_path { let tmp = format!("{p}.part"); if std::fs::write(&tmp, json!({"settings": settings, "checkpoint": c}).to_string()).is_ok() { let _ = std::fs::rename(&tmp, p); } }
                 };
-                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: 8, start: start_sigmas };
+                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: 8, start: start_sigmas, floor, floor_share };
                 pushfold::preflop::solve_accurate_opts(&spec, passes, min_freq, &mut eval, &mut report, start, &mut keep, &opts)?
             } else { pushfold::preflop::solve(&spec)? };
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
