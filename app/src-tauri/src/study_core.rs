@@ -320,6 +320,8 @@ pub struct NodeView {
     pub curves: Vec<Vec<[f32; 2]>>,
     /// acting player's exact hands still in range
     pub combos: Vec<Combo>,
+    /// the other player's range at a decision, as 169 chart squares (no action mix)
+    pub other_grid: Vec<Cell>,
 }
 
 #[derive(Serialize, Default, Clone)]
@@ -1063,6 +1065,23 @@ pub fn node_view<G: Solved>(game: &mut G, history: &[usize]) -> Result<NodeView,
     }
     let _ = RANKS;
     v.grid = grid;
+    {
+        // the player who is not deciding: how much of each hand is left, its value and chance to win
+        let o = 1 - p;
+        let (oc, ow, oraw, oeq, oev) = (game.private_cards(o), game.normalized_weights(o), game.weights(o), game.equity(o), game.expected_values(o));
+        let mut og: Vec<Cell> = (0..169).map(|_| Cell::default()).collect();
+        for h in 0..oc.len() {
+            let wt = ow[h] as f64;
+            if wt <= 0.0 { continue; }
+            let c = &mut og[grid_index(oc[h])];
+            c.weight += wt; c.reach += oraw[h] as f64; c.equity += oeq[h] as f64 * wt; c.ev += oev[h] as f64 * wt;
+        }
+        for (i, c) in og.iter_mut().enumerate() {
+            c.full = v.grid[i].full;
+            if c.weight > 0.0 { c.equity /= c.weight; c.ev /= c.weight; }
+        }
+        v.other_grid = og;
+    }
     v.buckets = buckets;
     Ok(v)
 }

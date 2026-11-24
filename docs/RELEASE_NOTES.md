@@ -1,4 +1,4 @@
-# Pontiac Solver 0.13.11
+# Pontiac Solver 0.13.12
 
 **New since 0.13.0, the Classic solver tab is gone:**
 
@@ -13,6 +13,8 @@
 
 **More on the Result page (0.13.10):**
 
+- (0.13.12) Hover over a chart square for a card with that hand's share still in range, how often it takes each action, its value and its chance to win.
+- (0.13.12) "What the other player holds here", under the chart: the range of the player who is not deciding, as a second chart that follows the Actions / Value / Chance to win buttons.
 - A table drawing above the charts: both seats with what each has behind and has put in, the board, the pot, whose turn it is, and each range's chance to win and value. Your cards are shown when a hand history was loaded. "Hide the table" puts it away and is remembered.
 - "Every hand ... can hold", under the charts: each exact hand still in the deciding player's range with how much of it is left, how often it takes each action, what it is worth, its chance to win, and "share kept" (value against chance to win times the pot). Click a column to sort, type to filter (AK, 7h, s), click a row to select its square in the chart.
 - Checked in the browser development build; not yet tried in the Windows app.

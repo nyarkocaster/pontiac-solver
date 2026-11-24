@@ -227,7 +227,7 @@
                 </div>
               </div>
               <ChartMode v-model="chartMode" class="mt-2" />
-              <HandGrid class="mt-3" :grid="node.grid" :colors="colors" :selected="selected" :marks="suitMarks" :mode="node.has_ev ? chartMode : chartMode === 'ev' ? 'strategy' : chartMode" :fmt-ev="money" @select="selected = selected === $event ? null : $event" />
+              <HandGrid class="mt-3" :grid="node.grid" :colors="colors" :values="node.has_ev" :selected="selected" :marks="suitMarks" :mode="node.has_ev ? chartMode : chartMode === 'ev' ? 'strategy' : chartMode" :fmt-ev="money" @select="selected = selected === $event ? null : $event" />
               <p class="hint mt-2">The fill height shows how much of each hand is still here. A sliver means that hand rarely reaches this point, so it barely moves the totals on the left.</p>
               <p v-if="selected === null" class="hint mt-1">Click a square to see every exact hand in it. A dot in the corner marks squares where the suits play differently.</p>
               <div v-else class="mt-3">

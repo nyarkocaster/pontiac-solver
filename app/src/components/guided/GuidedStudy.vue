@@ -232,9 +232,16 @@
                   </ul>
                 </div>
                 <div class="mt-2">
-                  <HandGrid :grid="node.grid" :colors="colors" :selected="selectedCell" :mine="myCell" :marks="suitMarks" :mode="chartMode" :fmt-ev="fmt" @select="selectCell" />
+                  <HandGrid :grid="node.grid" :colors="colors" :actions="node.actions.map((_x, a) => shortAction(a))" :selected="selectedCell" :mine="myCell" :marks="suitMarks" :mode="chartMode" :fmt-ev="fmt" @select="selectCell" />
                   <p class="hint mt-1.5">The fill height shows how much of each hand is still in the range here. A sliver means that hand rarely reaches this point. A dot in the corner marks squares where the suits play differently; click one to see each suit.</p>
                 </div>
+                <details v-if="otherGrid" class="mt-3 rounded-lg border border-rule px-3 py-2" :open="otherOn" @toggle="setOther(($event.target as HTMLDetailsElement).open)">
+                  <summary class="cursor-pointer font-bold text-sm">What {{ node.player === 0 ? built.ipName : built.oopName }} holds here</summary>
+                  <div v-if="otherOn" class="mt-2 max-w-sm">
+                    <HandGrid :grid="otherGrid" :colors="['#8792a8']" :selected="null" :mode="chartMode" :fmt-ev="fmt" />
+                    <p class="hint mt-1.5">The other player's range at this point: {{ Math.round(otherCombos) }} hands, winning {{ Math.round(node.equity[1 - node.player] * 100) }}% against the range above. The fill height is how much of each hand is left; the chart buttons above switch both charts.</p>
+                  </div>
+                </details>
               </template>
 
               <template v-else-if="node.kind === 'chance'">
@@ -981,6 +988,13 @@ const suitMarks = computed(() => {
   lo.forEach((a, cell) => { const b = hi.get(cell)!; if (a.some((x, i) => b[i] - x >= 0.2)) out.add(cell); });
   return out;
 });
+// the other player's range beside the deciding player's; open or closed is remembered on this computer
+const otherOn = ref(false);
+try { otherOn.value = localStorage.getItem("pontiac.other") === "on"; } catch { /* no storage: closed */ }
+function setOther(open: boolean) { if (open === otherOn.value) return; otherOn.value = open; try { localStorage.setItem("pontiac.other", open ? "on" : "off"); } catch { /* not remembered */ } }
+/** one neutral bar per square: how much of the hand is left */
+const otherGrid = computed(() => (node.value?.kind === "player" && node.value.other_grid?.length === 169 ? node.value.other_grid.map((c) => ({ ...c, freqs: c.weight > 0 ? [1] : [] })) : null));
+const otherCombos = computed(() => (node.value?.other_grid ?? []).reduce((s, c) => s + (c.reach ?? 0), 0));
 // the table drawing can be hidden; the choice is remembered on this computer
 const tableOn = ref(true);
 try { tableOn.value = localStorage.getItem("pontiac.table") !== "off"; } catch { /* no storage: keep it on */ }

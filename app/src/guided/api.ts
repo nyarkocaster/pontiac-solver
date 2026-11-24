@@ -47,6 +47,8 @@ export interface NodeView {
   action_freqs: number[]; grid: Cell[]; buckets: Bucket[]; ev: [number, number];
   equity: [number, number]; cards: [string, number][]; locked: boolean; range_combos: [number, number];
   combos: Combo[]; curves: [number, number][][];
+  /** the other player's range at a decision (no action mix) */
+  other_grid?: Cell[];
 }
 export interface Combo { hand: string; cell: number; weight: number; freqs: number[]; equity: number; ev: number }
 
