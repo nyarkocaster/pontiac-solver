@@ -339,8 +339,12 @@ pub struct AccurateOpts {
     /// check that the two players' values add to the pot must weight by the same ranges
     pub floor: f64,
     pub floor_share: f64,
+    /// per line (by path), each player's whole-range value in big blinds from the flop solves'
+    /// own weights (button first). When present, each player's values in that line are scaled to
+    /// that total, so the valuing step cannot move value between the players.
+    pub pin: Option<std::rc::Rc<std::cell::RefCell<std::collections::HashMap<String, [f64; 2]>>>>,
 }
-impl Default for AccurateOpts { fn default() -> Self { AccurateOpts { step: StepRule::Fixed(0.35), settled_points: None, min_rounds: 6, start: None, floor: 0.0, floor_share: 0.0 } } }
+impl Default for AccurateOpts { fn default() -> Self { AccurateOpts { step: StepRule::Fixed(0.35), settled_points: None, min_rounds: 6, start: None, floor: 0.0, floor_share: 0.0, pin: None } } }
 
 /// Have the button's totals stopped moving? True when, over the last three rounds (four readings),
 /// no total's highest and lowest reading differ by `points` or more.
@@ -430,8 +434,12 @@ pub fn solve_accurate_opts(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
                         let w: f64 = (0..N).filter(|&j| vals[1 - p][j].is_finite() && solved_reach[1 - p][j] > cut(1 - p)).map(|j| cp[i * N + j] * solved_reach[1 - p][j]).sum();
                         let m = combos(i) * solved_reach[p][i] * w; num += m * vals[p][i]; den += m; }
                     share[p] = if den > 0.0 { num / den / l.pot_bb } else { 0.5 }; }
-                let total = share[0] + share[1];
+                let mut total = share[0] + share[1];
                 values_total = total;
+                if let Some(t) = opts.pin.as_ref().and_then(|m| m.borrow().get(&l.path).copied()) {
+                    for p in 0..2 { if share[p] > 0.0 && t[p].is_finite() { let k = t[p] / l.pot_bb / share[p]; for v in vals[p].iter_mut() { *v *= k; } } }
+                    total = (t[0] + t[1]) / l.pot_bb;
+                }
                 if total > 0.5 { for p in 0..2 { for v in vals[p].iter_mut() { *v /= total; } } }
             }
             let entry = fit_offsets(&cp, &eq, &l.reach, &vals, l.pot_bb);

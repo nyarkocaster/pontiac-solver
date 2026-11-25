@@ -773,6 +773,10 @@ fn main() {
                 // percent are left out and take the average adjustment of the hands that are in.
                 let floor = num("--floor")?.unwrap_or(0.0).clamp(0.0, 0.2);
                 let floor_share = num("--floor-share")?.unwrap_or(0.0).clamp(0.0, 0.5);
+                // chips per big blind in the flop solves; 40 makes pots with a 0.125 ante whole numbers
+                let chips = num("--chips")?.unwrap_or(10.0).round().clamp(10.0, 200.0);
+                let pin_totals = args.iter().any(|a| a == "--pin-totals");
+                let pins: std::rc::Rc<std::cell::RefCell<std::collections::HashMap<String, [f64; 2]>>> = Default::default();
                 // --rounds fixed|average|rising: how the rounds are combined. fixed (default) moves --step (0.35) of the way to
                 // each fresh solve; average keeps the plain average of every round's solve; rising weights later rounds more.
                 let rule = match flag("--rounds").unwrap_or("fixed") {
@@ -831,13 +835,14 @@ fn main() {
                     }
                     let (mut num_v, mut den_v) = ([vec![0f64; 169], vec![0f64; 169]], [vec![0f64; 169], vec![0f64; 169]]);
                     let mut worst = 0f64;
+                    let (mut plain_num, mut plain_den) = ([0f64; 2], 0f64);
                     let mut detail_flops: Vec<Value> = vec![];
                     // by_flop[player][flop][class] in big blinds, button first
                     let mut by_flop: [Vec<Vec<f64>>; 2] = [vec![], vec![]];
                     let make_spec = |board: &str, th: usize| study_core::StudySpec {
                             oop_range: if floor > 0.0 || floor_share > 0.0 { pushfold::preflop::range_with_floor(&l.reach[1], pushfold::preflop::line_floor(&l.reach[1], floor, floor_share)) } else { l.big_blind_range.clone() },
                             ip_range: if floor > 0.0 || floor_share > 0.0 { pushfold::preflop::range_with_floor(&l.reach[0], pushfold::preflop::line_floor(&l.reach[0], floor, floor_share)) } else { l.button_range.clone() },
-                            board: board.to_string(), pot: (l.pot_bb * 10.0).round() as i32, stack: (l.behind_bb * 10.0).round() as i32,
+                            board: board.to_string(), pot: (l.pot_bb * chips).round() as i32, stack: (l.behind_bb * chips).round() as i32,
                             oop_flop_bet: "50%".into(), ip_flop_bet: "50%".into(), turn_bet: "66%".into(), river_bet: "66%".into(), raise: "2.5x".into(),
                             allin_threshold: 0.67, accuracy_pct: accuracy, max_iter: 400, leaks: vec![], threads: th, low_memory: false, freeze_rest: true, confidence: 1.0, icm: None };
                     // --flop-parallel K: solve K flops at once, each with a share of the threads
@@ -869,18 +874,25 @@ fn main() {
                             Some(d) => {
                                 let line = d["lines"].as_array().and_then(|a| a.iter().find(|x| x["line"] == json!(l.path))).ok_or(format!("the flop-values file has no line '{}'", l.path))?;
                                 let f = line["flops"].as_array().and_then(|a| a.iter().find(|x| x["flop"] == json!(board))).ok_or(format!("the flop-values file has no flop {board} for the line '{}'", l.path))?;
-                                let row = |k: &str| -> Vec<f64> { (0..169).map(|c| f[k][c].as_f64().map(|x| x * 10.0).unwrap_or(f64::NAN)).collect() };
+                                let row = |k: &str| -> Vec<f64> { (0..169).map(|c| f[k][c].as_f64().map(|x| x * chips).unwrap_or(f64::NAN)).collect() };
                                 ([row("big_blind"), row("button")], f["accuracy_pct"].as_f64().unwrap_or(0.0), [vec![0.0; 169], vec![0.0; 169]])
                             }
                             None => match pre[k].take() { Some((r, _)) => r?, None => study_core::class_values(&sp, &prog)? },
                         };
                         worst = worst.max(acc);
-                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { by_flop[mine].push(vals[theirs].iter().map(|x| x / 10.0).collect()); }
+                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { by_flop[mine].push(vals[theirs].iter().map(|x| x / chips).collect()); }
                         // vals[0] is the big blind (first to act after the flop), vals[1] the button; chips are tenths of a big blind
-                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; let k = if plain_flops { flop_ways[k] * mass[theirs][c] } else { flop_fit.weight[c][k] }; if x.is_finite() && k > 0.0 { num_v[mine][c] += k * x / 10.0; den_v[mine][c] += k; } } }
+                        for (mine, theirs) in [(0usize, 1usize), (1, 0)] { for c in 0..169 { let x = vals[theirs][c]; let k = if plain_flops { flop_ways[k] * mass[theirs][c] } else { flop_fit.weight[c][k] }; if x.is_finite() && k > 0.0 { num_v[mine][c] += k * x / chips; den_v[mine][c] += k; } } }
+                        // each player's whole-range value on this flop, with the weights the flop was solved with
+                        let plain_here: [f64; 2] = match &replay {
+                            Some(d) => { let line = d["lines"].as_array().and_then(|a| a.iter().find(|x| x["line"] == json!(l.path))); let f = line.and_then(|x| x["flops"].as_array()).and_then(|a| a.iter().find(|x| x["flop"] == json!(board)));
+                                [f.and_then(|f| f["plain_button"].as_f64()).unwrap_or(f64::NAN), f.and_then(|f| f["plain_big_blind"].as_f64()).unwrap_or(f64::NAN)] }
+                            None => [1usize, 0].map(|theirs| (0..169).filter(|&c| vals[theirs][c].is_finite()).map(|c| mass[theirs][c] * vals[theirs][c] / chips).sum::<f64>()),
+                        };
+                        for p in 0..2 { plain_num[p] += flop_ways[k] * plain_here[p]; } plain_den += flop_ways[k];
                         if detail.is_some() {
-                            let bb = |v: &Vec<f64>| -> Vec<Value> { v.iter().map(|x| if x.is_finite() { json!((x / 10.0 * 1e4).round() / 1e4) } else { Value::Null }).collect() };
-                            detail_flops.push(json!({"flop": board, "accuracy_pct": acc, "button": bb(&vals[1]), "big_blind": bb(&vals[0])}));
+                            let bb = |v: &Vec<f64>| -> Vec<Value> { v.iter().map(|x| if x.is_finite() { json!((x / chips * 1e4).round() / 1e4) } else { Value::Null }).collect() };
+                            detail_flops.push(json!({"flop": board, "accuracy_pct": acc, "button": bb(&vals[1]), "big_blind": bb(&vals[0]), "plain_button": plain_here[0], "plain_big_blind": plain_here[1]}));
                         }
                         say(format!("pass {pass} | {} | flop {} of {nflops} ({board}) | {:.0}s, within {:.2}% of the pot | {:.0} min so far", l.path, k + 1, t.elapsed().as_secs_f64(), acc, t0.elapsed().as_secs_f64() / 60.0));
                     }
@@ -893,11 +905,16 @@ fn main() {
                         if detail.is_some() { kinds_detail = json!({"kinds": pushfold::flopweights::KIND_NAMES, "lean": lean, "weights_only_button": nums(&out[0]), "weights_only_big_blind": nums(&out[1]), "button": table(&kv[0]), "big_blind": table(&kv[1])}); }
                         out = [kv[0].value.clone(), kv[1].value.clone()];
                     }
+                    let plain_total = [plain_num[0] / plain_den, plain_num[1] / plain_den];
+                    if pin_totals {
+                        if !(plain_total[0].is_finite() && plain_total[1].is_finite()) { return Err("--pin-totals needs each flop's plain totals; this flop-values file was recorded without them".into()); }
+                        pins.borrow_mut().insert(l.path.clone(), plain_total);
+                    }
                     if let Some(path) = &detail {
                         if pass != detail_round { detail_round = pass; detail_lines.clear(); }
                         let avg = |v: &Vec<f64>| -> Vec<Value> { v.iter().map(|x| if x.is_finite() { json!((x * 1e4).round() / 1e4) } else { Value::Null }).collect() };
                         detail_lines.push(json!({"line": l.path, "pot_bb": l.pot_bb, "behind_bb": l.behind_bb, "button_range": l.button_range, "big_blind_range": l.big_blind_range,
-                            "weighted_button": avg(&out[0]), "weighted_big_blind": avg(&out[1]), "by_kind": kinds_detail, "flops": detail_flops}));
+                            "weighted_button": avg(&out[0]), "weighted_big_blind": avg(&out[1]), "plain_total_button": plain_total[0], "plain_total_big_blind": plain_total[1], "by_kind": kinds_detail, "flops": detail_flops}));
                         let doc = json!({"round": pass, "classes": (0..169).map(pushfold::class_name).collect::<Vec<_>>(), "flop_names": flop_names,
                             "weighting": if plain_flops { "plain" } else { "fitted" }, "valuing": valuing,
                             "weights": flop_fit.weight.iter().map(|w| w.iter().map(|x| (x * 1e5).round() / 1e5).collect::<Vec<f64>>()).collect::<Vec<_>>(),
@@ -933,6 +950,8 @@ fn main() {
                 if let Some(p) = &start_from { settings["start_from"] = json!(p); }
                 if floor > 0.0 { settings["floor"] = json!(floor); }
                 if floor_share > 0.0 { settings["floor_share"] = json!(floor_share); }
+                if chips != 10.0 { settings["chips"] = json!(chips); }
+                if pin_totals { settings["pin_totals"] = json!(true); }
                 let mut start: Option<pushfold::preflop::Checkpoint> = None;
                 if want_resume {
                     if let Some(text) = cp_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
@@ -946,7 +965,7 @@ fn main() {
                 let mut keep = |c: &pushfold::preflop::Checkpoint| {
                     if let Some(p) = &cp_path { let tmp = format!("{p}.part"); if std::fs::write(&tmp, json!({"settings": settings, "checkpoint": c}).to_string()).is_ok() { let _ = std::fs::rename(&tmp, p); } }
                 };
-                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: num("--min-rounds")?.map(|x| (x as usize).clamp(4, 40)).unwrap_or(8), start: start_sigmas, floor, floor_share };
+                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: num("--min-rounds")?.map(|x| (x as usize).clamp(4, 40)).unwrap_or(8), start: start_sigmas, floor, floor_share, pin: if pin_totals { Some(pins.clone()) } else { None } };
                 pushfold::preflop::solve_accurate_opts(&spec, passes, min_freq, &mut eval, &mut report, start, &mut keep, &opts)?
             } else { pushfold::preflop::solve(&spec)? };
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
