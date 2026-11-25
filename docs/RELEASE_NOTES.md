@@ -1,4 +1,6 @@
-# Pontiac Solver 0.13.12
+# Pontiac Solver 0.13.13
+
+**Fixed in 0.13.13:** two-player tournament spots counted chips in tenths of a big blind, so a pot that is not a whole tenth was rounded before solving (with a 0.125 bb ante, 2.25 bb was solved as 2.3 bb, 2% too much). They now count in hundredths. Spots saved to the library before this version open as they were solved.
 
 **New since 0.13.0, the Classic solver tab is gone:**
 

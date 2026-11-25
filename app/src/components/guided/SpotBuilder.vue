@@ -391,7 +391,7 @@ const props = defineProps<{
   preview2: (p: Solve2) => Promise<Preview>; preview3: (p: Solve3) => Promise<Preview>;
   quickFlop: (p: Solve2, flop: number[]) => Promise<FlopRow>;
 }>();
-export interface Solve2 { autoSizes?: boolean; res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; heroHand?: string; overrides: Record<string, unknown>;
+export interface Solve2 { autoSizes?: boolean; res: ScenarioResult; format: "live" | "hu"; chips?: number; board: number[]; profile: string | null; heroHand?: string; overrides: Record<string, unknown>;
   /** from a pasted hand history: what happened after the flop, for the hand review (amounts in the solve's chips) */
   line?: ReviewStep[] }
 export interface Solve3 {
@@ -519,12 +519,14 @@ const exploitSeat = ref("");
 watch(() => opponentsInSpot.value.map((p) => p.seat).join(","), () => { if (!opponentsInSpot.value.some((p) => p.seat === exploitSeat.value)) exploitSeat.value = ""; });
 const sizes = reactive({ pfrFlop: "33%, 66%", callerFlop: "33%", turn: "75%", river: "75%", raise: "3x" });
 // what the old Classic solver tab had and this page did not: lead sizes, hand-made tree changes, folded players' cards
+/** Chips per big blind for tournament spots. It was 10, which rounded a pot with an ante in it (2.25 bb became 2.3). */
+const TOURNEY_CHIPS = 100;
 const advOpen = ref(false);
 const adv = reactive({ turnLead: "", riverLead: "", edits: [] as string[], folded: [] as string[], rakePct: 0, rakeCap: 0 });
 const advCount = computed(() => (table.game === "cash" && adv.rakePct > 0 ? 1 : 0) + (adv.turnLead.trim() ? 1 : 0) + (adv.riverLead.trim() ? 1 : 0) + adv.edits.length + adv.folded.filter((r) => r.trim()).length);
 /** hands outside a roughly 30% opening range: what a typical player folds first in */
 const TYPICAL_FOLDS = "A9o-A2o,K9o-K2o,Q9o-Q2o,J9o-J2o,T8o-T2o,98o-92o,87o-82o,76o-72o,65o-62o,54o-52o,43o,42o,32o,K8s-K2s,Q8s-Q2s,J7s-J2s,T6s-T2s,95s-92s,84s-82s,74s-72s,63s-62s,53s-52s,43s,42s,32s";
-const chipK = computed(() => (table.game === "tourney" ? 10 : 1));
+const chipK = computed(() => (table.game === "tourney" ? TOURNEY_CHIPS : 1));
 const advOverrides = () => ({
   ...(table.game === "cash" && adv.rakePct > 0 ? { rake_pct: adv.rakePct, rake_cap: adv.rakeCap > 0 ? adv.rakeCap : 0 } : {}),
   ...(adv.turnLead.trim() ? { turn_lead: adv.turnLead.trim() } : {}), ...(adv.riverLead.trim() ? { river_lead: adv.riverLead.trim() } : {}),
@@ -592,7 +594,7 @@ function payload(): { two?: Solve2; three?: Solve3 } {
   const profile = hab ? PLAYER_TYPES.find((t) => t.id === hab.type)?.profile ?? "austin" : null;
   const left = spot.value.left.length ? ` (${spot.value.left.map((p) => p.name).join(" and ")} left out; their chips stay in the pot.)` : "";
   if (ps.length === 2) {
-    const k = tourney ? 10 : 1; // tournament amounts go to the two-player screen in tenths of a big blind
+    const k = tourney ? TOURNEY_CHIPS : 1; // tournament amounts go to the two-player screen in hundredths of a big blind
     const [oop, ip] = ps;
     return { two: {
       res: {
@@ -600,7 +602,7 @@ function payload(): { two?: Solve2; three?: Solve3 } {
         stack: Math.max(1, Math.round(Math.min(oop.behind, ip.behind) * k)), pfrIsOop: oop.raisedLast,
         description: pre.value.story + left, oopName: oop.name, ipName: ip.name,
       },
-      format: tourney ? "hu" : "live", board: [...board.value], profile, heroHand: heroHand.value, line: reviewLine(oop.seat, ip.seat, k), autoSizes: autoSizes.value,
+      format: tourney ? "hu" : "live", chips: k, board: [...board.value], profile, heroHand: heroHand.value, line: reviewLine(oop.seat, ip.seat, k), autoSizes: autoSizes.value,
       overrides: { oop_flop_bet: oop.raisedLast ? sizes.pfrFlop : sizes.callerFlop, ip_flop_bet: oop.raisedLast ? sizes.callerFlop : sizes.pfrFlop, turn_bet: sizes.turn, river_bet: sizes.river, raise: sizes.raise, accuracy_pct: accuracyPct.value, ...advOverrides(),
         ...(icmActive.value && icmOthers.value.length && numList(icmPayouts.value).length ? { icm: { payouts: numList(icmPayouts.value), oop_stack: Math.round(oop.behind * k), ip_stack: Math.round(ip.behind * k), others: icmOthers.value.map((x) => Math.round(x * k)) } } : {}) },
     } };

@@ -499,7 +499,7 @@ const built = computed(() => custom.value?.res ?? scenario.value.build(seat.valu
 const emit = defineEmits<{ (e: "new"): void }>();
 const newSpot = () => { step.value = "setup"; };
 watch(step, (v) => { if (v === "setup" && custom.value) emit("new"); });
-type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown>; heroHand?: string; line?: api.ReviewStep[]; autoSizes?: boolean };
+type Custom2 = { res: ScenarioResult; format: "live" | "hu"; board: number[]; profile: string | null; overrides: Record<string, unknown>; heroHand?: string; line?: api.ReviewStep[]; autoSizes?: boolean; /** chips per big blind for "hu" spots; 10 when missing (spots saved before 0.13.13) */ chips?: number };
 /** "Pick the bet sizes for me": a rough first solve tries these sizes (percent of pot) and keeps each player's two most used */
 const SIZES_TRIED = [33, 50, 75, 100, 150];
 const autoSizes = ref(false);
@@ -529,7 +529,7 @@ async function previewCustom(p: Custom2): Promise<{ text: string; problem: strin
 }
 /** Takes a spot from the spot builder and solves it. Resolves when the solve is over. */
 async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
-  fromFile.value = false; chipsPerBb.value = 10; turnNote.value = null;
+  fromFile.value = false; chipsPerBb.value = p.chips && p.format === "hu" ? p.chips : 10; turnNote.value = null;
   lastPayload = p; manualLocks.value = []; lockStale.value = false; savedId.value = "";
   custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
   autoSizes.value = !!p.autoSizes; picked.value = null;
@@ -685,7 +685,7 @@ async function openSaved(e: api.LibraryEntry): Promise<{ ok: boolean; error: str
   if (!p || !e.summary) return { ok: false, error: "That entry cannot be opened." };
   try {
     await api.libraryOpenTwo(e.id);
-    fromFile.value = e.kind === "flop"; chipsPerBb.value = headless ? Number(headless.chips_per_bb) || 100 : 10; turnNote.value = null; turnError.value = "";
+    fromFile.value = e.kind === "flop"; chipsPerBb.value = headless ? Number(headless.chips_per_bb) || 100 : p.chips && p.format === "hu" ? p.chips : 10; turnNote.value = null; turnError.value = "";
     lastPayload = p; custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
     if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
     await nextTick();
