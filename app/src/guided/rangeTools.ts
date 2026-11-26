@@ -137,3 +137,67 @@ export function without(base: string, remove: string): string {
   r.weights.forEach((_w, h) => b.weights.delete(h));
   return formatRange(b);
 }
+
+/** What `importRange` made of a pasted range. */
+export interface Imported { text: string; percent: number; unknown: string[]; /** hand classes whose suits had different weights, now averaged */ uneven: string[] }
+
+const classOfCombo = (a: string, b: string): string => {
+  let r1 = RANKS.indexOf(a[0]), r2 = RANKS.indexOf(b[0]);
+  if (r1 === r2) return a[0] + b[0];
+  if (r1 > r2) [r1, r2] = [r2, r1];
+  return RANKS[r1] + RANKS[r2] + (a[1] === b[1] ? "s" : "o");
+};
+
+/**
+ * Reads a preflop range written by another program and returns it in this app's text form.
+ * Understood: lists of hand classes with "+" and "-" ("TT+, AJs+ KQo"), weights after a colon as a
+ * fraction or a percent ("AKs:0.5", "AKs:50"), weights as bracket blocks ("[50]AQo,KJs[/50]"), and
+ * exact-card lists ("AhKh:0.25,AsKs:1,..."), which are averaged into hand classes because the solver's
+ * preflop ranges do not depend on suits. Separators may be commas, spaces, semicolons or new lines.
+ */
+export function importRange(raw: string): Imported {
+  const weights = new Map<string, number>(); const unknown: string[] = [];
+  const comboSum = new Map<string, number>(); const comboSeen = new Map<string, Set<string>>(); const comboVals = new Map<string, number[]>();
+  const norm = (w: string | undefined, dflt: number) => { if (w === undefined || w === "") return dflt; const v = parseFloat(w); if (!isFinite(v)) return NaN; return Math.max(0, Math.min(1, v > 1 ? v / 100 : v)); };
+  const take = (chunk: string, blockW: number) => {
+    for (const t0 of chunk.replace(/\s*:\s*/g, ":").split(/[,;\s]+/)) {
+      const t = t0.trim(); if (!t) continue;
+      const [body0, w0] = t.split(":");
+      const w = norm(w0, 1) * blockW;
+      const combo = /^([AKQJT2-9])([shdc])([AKQJT2-9])([shdc])$/i.exec(body0);
+      if (combo && !isNaN(w)) {
+        const a = combo[1].toUpperCase() + combo[2].toLowerCase(), b = combo[3].toUpperCase() + combo[4].toLowerCase();
+        if (a === b) { unknown.push(t); continue; }
+        const cls = classOfCombo(a, b); const key = [a, b].sort().join("");
+        const seen = comboSeen.get(cls) ?? new Set<string>(); if (seen.has(key)) continue;
+        seen.add(key); comboSeen.set(cls, seen); comboSum.set(cls, (comboSum.get(cls) ?? 0) + w); comboVals.set(cls, [...(comboVals.get(cls) ?? []), w]);
+        continue;
+      }
+      const m = /^([AKQJT2-9])([AKQJT2-9])([so]?)(.*)$/i.exec(body0);
+      const body = m ? m[1].toUpperCase() + m[2].toUpperCase() + m[3].toLowerCase() + m[4].toUpperCase().replace(/([AKQJT2-9]{2})([SO])/g, (_x, r, s) => r + s.toLowerCase()) : body0;
+      const cls = classesOf(body);
+      if (!cls || isNaN(w)) { unknown.push(t); continue; }
+      for (const c of cls) weights.set(c, w);
+    }
+  };
+  // bracket blocks first: [50]AQo,KJs[/50] or [50.0]...[/50.0]
+  let rest = raw.replace(/\[(\d+(?:\.\d+)?)\]([\s\S]*?)\[\/[\d.]*\]/g, (_x, pct: string, inner: string) => { take(inner, Math.max(0, Math.min(1, parseFloat(pct) / 100))); return " "; });
+  rest = rest.replace(/\[[^\]]*\]/g, " ");
+  take(rest, 1);
+  const uneven: string[] = [];
+  comboSum.forEach((sum, cls) => {
+    const vals = comboVals.get(cls)!; const n = comboCount(cls);
+    if (vals.length < n || Math.max(...vals) - Math.min(...vals) > 0.02) { if (Math.max(...vals, 0) - (vals.length < n ? 0 : Math.min(...vals)) > 0.02) uneven.push(cls); }
+    weights.set(cls, Math.round((sum / n) * 1000) / 1000);
+  });
+  for (const [h, w] of [...weights]) if (w <= 0) weights.delete(h);
+  const p = { weights, extras: [] as string[] };
+  return { text: formatRange3(p), percent: rangePercent(p), unknown, uneven };
+}
+
+/** Like `formatRange`, but part weights keep three decimal places (imported ranges are mostly mixed). */
+function formatRange3(p: ParsedRange): string {
+  const whole = formatRange({ weights: new Map([...p.weights].filter(([, w]) => w >= 1)), extras: [] });
+  const parts = STRENGTH.filter((h) => { const w = p.weights.get(h) ?? 0; return w > 0 && w < 1; }).map((h) => `${h}:${p.weights.get(h)}`);
+  return [whole, ...parts].filter(Boolean).join(",");
+}

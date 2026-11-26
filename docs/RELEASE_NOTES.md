@@ -1,4 +1,9 @@
-# Pontiac Solver 0.13.15
+# Pontiac Solver 0.13.16
+
+**New in 0.13.16:**
+
+- Ranges from other programs: in Study a spot, each player's range has "Bring in a range from another program". Paste the text or choose a text file. Read: lists such as "TT+, AJs+, KQo"; weights as "AKs:0.5" or "AKs:50"; weights as blocks, "[50]AQo,KJs[/50]"; and card-by-card lists such as "AhKh:0.25, AsKs:1, …", which are averaged into hand classes (the app says which hands had different weights by suit). Anything not understood is listed and left out.
+- Lock sets side by side: after each "Solve again" with node locks, a table under the locks lists every set solved so far, with your value, the change from the normal solve, and the play at the decision that was on screen. "Use again" brings a set's locks back. Only the newest solve can be browsed; up to eight sets are kept until the next new solve.
 
 **New in 0.13.15:**
 

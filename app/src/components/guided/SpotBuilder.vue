@@ -186,6 +186,18 @@
                     <option v-for="(r, k) in RANGES" :key="k" :value="k">{{ r.label }}</option>
                   </select>
                 </div>
+                <details class="mt-1.5 text-xs" :open="imp.seat === p.seat" @toggle="($event.target as HTMLDetailsElement).open ? (imp.seat = p.seat) : imp.seat === p.seat && (imp.seat = '')">
+                  <summary class="cursor-pointer text-felt font-bold">Bring in a range from another program</summary>
+                  <div v-if="imp.seat === p.seat" class="mt-1">
+                    <p class="text-muted">Paste the range text, or choose a text file. Lists like “TT+, AJs+, KQo”, weights like “AKs:0.5” or “[50]AQo[/50]”, and card-by-card lists like “AhKh:0.25, …” are read.</p>
+                    <textarea v-model="imp.text" rows="3" class="input w-full text-[11px] leading-snug font-body mt-1" :aria-label="`Range text from another program for ${p.name}`"></textarea>
+                    <div class="flex flex-wrap items-center gap-2 mt-1">
+                      <button class="btn-quiet !py-1" :disabled="!imp.text.trim()" @click="useImport(p.seat)">Use this range</button>
+                      <label class="underline cursor-pointer">Choose a file<input type="file" accept=".txt,.csv,.rng,text/plain" class="sr-only" @change="importFile($event)" /></label>
+                    </div>
+                    <p v-if="imp.note" class="mt-1" :class="imp.bad ? 'text-danger font-bold' : ''" role="status">{{ imp.note }}</p>
+                  </div>
+                </details>
                 <button v-if="edits[p.seat] !== p.range" class="text-xs text-felt underline font-bold mt-1" @click="edits[p.seat] = p.range">Back to the suggested range</button>
               </div>
             </div>
@@ -377,7 +389,7 @@ import { splitHands } from "../../guided/handFormats";
 import type { ReviewStep } from "../../guided/api";
 import { useStore } from "../../store";
 import { RANGES, RANK_CHARS, SUIT_CHARS, SUIT_COLOR, SUIT_SYMBOL, cardStr, PROFILES, type ScenarioResult } from "../../guided/data";
-import { parseRange, rangePercent } from "../../guided/rangeTools";
+import { importRange, parseRange, rangePercent } from "../../guided/rangeTools";
 import { studyCancel, studyProgress } from "../../guided/api";
 import type { StudySpec } from "../../guided/api";
 import TreeLines from "./TreeLines.vue";
@@ -492,6 +504,19 @@ const miniGrid = (s: string) => {
   for (let r = 0; r < 13; r++) for (let c = 0; c < 13; c++) out.push(w.get(r === c ? R[r] + R[c] : c > r ? R[r] + R[c] + "s" : R[c] + R[r] + "o") ?? 0);
   return out;
 };
+// a range pasted or loaded from another program
+const imp = reactive({ seat: "", text: "", note: "", bad: false });
+function useImport(seat: string) {
+  const r = importRange(imp.text);
+  if (!r.text) { imp.bad = true; imp.note = "No hands could be read from that text."; return; }
+  edits[seat] = r.text; imp.bad = false;
+  const short = (a: string[]) => a.slice(0, 6).join(", ") + (a.length > 6 ? ` and ${a.length - 6} more` : "");
+  imp.note = `Read ${r.percent.toFixed(1)}% of hands.` + (r.unknown.length ? ` Not understood and left out: ${short(r.unknown)}.` : "") + (r.uneven.length ? ` ${r.uneven.length} hand${r.uneven.length === 1 ? "" : "s"} had different weights by suit and now use${r.uneven.length === 1 ? "s" : ""} the average (${short(r.uneven)}).` : "");
+}
+async function importFile(ev: Event) {
+  const f = (ev.target as HTMLInputElement).files?.[0]; if (!f) return;
+  imp.text = (await f.text()).slice(0, 200000); imp.note = ""; (ev.target as HTMLInputElement).value = "";
+}
 const loadPreset = (s: string, ev: Event) => { const k = (ev.target as HTMLSelectElement).value; if (k && RANGES[k]) edits[s] = RANGES[k].range; (ev.target as HTMLSelectElement).value = ""; };
 
 // board

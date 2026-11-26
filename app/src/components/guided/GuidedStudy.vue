@@ -218,6 +218,25 @@
                       <p v-if="lockStale && !relocking" class="hint mt-1">The locks changed since the last solve. Solve again to see their effect.</p>
                       <p v-if="lockError" class="text-sm font-bold text-danger mt-1">{{ lockError }}</p>
                     </div>
+                    <div v-if="lockRuns.length" class="mt-4 border-t border-rule pt-3">
+                      <h4 class="font-bold">Lock sets solved so far</h4>
+                      <p class="hint">Each row is one solve with a set of locks. The play shown is at the decision that was on screen when that solve finished. Only the newest solve can be browsed; “Use again” brings a set's locks back so it can be solved again.</p>
+                      <div class="overflow-x-auto mt-2">
+                        <table class="w-full text-xs tabular-nums">
+                          <thead><tr class="text-left text-muted"><th class="pr-2 py-1 font-bold">Locks</th><th class="pr-2 py-1 font-bold text-right">Value for {{ heroIdx === 0 ? built.oopName : built.ipName }}</th><th class="pr-2 py-1 font-bold text-right">Change</th><th class="pr-2 py-1 font-bold">Play there</th><th></th></tr></thead>
+                          <tbody>
+                            <tr class="border-t border-rule align-top"><td class="pr-2 py-1">None (the normal solve)</td><td class="pr-2 py-1 text-right">{{ fmt(lockRuns[0].baseEv) }}</td><td class="pr-2 py-1 text-right">–</td><td class="pr-2 py-1 text-muted">see each row</td><td></td></tr>
+                            <tr v-for="(r, i) in lockRuns" :key="i" class="border-t border-rule align-top" :class="i === lockRuns.length - 1 && !lockStale ? 'bg-mine-light' : ''">
+                              <td class="pr-2 py-1"><div v-for="(l, j) in r.locks" :key="j">{{ l.label }}</div></td>
+                              <td class="pr-2 py-1 text-right font-bold">{{ fmt(r.ev) }}</td>
+                              <td class="pr-2 py-1 text-right">{{ r.ev - r.baseEv >= 0 ? "+" : "−" }}{{ fmt(Math.abs(r.ev - r.baseEv)) }}</td>
+                              <td class="pr-2 py-1"><template v-if="r.acts.length"><div class="text-muted">{{ r.where }}, {{ r.who }}:</div><div v-for="(a, j) in r.acts" :key="j" class="whitespace-nowrap">{{ a.name }} {{ pct(a.f) }} <span class="text-muted">(normally {{ pct(a.base) }})</span></div></template></td>
+                              <td class="py-1 text-right"><button class="underline text-felt font-bold whitespace-nowrap" :disabled="relocking" @click="useRun(i)">Use again</button></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 </details>
 
@@ -533,7 +552,7 @@ async function previewCustom(p: Custom2): Promise<{ text: string; problem: strin
 /** Takes a spot from the spot builder and solves it. Resolves when the solve is over. */
 async function loadCustom(p: Custom2): Promise<{ ok: boolean; error: string }> {
   fromFile.value = false; chipsPerBb.value = p.chips && p.format === "hu" ? p.chips : 10; turnNote.value = null;
-  lastPayload = p; manualLocks.value = []; lockStale.value = false; savedId.value = "";
+  lastPayload = p; manualLocks.value = []; lockStale.value = false; savedId.value = ""; lockRuns.value = [];
   custom.value = { res: p.res, format: p.format }; override.value = p.overrides; board.value = [...p.board];
   autoSizes.value = !!p.autoSizes; picked.value = null;
   if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
@@ -626,9 +645,22 @@ async function relockNow() {
     if (s.error) { lockError.value = s.error === "Solve cancelled" ? "Stopped. The normal solve is still here." : s.error; summary.value = { ...s, error: null }; view.value = "base"; }
     else { summary.value = s; view.value = "locked"; compareOn.value = true; lockStale.value = false; savedId.value = ""; }
     await load();
+    if (!s.error) keepRun();
   } catch (e) { lockError.value = String((e as Error).message ?? e); }
   finally { window.clearInterval(t); relocking.value = false; }
 }
+/** one row per locked solve, so several lock sets can be read side by side */
+interface LockRun { locks: api.ManualLock[]; ev: number; baseEv: number; where: string; who: string; acts: { name: string; f: number; base: number }[] }
+const lockRuns = ref<LockRun[]>([]);
+function keepRun() {
+  const s = summary.value; const v = node.value; if (!s?.locked) return;
+  const c = compareNode.value;
+  const acts = v && v.kind === "player" ? v.actions.map((_a, i) => ({ name: shortAction(i), f: v.action_freqs[i] ?? 0, base: c && c.kind === "player" ? c.action_freqs[i] ?? 0 : 0 })) : [];
+  const key = JSON.stringify(manualLocks.value.map((l) => [l.history, l.cells, l.freqs]));
+  const run: LockRun = { locks: manualLocks.value.map((l) => ({ ...l })), ev: s.locked_ev[heroIdx.value], baseEv: s.base_ev[heroIdx.value], where: crumbs.value.length ? crumbs.value.join(" › ") : "First decision", who: v && v.kind === "player" ? (v.player === 0 ? built.value.oopName : built.value.ipName) : "", acts };
+  lockRuns.value = [...lockRuns.value.filter((r) => JSON.stringify(r.locks.map((l) => [l.history, l.cells, l.freqs])) !== key), run].slice(-8);
+}
+const useRun = (i: number) => { manualLocks.value = lockRuns.value[i].locks.map((l) => ({ ...l })); lockStale.value = true; };
 /** the other player's hands and replies after one of this player's actions */
 async function loadReply(action: number) { const v = await nodeAt(view.value, [...history.value, action]); return { actions: v.actions, combos: v.kind === "player" ? v.combos : [] }; }
 
@@ -693,7 +725,7 @@ async function openSaved(e: api.LibraryEntry): Promise<{ ok: boolean; error: str
     if (p.profile) applyProfile(p.profile); else exploitOn.value = false;
     await nextTick();
     oopRangeEdit.value = p.res.oopRange; ipRangeEdit.value = p.res.ipRange;
-    manualLocks.value = (e.meta.locks as api.ManualLock[] | undefined) ?? []; lockStale.value = false; savedId.value = e.id;
+    manualLocks.value = (e.meta.locks as api.ManualLock[] | undefined) ?? []; lockStale.value = false; savedId.value = e.id; lockRuns.value = [];
     summary.value = { ...e.summary, swap_mode: false }; view.value = e.summary.locked ? "locked" : "base"; compareOn.value = true;
     history.value = []; crumbs.value = []; probs.value = []; takeaway.value = ""; saved.value = false; error.value = "";
     await load();
