@@ -776,6 +776,8 @@ fn main() {
                 // chips per big blind in the flop solves; 40 makes pots with a 0.125 ante whole numbers
                 let chips = num("--chips")?.unwrap_or(10.0).round().clamp(10.0, 200.0);
                 let pin_totals = args.iter().any(|a| a == "--pin-totals");
+                // --always-solve "line; line": solve these lines' flops every round even when they are rarely taken
+                let always: Vec<String> = flag("--always-solve").map(|t| t.split(';').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default();
                 let pins: std::rc::Rc<std::cell::RefCell<std::collections::HashMap<String, [f64; 2]>>> = Default::default();
                 // --rounds fixed|average|rising: how the rounds are combined. fixed (default) moves --step (0.35) of the way to
                 // each fresh solve; average keeps the plain average of every round's solve; rising weights later rounds more.
@@ -936,7 +938,7 @@ fn main() {
                         }
                     }
                     say(format!("== after pass {}: {} =={}", i.pass, i.root_actions.iter().zip(&i.root_freqs).map(|(a, f)| format!("{a} {:.1}%", f * 100.0)).collect::<Vec<_>>().join(", "), if i.settled { " settled" } else { "" }));
-                    for l in &i.lines { say(format!("   {} ({:.1}% of hands): button's share was {:.1}%, flop solves gave {:.1}%; the two sides' values came to {:.1}% of the pot", l.path, l.freq * 100.0, l.share_before * 100.0, l.share_solved * 100.0, l.values_total * 100.0)); }
+                    for l in &i.lines { say(format!("   {} ({:.1}% of hands): button's share was {:.1}%, flop solves gave {:.1}%; the two sides' values came to {:.1}% of the pot{}", l.path, l.freq * 100.0, l.share_before * 100.0, l.share_solved * 100.0, l.values_total * 100.0, if pin_totals { format!(" before pinning (button {:+.2}, big blind {:+.2} points against the flop solves' own totals)", l.side_gap[0] * 100.0, l.side_gap[1] * 100.0) } else { String::new() })); }
                 };
                 // --resume: carry on from the round a stopped run last finished (kept beside the --save file)
                 let want_resume = args.iter().any(|a| a == "--resume");
@@ -952,6 +954,7 @@ fn main() {
                 if floor_share > 0.0 { settings["floor_share"] = json!(floor_share); }
                 if chips != 10.0 { settings["chips"] = json!(chips); }
                 if pin_totals { settings["pin_totals"] = json!(true); }
+                if !always.is_empty() { settings["always_solve"] = json!(always); }
                 let mut start: Option<pushfold::preflop::Checkpoint> = None;
                 if want_resume {
                     if let Some(text) = cp_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
@@ -965,7 +968,7 @@ fn main() {
                 let mut keep = |c: &pushfold::preflop::Checkpoint| {
                     if let Some(p) = &cp_path { let tmp = format!("{p}.part"); if std::fs::write(&tmp, json!({"settings": settings, "checkpoint": c}).to_string()).is_ok() { let _ = std::fs::rename(&tmp, p); } }
                 };
-                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: num("--min-rounds")?.map(|x| (x as usize).clamp(4, 40)).unwrap_or(8), start: start_sigmas, floor, floor_share, pin: if pin_totals { Some(pins.clone()) } else { None } };
+                let opts = pushfold::preflop::AccurateOpts { step: rule, settled_points: settle, min_rounds: num("--min-rounds")?.map(|x| (x as usize).clamp(4, 40)).unwrap_or(8), start: start_sigmas, floor, floor_share, pin: if pin_totals { Some(pins.clone()) } else { None }, always: always.clone() };
                 pushfold::preflop::solve_accurate_opts(&spec, passes, min_freq, &mut eval, &mut report, start, &mut keep, &opts)?
             } else { pushfold::preflop::solve(&spec)? };
             let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;

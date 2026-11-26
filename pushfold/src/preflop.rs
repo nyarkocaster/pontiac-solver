@@ -305,7 +305,9 @@ pub struct PassInfo {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PassLine { pub path: String, pub freq: f64, pub share_before: f64, pub share_solved: f64, pub flops: usize, pub worst_accuracy_pct: f64,
     /// the two players' flop values as a share of the pot, added together, before they are scaled to add up to it (1.0 = they already do)
-    #[serde(default)] pub values_total: f64 }
+    #[serde(default)] pub values_total: f64,
+    /// with pinned totals: each player's total as valued minus the flop solves' own, as a fraction of the pot (button first), before pinning
+    #[serde(default)] pub side_gap: [f64; 2] }
 
 /// How far each round moves from the strategy so far toward the fresh solve.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -342,9 +344,11 @@ pub struct AccurateOpts {
     /// per line (by path), each player's whole-range value in big blinds from the flop solves'
     /// own weights (button first). When present, each player's values in that line are scaled to
     /// that total, so the valuing step cannot move value between the players.
+    /// lines (by path) whose flops are solved every round however rarely they are taken
+    pub always: Vec<String>,
     pub pin: Option<std::rc::Rc<std::cell::RefCell<std::collections::HashMap<String, [f64; 2]>>>>,
 }
-impl Default for AccurateOpts { fn default() -> Self { AccurateOpts { step: StepRule::Fixed(0.35), settled_points: None, min_rounds: 6, start: None, floor: 0.0, floor_share: 0.0, pin: None } } }
+impl Default for AccurateOpts { fn default() -> Self { AccurateOpts { step: StepRule::Fixed(0.35), settled_points: None, min_rounds: 6, start: None, floor: 0.0, floor_share: 0.0, pin: None, always: vec![] } } }
 
 /// Have the button's totals stopped moving? True when, over the last three rounds (four readings),
 /// no total's highest and lowest reading differ by `points` or more.
@@ -419,9 +423,10 @@ pub fn solve_accurate_opts(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
     for pass in first..=passes.max(1) {
         let step = opts.step.step(pass + offset);
         let mut lines = vec![];
-        for l in out.lines.iter().filter(|l| l.freq >= min_freq) {
+        for l in out.lines.iter().filter(|l| l.freq >= min_freq || opts.always.iter().any(|a| a == &l.path)) {
             let (mut vals, flops, worst) = eval(l, pass)?;
             let values_total;
+            let mut side_gap = [0.0f64; 2];
             // A sample of flops pairs each hand a little more often than the full deck does, so the two
             // players' solved values add up to slightly more than the pot. Scale both back so they add up.
             {
@@ -437,6 +442,7 @@ pub fn solve_accurate_opts(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
                 let mut total = share[0] + share[1];
                 values_total = total;
                 if let Some(t) = opts.pin.as_ref().and_then(|m| m.borrow().get(&l.path).copied()) {
+                    for p in 0..2 { if t[p].is_finite() { side_gap[p] = share[p] - t[p] / l.pot_bb; } }
                     for p in 0..2 { if share[p] > 0.0 && t[p].is_finite() { let k = t[p] / l.pot_bb / share[p]; for v in vals[p].iter_mut() { *v *= k; } } }
                     total = (t[0] + t[1]) / l.pot_bb;
                 }
@@ -459,7 +465,7 @@ pub fn solve_accurate_opts(spec: &PreSpec, passes: usize, min_freq: f64, eval: &
             // the button's share these flop solves gave, over the ranges that were sent
             let (mut num, mut den) = (0.0, 0.0);
             for i in 0..N { let w = combos(i) * l.reach[0][i]; if vals[0][i].is_finite() { num += w * vals[0][i]; den += w; } }
-            lines.push(PassLine { path: l.path.clone(), freq: l.freq, share_before: l.button_share, share_solved: if den > 0.0 { ((num / den / l.pot_bb) * 1e4).round() / 1e4 } else { 0.0 }, flops, worst_accuracy_pct: worst, values_total: (values_total * 1e4).round() / 1e4 });
+            lines.push(PassLine { path: l.path.clone(), freq: l.freq, share_before: l.button_share, share_solved: if den > 0.0 { ((num / den / l.pot_bb) * 1e4).round() / 1e4 } else { 0.0 }, flops, worst_accuracy_pct: worst, values_total: (values_total * 1e4).round() / 1e4 , side_gap});
             solved.insert(l.leaf, entry);
         }
         let prev = std::mem::take(&mut out.sigmas);
