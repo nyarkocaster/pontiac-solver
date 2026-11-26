@@ -53,12 +53,16 @@ pub const SAMPLE_96: [&str; 96] = ["Qc9d3c", "Kh4d2c", "Kc9d3c", "8h7d3c", "Jh4d
 /// 64 flops with the same full rank coverage as the 96, for when 96 are too slow.
 pub const SAMPLE_64: [&str; 64] = ["TdTc4c", "Tc8d6c", "Th9d3c", "QcTd8c", "AcJd9c", "8d7d4c", "Kh4d3c", "Kh5d5c", "Qh8d3c", "AcQcJc", "Qd7d2c", "9c6d5c", "AcKdTc", "Tc5d4c", "KhJd4c", "KhJdTc", "AhQdTc", "8h7d4c", "Qh8d4c", "Kh7d5c", "Ac8c2c", "AhAd9c", "Qc9d2c", "QhTd9c", "KdQc5c", "8c5d3c", "Jh8d6c", "JdJc5c", "7h6d3c", "Ad8d3c", "8d8c2c", "9d7c2c", "Th7d2c", "Ad6d4c", "7d6d4c", "9h6d6c", "Qd9d4c", "KdQd3c", "Jd8c4c", "Ac5d4c", "AdJd2c", "Qh4d2c", "8h2d2c", "Kd6c3c", "KhKdTc", "Ac7c5c", "KhQdQc", "AhJd7c", "Kh9d8c", "4d4c3c", "Kd7d3c", "Th5d2c", "KcJc8c", "7h7d5c", "6h5d2c", "Qh8d6c", "Qc3d3c", "Th8d2c", "Ah9d9c", "Ah9d5c", "Jc8d3c", "JhJd6c", "KdTd2c", "8h3d2c"];
 
+/// 48 flops chosen the same way as the 64 and 96.
+pub const SAMPLE_48: [&str; 48] = ["Ac9d9c", "AcKc5c", "8h7d4c", "Qh6d5c", "AcKdQc", "Qc8d2c", "Th7d7c", "8d4c2c", "7h5d5c", "7d6c2c", "AdJc9c", "Jd7c3c", "AcTc2c", "Kh8d2c", "JhTd5c", "AdTc4c", "Qh3d2c", "AdAc6c", "QhQd2c", "8d8c2c", "ThTd5c", "KhKd6c", "QhJd4c", "Jc8d2c", "6d4d3c", "Qc9c3c", "8h5d4c", "Kd8d4c", "Th8d6c", "Th8d3c", "KdTd9c", "Qc9d7c", "Ac7d3c", "9h5d2c", "9c4d4c", "JdJc6c", "7c2d2c", "9d6c4c", "Th9d5c", "KdQd7c", "Kd4d3c", "Td5d3c", "6h6d3c", "9c4d2c", "Ad9d8c", "AhKdJc", "Jc3d3c", "AdQcTc"];
+
 /// The built-in sample of `n` flops: the chosen 24, 32, 64 or 96 when asked for exactly that many,
 /// otherwise the first `n` of the original 16.
 pub fn sample(n: usize) -> Vec<&'static str> {
     match n {
         24 => SAMPLE_24.to_vec(),
         32 => SAMPLE_32.to_vec(),
+        48 => SAMPLE_48.to_vec(),
         64 => SAMPLE_64.to_vec(),
         96 => SAMPLE_96.to_vec(),
         _ => SAMPLE_16.iter().take(n.min(SAMPLE_16.len())).copied().collect(),
