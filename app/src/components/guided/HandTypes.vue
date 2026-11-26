@@ -3,8 +3,8 @@
     <p v-if="!made.length" class="text-sm text-muted">No hands reach this point.</p>
     <template v-else>
       <div class="rowhead"><span>Type of hand</span><span class="text-right">Share</span><span>What it does</span></div>
-      <div v-for="r in made" :key="r.name" class="row" :class="rowClass(r.name)" :title="tip(r)" role="button" tabindex="0" :aria-pressed="picked === r.name" @click="pick(r.name)" @keydown.enter="pick(r.name)">
-        <span class="font-bold truncate">{{ r.name }}</span>
+      <div v-for="r in made" :key="r.name" class="row" :class="rowClass(r.name)" :title="tip(r)" role="button" tabindex="0" :aria-pressed="state(r.name) !== ''" @click="pick(r.name, $event)" @keydown.enter="pick(r.name, $event)">
+        <span class="font-bold truncate" :class="state(r.name) === 'hide' ? 'line-through text-muted' : ''">{{ r.name }}</span>
         <span class="text-right tabular-nums">{{ share(r.share) }}</span>
         <span>
           <span class="flex h-3.5 rounded overflow-hidden bg-paper" role="img" :aria-label="tip(r)">
@@ -15,8 +15,8 @@
       </div>
       <template v-if="draws.length">
         <div class="rowhead mt-3"><span>Draws</span><span class="text-right">Share</span><span>Counted in the rows above as well</span></div>
-        <div v-for="r in draws" :key="r.name" class="row" :class="rowClass(r.name)" :title="tip(r)" role="button" tabindex="0" :aria-pressed="picked === r.name" @click="pick(r.name)" @keydown.enter="pick(r.name)">
-          <span class="font-bold truncate">{{ r.name }}</span>
+        <div v-for="r in draws" :key="r.name" class="row" :class="rowClass(r.name)" :title="tip(r)" role="button" tabindex="0" :aria-pressed="state(r.name) !== ''" @click="pick(r.name, $event)" @keydown.enter="pick(r.name, $event)">
+          <span class="font-bold truncate" :class="state(r.name) === 'hide' ? 'line-through text-muted' : ''">{{ r.name }}</span>
           <span class="text-right tabular-nums">{{ share(r.share) }}</span>
           <span>
             <span class="flex h-3.5 rounded overflow-hidden bg-paper" role="img" :aria-label="tip(r)">
@@ -35,11 +35,20 @@ import { computed } from "vue";
 import { classify, MADE, DRAWS } from "../../guided/handClass";
 
 interface Combo { hand: string; weight: number; freqs: number[]; equity: number }
-const props = defineProps<{ combos: Combo[]; board: string[]; actions: string[]; colors: string[]; /** the type being highlighted in the chart, if any */ picked?: string | null }>();
-const emit = defineEmits<{ (e: "pick", name: string | null): void }>();
-/** clicking a row highlights that type in the chart; clicking it again shows everything */
-const pick = (name: string) => emit("pick", props.picked === name ? null : name);
-const rowClass = (name: string) => (props.picked === undefined ? "" : "cursor-pointer hover:bg-paper " + (props.picked === name ? "bg-paper ring-1 ring-felt rounded" : ""));
+const props = defineProps<{ combos: Combo[]; board: string[]; actions: string[]; colors: string[];
+  /** types being shown or hidden in the chart: name -> "show" | "hide". Leave out to make the rows plain text. */
+  picked?: Record<string, "show" | "hide"> }>();
+const emit = defineEmits<{ (e: "pick", v: Record<string, "show" | "hide">): void }>();
+const state = (name: string) => props.picked?.[name] ?? "";
+/** click: show only this type (click more to add them, click again to drop one). Ctrl-click or Shift-click: hide this type. */
+function pick(name: string, ev: Event) {
+  if (!props.picked) return;
+  const hide = (ev as MouseEvent).ctrlKey || (ev as MouseEvent).metaKey || (ev as MouseEvent).shiftKey;
+  const next = { ...props.picked }; const mode = hide ? "hide" : "show";
+  if (next[name] === mode) delete next[name]; else next[name] = mode;
+  emit("pick", next);
+}
+const rowClass = (name: string) => (props.picked === undefined ? "" : "cursor-pointer hover:bg-paper " + (state(name) === "show" ? "bg-paper ring-1 ring-felt rounded" : state(name) === "hide" ? "opacity-60" : ""));
 interface Row { name: string; share: number; freqs: number[]; equity: number }
 
 const groups = computed(() => {

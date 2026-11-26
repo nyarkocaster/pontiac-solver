@@ -355,7 +355,7 @@
 
             <section v-if="node.kind === 'player'" class="panel">
               <h3 class="font-bold">{{ actorName }}'s play by type of hand</h3>
-              <p class="text-xs text-muted mt-1">Click a type to show only those hands in the chart and in the list of every hand. <button v-if="typePick" class="underline text-felt font-bold" @click="typePick = null">Show all hands</button></p>
+              <p class="text-xs text-muted mt-1">Click types to show only those hands in the chart and in the list of every hand. Ctrl-click (or Shift-click) a type to hide it. <button v-if="typeOn" class="underline text-felt font-bold" @click="typePick = {}">Show all hands</button></p>
               <HandTypes class="mt-2" :combos="node.combos" :board="node.board" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" :picked="typePick" @pick="typePick = $event" />
             </section>
 
@@ -392,7 +392,7 @@
         <section v-if="node.kind === 'player' && node.combos.length" class="panel mt-4">
           <h3 class="font-bold">Every hand {{ actorName }} can hold</h3>
           <HandsTable class="mt-2" :combos="node.combos" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" :pot="node.pot" :selected="selectedCell" :fmt-ev="fmt" :only="typeHands" @select="selectCell" />
-          <p v-if="typePick" class="hint mt-1">Showing {{ typePick.toLowerCase() }} only. <button class="underline text-felt font-bold" @click="typePick = null">Show all hands</button></p>
+          <p v-if="typeOn" class="hint mt-1">{{ typeText }} <button class="underline text-felt font-bold" @click="typePick = {}">Show all hands</button></p>
         </section>
       </div>
 
@@ -999,18 +999,31 @@ function setOther(open: boolean) { if (open === otherOn.value) return; otherOn.v
 const otherGrid = computed(() => (node.value?.kind === "player" && node.value.other_grid?.length === 169 ? node.value.other_grid.map((c) => ({ ...c, freqs: c.weight > 0 ? [1] : [] })) : null));
 const otherCombos = computed(() => (node.value?.other_grid ?? []).reduce((s, c) => s + (c.reach ?? 0), 0));
 // a type of hand picked in "play by type of hand": the chart fades every other square and the hands table lists only that type
-const typePick = ref<string | null>(null);
+const typePick = ref<Record<string, "show" | "hide">>({});
+const typeOn = computed(() => Object.keys(typePick.value).length > 0);
+const typeText = computed(() => {
+  const of = (m: string) => Object.entries(typePick.value).filter(([, v]) => v === m).map(([k]) => k.toLowerCase());
+  const [show, hide] = [of("show"), of("hide")];
+  return [show.length ? `Showing ${show.join(", ")} only.` : "", hide.length ? `Hiding ${hide.join(", ")}.` : ""].filter(Boolean).join(" ");
+});
 const typeHands = computed<Set<string> | null>(() => {
-  const n = node.value; const t = typePick.value;
-  if (!n || !t || n.kind !== "player") return null;
+  const n = node.value;
+  if (!n || !typeOn.value || n.kind !== "player") return null;
+  const show = new Set(Object.entries(typePick.value).filter(([, v]) => v === "show").map(([k]) => k));
+  const hide = new Set(Object.entries(typePick.value).filter(([, v]) => v === "hide").map(([k]) => k));
   const out = new Set<string>();
-  for (const c of n.combos) { if (c.weight <= 0 || c.hand.length !== 4) continue; const k = classify(c.hand, n.board); if (k.made === t || (k.draws as string[]).includes(t)) out.add(c.hand); }
+  for (const c of n.combos) {
+    if (c.weight <= 0 || c.hand.length !== 4) continue;
+    const k = classify(c.hand, n.board); const types = [k.made as string, ...(k.draws as string[])];
+    if (types.some((t) => hide.has(t))) continue;
+    if (!show.size || types.some((t) => show.has(t))) out.add(c.hand);
+  }
   return out;
 });
 /** per chart square: does any hand of the picked type sit in it? null when nothing is picked or the type is not held here */
 const typeLit = computed<boolean[] | null>(() => {
   const n = node.value; const hands = typeHands.value;
-  if (!n || !hands || !hands.size) return null;
+  if (!n || !hands) return null;
   const lit = new Array<boolean>(169).fill(false);
   for (const c of n.combos) if (hands.has(c.hand)) lit[c.cell] = true;
   return lit;

@@ -1,4 +1,9 @@
-# Pontiac Solver 0.13.14
+# Pontiac Solver 0.13.15
+
+**New in 0.13.15:**
+
+- Types of hand: click several types to show them together, and Ctrl-click (or Shift-click) a type to hide it. "Flush draw" shown with "Top pair" hidden leaves the flush draws that are not also top pair.
+- Flop report: "Show only" buttons for paired, connected, one suit, two-tone, rainbow and four heights of flop. Picks in the same family widen (two-tone or rainbow), picks across families narrow (ace high and two-tone). The average of the shown flops sits above the average of all.
 
 **New in 0.13.14, highlight a type of hand:** on the Result page, click a row in "play by type of hand" (top pair, flush draw, no pair and so on) and the chart fades every square that holds none of that type, while "Every hand" lists only those hands. Click the row again, or "Show all hands", to go back. The choice stays as you move through the hand, so you can follow one type of hand across streets. Two-player results only for now.
 

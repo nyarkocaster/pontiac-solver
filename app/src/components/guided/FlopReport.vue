@@ -21,7 +21,13 @@
     <p v-if="error" class="mt-2 text-sm font-bold text-danger">{{ error }}</p>
 
     <template v-if="rows.length">
-      <div class="overflow-x-auto mt-3">
+      <div class="flex flex-wrap items-center gap-1.5 mt-3 text-sm" role="group" aria-label="Show only these kinds of flop">
+        <span class="text-xs text-muted mr-1">Show only</span>
+        <button v-for="t in TEXTURES" :key="t.id" class="chip" :class="want.has(t.id) ? 'chip-on' : ''" :aria-pressed="want.has(t.id)" @click="toggle(t.id)">{{ t.label }} <span class="text-xs opacity-70">{{ rows.filter(t.test).length }}</span></button>
+        <button v-if="want.size" class="text-xs underline text-muted ml-1" @click="want = new Set()">All flops</button>
+      </div>
+      <p v-if="want.size && !shown.length" class="text-sm text-muted mt-2">None of the {{ rows.length }} flops is of that kind.</p>
+      <div class="overflow-x-auto mt-2">
         <table class="w-full text-sm tabular-nums">
           <thead>
             <tr class="text-left text-xs text-muted">
@@ -43,7 +49,12 @@
               <td class="text-right text-xs">{{ r.ipSize }}</td>
             </tr>
             <tr class="border-t-2 border-rule font-bold">
-              <td class="py-1" title="Weighted by how often each kind of flop is dealt">Average of {{ rows.length }}</td>
+              <td class="py-1" title="Weighted by how often each kind of flop is dealt">Average of {{ shown.length }}{{ want.size ? " shown" : "" }}</td>
+              <td class="text-right pr-2">{{ pc(avg((r) => r.heroEq, shown)) }}</td><td class="text-right pr-2">{{ pc(avg((r) => r.heroEv, shown)) }}</td>
+              <td class="text-right pr-2">{{ pc(avg((r) => r.oopBet, shown)) }}</td><td class="text-right pr-2">{{ pc(avg((r) => r.ipBet, shown)) }}</td><td></td>
+            </tr>
+            <tr v-if="want.size" class="text-muted">
+              <td class="py-1">Average of all {{ rows.length }}</td>
               <td class="text-right pr-2">{{ pc(avg((r) => r.heroEq)) }}</td><td class="text-right pr-2">{{ pc(avg((r) => r.heroEv)) }}</td>
               <td class="text-right pr-2">{{ pc(avg((r) => r.oopBet)) }}</td><td class="text-right pr-2">{{ pc(avg((r) => r.ipBet)) }}</td><td></td>
             </tr>
@@ -142,9 +153,30 @@ type ColId = (typeof COLS)[number]["id"];
 const label = (id: ColId) => ({ flop: "Flop", heroEq: `${props.hero} wins`, heroEv: `${props.hero}'s share of the pot`, oopBet: `${props.oop} bets first`, ipBet: `${props.ip} bets when checked to`, ipSize: "Favourite size" })[id];
 const sortBy = ref<ColId>("flop"); const sortDown = ref(true);
 const sort = (id: ColId) => { if (sortBy.value === id) sortDown.value = !sortDown.value; else { sortBy.value = id; sortDown.value = true; } };
+// kinds of flop to show; within one line (suits, pairing, height) picks widen, across lines they narrow
+const TEXTURES: { id: string; group: string; label: string; test: (r: Row) => boolean }[] = [
+  { id: "paired", group: "shape", label: "Paired", test: (r) => r.paired },
+  { id: "connected", group: "shape", label: "Connected", test: (r) => r.joined },
+  { id: "dry", group: "shape", label: "Unpaired, not connected", test: (r) => !r.paired && !r.joined },
+  { id: "mono", group: "suits", label: "One suit", test: (r) => r.suits === "One suit" },
+  { id: "two", group: "suits", label: "Two-tone", test: (r) => r.suits === "Two of a suit" },
+  { id: "rainbow", group: "suits", label: "Rainbow", test: (r) => r.suits === "Three suits" },
+  { id: "ace", group: "high", label: "Ace high", test: (r) => r.high === "Ace high" },
+  { id: "kq", group: "high", label: "King or queen high", test: (r) => r.high === "King or queen high" },
+  { id: "jt", group: "high", label: "Jack or ten high", test: (r) => r.high === "Jack or ten high" },
+  { id: "low", group: "high", label: "Nine high or lower", test: (r) => r.high === "Nine high or lower" },
+];
+const want = ref(new Set<string>());
+function toggle(id: string) { const n = new Set(want.value); if (n.has(id)) n.delete(id); else n.add(id); want.value = n; }
+const shown = computed(() => {
+  if (!want.value.size) return rows.value;
+  const groups = new Map<string, ((r: Row) => boolean)[]>();
+  for (const t of TEXTURES) if (want.value.has(t.id)) groups.set(t.group, [...(groups.get(t.group) ?? []), t.test]);
+  return rows.value.filter((r) => [...groups.values()].every((tests) => tests.some((f) => f(r))));
+});
 const sorted = computed(() => {
-  const id = sortBy.value; if (id === "flop" || id === "ipSize") return sortDown.value ? rows.value : [...rows.value].reverse();
-  return [...rows.value].sort((a, b) => (sortDown.value ? b[id] - a[id] : a[id] - b[id]));
+  const id = sortBy.value; if (id === "flop" || id === "ipSize") return sortDown.value ? shown.value : [...shown.value].reverse();
+  return [...shown.value].sort((a, b) => (sortDown.value ? b[id] - a[id] : a[id] - b[id]));
 });
 const pc = (v: number) => Math.round(v * 100) + "%";
 const avg = (f: (r: Row) => number, list: Row[] = rows.value) => { const w = list.reduce((a, r) => a + r.ways, 0); return w ? list.reduce((a, r) => a + f(r) * r.ways, 0) / w : 0; };
@@ -170,6 +202,8 @@ const notes = computed(() => {
 </script>
 
 <style scoped>
+.chip { @apply px-2 py-0.5 rounded-full border border-rule bg-surface hover:border-felt; }
+.chip-on { @apply border-felt bg-felt text-white; }
 .hint { @apply text-xs text-muted; }
 .btn-quiet { @apply px-3 py-1.5 rounded-lg border border-rule bg-surface text-sm font-bold hover:border-felt disabled:opacity-50; }
 .seg { @apply inline-flex rounded-lg border border-rule overflow-hidden text-xs font-bold; }
