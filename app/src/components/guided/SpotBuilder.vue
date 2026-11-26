@@ -43,6 +43,29 @@
             </table>
           </div>
           <button v-if="session.hands.length > sessionShown" class="btn-quiet mt-2" @click="sessionShown += 100">Show more ({{ session.hands.length - sessionShown }} left)</button>
+          <details :key="hhSource.length" class="mt-3 rounded-lg border border-rule px-3 py-2" @toggle="($event.target as HTMLDetailsElement).open && loadStats()">
+            <summary class="cursor-pointer text-sm font-bold">How each player played in this session (statistics)</summary>
+            <div v-if="stats" class="mt-2">
+              <p class="hint">Counted from the actions in all {{ stats.hands }} hands that could be read{{ stats.unread ? ` (${stats.unread} could not)` : "" }}, including hands that ended before the flop. Each figure shows how often it happened out of the times it could have. Figures from fewer than about 20 chances say little. Winnings are not counted.</p>
+              <div class="overflow-x-auto mt-2 max-h-96">
+                <table class="w-full text-xs tabular-nums whitespace-nowrap">
+                  <thead><tr class="text-left text-muted align-bottom">
+                    <th class="pr-3 py-1 font-bold">Player</th><th class="pr-3 py-1 font-bold text-right">Hands</th>
+                    <th v-for="c in STAT_COLS" :key="c.key" class="pr-3 py-1 font-bold text-right" :title="c.tip">{{ c.name }}<div class="font-normal">{{ c.short }}</div></th>
+                    <th class="py-1 font-bold text-right" title="Bets and raises after the flop for each call after the flop. Above 2 is aggressive, below 1 is passive.">Bets and raises<div class="font-normal">per call</div></th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="pl in stats.players.slice(0, statsShown)" :key="pl.name" class="border-t border-rule" :class="pl.hero ? 'bg-felt/10 font-bold' : ''">
+                      <td class="pr-3 py-1 max-w-[160px] truncate">{{ pl.name }}{{ pl.hero ? " (you)" : "" }}</td><td class="pr-3 py-1 text-right">{{ pl.hands }}</td>
+                      <td v-for="c in STAT_COLS" :key="c.key" class="pr-3 py-1 text-right" :title="`${pl[c.key][0]} of ${pl[c.key][1]}`">{{ pl[c.key][1] ? Math.round((pl[c.key][0] / pl[c.key][1]) * 100) + "%" : "–" }} <span class="text-muted font-normal">{{ pl[c.key][0] }}/{{ pl[c.key][1] }}</span></td>
+                      <td class="py-1 text-right" :title="`${pl.aggr} bets and raises, ${pl.calls} calls`">{{ pl.calls ? (pl.aggr / pl.calls).toFixed(1) : pl.aggr ? "no calls" : "–" }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <button v-if="stats.players.length > statsShown" class="btn-quiet mt-2" @click="statsShown += 50">Show more players ({{ stats.players.length - statsShown }} left)</button>
+            </div>
+          </details>
         </div>
         <ul v-if="hhNotes.length" class="mt-2 space-y-1 text-sm">
           <li v-for="(n, i) in hhNotes" :key="i" class="flex gap-2"><span class="text-felt font-bold">•</span><span>{{ n }}</span></li>
@@ -384,6 +407,7 @@
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import RangeSlider from "./RangeSlider.vue";
 import FlopReport, { type FlopRow } from "./FlopReport.vue";
+import { sessionStats, type PlayerStats, type SessionStats } from "../../guided/handStats";
 import { parseHandHistory, readSession, type LaterStep, type Session, type SessionHand } from "../../guided/handHistory";
 import { splitHands } from "../../guided/handFormats";
 import type { ReviewStep } from "../../guided/api";
@@ -684,6 +708,19 @@ function reviewLine(oopSeat: string, ipSeat: string, k: number): ReviewStep[] | 
 const hhFile = ref(""); const hhFileText = ref("");
 const hhSource = computed(() => hhFileText.value || hhText.value);
 const session = ref<Session | null>(null); const sessionShown = ref(100); const sessionAt = ref(0);
+const stats = ref<SessionStats | null>(null); const statsShown = ref(30);
+type CountKey = "vpip" | "pfr" | "threeBet" | "foldTo3" | "sawFlop" | "cbet" | "foldToCbet" | "showdown";
+const STAT_COLS: { key: CountKey & keyof PlayerStats; name: string; short: string; tip: string }[] = [
+  { key: "vpip", name: "Played the hand", short: "VPIP", tip: "Called or raised before the flop, out of all hands dealt." },
+  { key: "pfr", name: "Raised before the flop", short: "PFR", tip: "Raised before the flop, out of all hands dealt." },
+  { key: "threeBet", name: "Re-raised a raise", short: "3-bet", tip: "Re-raised, out of the times they faced exactly one raise before the flop." },
+  { key: "foldTo3", name: "Folded to a re-raise", short: "fold to 3-bet", tip: "Folded, out of the times they opened with a raise and were re-raised." },
+  { key: "sawFlop", name: "Saw the flop", short: "", tip: "Still in the hand when the flop came, out of all hands dealt." },
+  { key: "cbet", name: "Bet the flop after raising", short: "c-bet", tip: "Bet the flop, out of the times they made the last raise before the flop and nobody had bet the flop before them." },
+  { key: "foldToCbet", name: "Folded to that bet", short: "fold to c-bet", tip: "Folded, out of the times they first faced a flop bet from the last raiser before the flop." },
+  { key: "showdown", name: "Went to showdown", short: "WTSD", tip: "Reached the end of the river with another player still in, out of the hands where they saw the flop." },
+];
+function loadStats() { if (!stats.value && hhSource.value.trim()) { try { stats.value = sessionStats(hhSource.value); } catch { stats.value = null; } } }
 async function openFile(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0]; (e.target as HTMLInputElement).value = "";
   if (!f) return;
@@ -691,7 +728,7 @@ async function openFile(e: Event) {
   await loadPasted();
 }
 async function loadPasted() {
-  hhError.value = ""; hhNotes.value = []; hhDone.value = false; session.value = null; sessionAt.value = 0; sessionShown.value = 100;
+  hhError.value = ""; hhNotes.value = []; hhDone.value = false; session.value = null; stats.value = null; statsShown.value = 30; sessionAt.value = 0; sessionShown.value = 100;
   let many = false;
   try { many = splitHands(hhSource.value).length > 1; } catch { /* one hand: let the reader explain */ }
   if (!many) return loadHistory(hhSource.value);

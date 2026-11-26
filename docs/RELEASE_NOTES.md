@@ -1,4 +1,6 @@
-# Pontiac Solver 0.13.16
+# Pontiac Solver 0.13.17
+
+**New in 0.13.17, session statistics:** load a whole session in Study a spot ("Paste a hand history") and open "How each player played in this session". For you and every other player it counts, out of the chances each had: played the hand (VPIP), raised before the flop (PFR), re-raised a raise (3-bet), folded to a re-raise, saw the flop, bet the flop after raising (c-bet), folded to that bet, went to showdown, and bets and raises per call after the flop. It counts every hand in the file, including those that ended before the flop, and reads every site layout the hand loader reads. Winnings are not counted.
 
 **New in 0.13.16:**
 
