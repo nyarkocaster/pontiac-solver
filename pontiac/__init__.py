@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ._binary import binary
 
-__version__ = "0.13.13"
+__version__ = "0.13.14"
 __all__ = ["solve", "query", "pack", "info", "estimate", "pushfold", "pushfold3", "preflop", "icm", "version", "SolverError", "binary",
            "example", "examples", "guide", "selftest"]
 

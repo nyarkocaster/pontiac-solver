@@ -19,7 +19,7 @@
         v-for="(cell, i) in cells"
         :key="i"
         class="relative aspect-square rounded-[3px] overflow-hidden cursor-pointer border"
-        :class="mine === i ? 'border-mine ring-[3px] ring-mine z-20' : selected === i ? 'border-ink ring-2 ring-ink z-10' : 'border-transparent'"
+        :class="[mine === i ? 'border-mine ring-[3px] ring-mine z-20' : selected === i ? 'border-ink ring-2 ring-ink z-10' : 'border-transparent', lit && !lit[i] ? 'opacity-20' : '']"
         :aria-label="tooltip(i)"
         @mouseenter="hover = i"
         @click="$emit('select', i)"
@@ -53,7 +53,7 @@ import { computed, ref } from "vue";
 import type { Cell } from "../../guided/api";
 type GridCell = Cell;
 
-const props = defineProps<{ grid: GridCell[]; colors: string[]; selected: number | null; mine?: number | null; marks?: Set<number>; mode?: "strategy" | "ev" | "equity"; fmtEv?: (v: number) => string; /** action names, for the card shown on hover */ actions?: string[]; /** false when the squares carry no value or chance to win */ values?: boolean }>();
+const props = defineProps<{ grid: GridCell[]; colors: string[]; selected: number | null; mine?: number | null; marks?: Set<number>; mode?: "strategy" | "ev" | "equity"; fmtEv?: (v: number) => string; /** action names, for the card shown on hover */ actions?: string[]; /** false when the squares carry no value or chance to win */ values?: boolean; /** when given, squares marked false are faded: a type of hand is being highlighted */ lit?: boolean[] }>();
 const hover = ref<number | null>(null);
 const valued = computed(() => !!props.mode && props.mode !== "strategy");
 // EV is shaded against the best hand in the range, chance to win as it is

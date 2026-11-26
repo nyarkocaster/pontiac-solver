@@ -1,4 +1,6 @@
-# Pontiac Solver 0.13.13
+# Pontiac Solver 0.13.14
+
+**New in 0.13.14, highlight a type of hand:** on the Result page, click a row in "play by type of hand" (top pair, flush draw, no pair and so on) and the chart fades every square that holds none of that type, while "Every hand" lists only those hands. Click the row again, or "Show all hands", to go back. The choice stays as you move through the hand, so you can follow one type of hand across streets. Two-player results only for now.
 
 **Fixed in 0.13.13:** two-player tournament spots counted chips in tenths of a big blind, so a pot that is not a whole tenth was rounded before solving (with a 0.125 bb ante, 2.25 bb was solved as 2.3 bb, 2% too much). They now count in hundredths. Spots saved to the library before this version open as they were solved.
 

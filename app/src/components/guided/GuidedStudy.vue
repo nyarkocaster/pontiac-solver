@@ -232,7 +232,7 @@
                   </ul>
                 </div>
                 <div class="mt-2">
-                  <HandGrid :grid="node.grid" :colors="colors" :actions="node.actions.map((_x, a) => shortAction(a))" :selected="selectedCell" :mine="myCell" :marks="suitMarks" :mode="chartMode" :fmt-ev="fmt" @select="selectCell" />
+                  <HandGrid :grid="node.grid" :colors="colors" :actions="node.actions.map((_x, a) => shortAction(a))" :selected="selectedCell" :mine="myCell" :marks="suitMarks" :mode="chartMode" :fmt-ev="fmt" :lit="typeLit ?? undefined" @select="selectCell" />
                   <p class="hint mt-1.5">The fill height shows how much of each hand is still in the range here. A sliver means that hand rarely reaches this point. A dot in the corner marks squares where the suits play differently; click one to see each suit.</p>
                 </div>
                 <details v-if="otherGrid" class="mt-3 rounded-lg border border-rule px-3 py-2" :open="otherOn" @toggle="setOther(($event.target as HTMLDetailsElement).open)">
@@ -355,7 +355,8 @@
 
             <section v-if="node.kind === 'player'" class="panel">
               <h3 class="font-bold">{{ actorName }}'s play by type of hand</h3>
-              <HandTypes class="mt-2" :combos="node.combos" :board="node.board" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" />
+              <p class="text-xs text-muted mt-1">Click a type to show only those hands in the chart and in the list of every hand. <button v-if="typePick" class="underline text-felt font-bold" @click="typePick = null">Show all hands</button></p>
+              <HandTypes class="mt-2" :combos="node.combos" :board="node.board" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" :picked="typePick" @pick="typePick = $event" />
             </section>
 
             <section v-if="node.kind === 'player' && node.actions.some((a) => /^(Bet|Raise|All-in)/.test(a))" class="panel">
@@ -390,7 +391,8 @@
         <!-- every exact hand, full width so all the columns fit -->
         <section v-if="node.kind === 'player' && node.combos.length" class="panel mt-4">
           <h3 class="font-bold">Every hand {{ actorName }} can hold</h3>
-          <HandsTable class="mt-2" :combos="node.combos" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" :pot="node.pot" :selected="selectedCell" :fmt-ev="fmt" @select="selectCell" />
+          <HandsTable class="mt-2" :combos="node.combos" :actions="node.actions.map((_x, a) => shortAction(a))" :colors="colors" :pot="node.pot" :selected="selectedCell" :fmt-ev="fmt" :only="typeHands" @select="selectCell" />
+          <p v-if="typePick" class="hint mt-1">Showing {{ typePick.toLowerCase() }} only. <button class="underline text-felt font-bold" @click="typePick = null">Show all hands</button></p>
         </section>
       </div>
 
@@ -432,6 +434,7 @@ import EquityGraph from "./EquityGraph.vue";
 import ChartMode from "./ChartMode.vue";
 import Blockers from "./Blockers.vue";
 import HandTypes from "./HandTypes.vue";
+import { classify } from "../../guided/handClass";
 import HandsTable from "./HandsTable.vue";
 import TableView from "./TableView.vue";
 import CardReport, { type CardRow } from "./CardReport.vue";
@@ -995,6 +998,23 @@ function setOther(open: boolean) { if (open === otherOn.value) return; otherOn.v
 /** one neutral bar per square: how much of the hand is left */
 const otherGrid = computed(() => (node.value?.kind === "player" && node.value.other_grid?.length === 169 ? node.value.other_grid.map((c) => ({ ...c, freqs: c.weight > 0 ? [1] : [] })) : null));
 const otherCombos = computed(() => (node.value?.other_grid ?? []).reduce((s, c) => s + (c.reach ?? 0), 0));
+// a type of hand picked in "play by type of hand": the chart fades every other square and the hands table lists only that type
+const typePick = ref<string | null>(null);
+const typeHands = computed<Set<string> | null>(() => {
+  const n = node.value; const t = typePick.value;
+  if (!n || !t || n.kind !== "player") return null;
+  const out = new Set<string>();
+  for (const c of n.combos) { if (c.weight <= 0 || c.hand.length !== 4) continue; const k = classify(c.hand, n.board); if (k.made === t || (k.draws as string[]).includes(t)) out.add(c.hand); }
+  return out;
+});
+/** per chart square: does any hand of the picked type sit in it? null when nothing is picked or the type is not held here */
+const typeLit = computed<boolean[] | null>(() => {
+  const n = node.value; const hands = typeHands.value;
+  if (!n || !hands || !hands.size) return null;
+  const lit = new Array<boolean>(169).fill(false);
+  for (const c of n.combos) if (hands.has(c.hand)) lit[c.cell] = true;
+  return lit;
+});
 // the table drawing can be hidden; the choice is remembered on this computer
 const tableOn = ref(true);
 try { tableOn.value = localStorage.getItem("pontiac.table") !== "off"; } catch { /* no storage: keep it on */ }

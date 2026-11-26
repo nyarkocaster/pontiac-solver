@@ -42,7 +42,7 @@ import { computed, ref, watch } from "vue";
 import { SUIT_COLOR, SUIT_SYMBOL } from "../../guided/data";
 
 interface Combo { hand: string; cell: number; weight: number; freqs: number[]; equity: number; ev: number }
-const props = defineProps<{ combos: Combo[]; actions: string[]; colors: string[]; pot: number; selected: number | null; fmtEv: (chips: number) => string }>();
+const props = defineProps<{ combos: Combo[]; actions: string[]; colors: string[]; pot: number; selected: number | null; fmtEv: (chips: number) => string; /** when given, only these exact hands are listed */ only?: Set<string> | null }>();
 const emit = defineEmits<{ (e: "select", cell: number): void }>();
 
 const filter = ref(""); const all = ref(false);
@@ -74,7 +74,7 @@ const rows = computed(() => {
     if (ranks.length === 2) return (hand[0] === ranks[0] && hand[2] === ranks[1]) || (hand[0] === ranks[1] && hand[2] === ranks[0]);
     return true;
   });
-  const list = props.combos.filter((c) => c.weight > 0.0005 && match(c.hand)).map((c) => ({ ...c, realised: c.equity > 0.005 && props.pot > 0 ? c.ev / (c.equity * props.pot) : null as number | null }));
+  const list = props.combos.filter((c) => c.weight > 0.0005 && (!props.only || props.only.has(c.hand)) && match(c.hand)).map((c) => ({ ...c, realised: c.equity > 0.005 && props.pot > 0 ? c.ev / (c.equity * props.pot) : null as number | null }));
   const k = sortKey.value;
   const value = (r: (typeof list)[number]): number => k === "hand" ? rankValue(r.hand) : k === "weight" ? r.weight : k === "ev" ? r.ev : k === "equity" ? r.equity : k === "realised" ? r.realised ?? -1 : r.freqs[Number(k.slice(1))] ?? 0;
   return list.sort((x, y) => (sortDown.value ? value(y) - value(x) : value(x) - value(y)) || rankValue(y.hand) - rankValue(x.hand));

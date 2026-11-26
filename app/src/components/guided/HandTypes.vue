@@ -3,7 +3,7 @@
     <p v-if="!made.length" class="text-sm text-muted">No hands reach this point.</p>
     <template v-else>
       <div class="rowhead"><span>Type of hand</span><span class="text-right">Share</span><span>What it does</span></div>
-      <div v-for="r in made" :key="r.name" class="row" :title="tip(r)">
+      <div v-for="r in made" :key="r.name" class="row" :class="rowClass(r.name)" :title="tip(r)" role="button" tabindex="0" :aria-pressed="picked === r.name" @click="pick(r.name)" @keydown.enter="pick(r.name)">
         <span class="font-bold truncate">{{ r.name }}</span>
         <span class="text-right tabular-nums">{{ share(r.share) }}</span>
         <span>
@@ -15,7 +15,7 @@
       </div>
       <template v-if="draws.length">
         <div class="rowhead mt-3"><span>Draws</span><span class="text-right">Share</span><span>Counted in the rows above as well</span></div>
-        <div v-for="r in draws" :key="r.name" class="row" :title="tip(r)">
+        <div v-for="r in draws" :key="r.name" class="row" :class="rowClass(r.name)" :title="tip(r)" role="button" tabindex="0" :aria-pressed="picked === r.name" @click="pick(r.name)" @keydown.enter="pick(r.name)">
           <span class="font-bold truncate">{{ r.name }}</span>
           <span class="text-right tabular-nums">{{ share(r.share) }}</span>
           <span>
@@ -35,7 +35,11 @@ import { computed } from "vue";
 import { classify, MADE, DRAWS } from "../../guided/handClass";
 
 interface Combo { hand: string; weight: number; freqs: number[]; equity: number }
-const props = defineProps<{ combos: Combo[]; board: string[]; actions: string[]; colors: string[] }>();
+const props = defineProps<{ combos: Combo[]; board: string[]; actions: string[]; colors: string[]; /** the type being highlighted in the chart, if any */ picked?: string | null }>();
+const emit = defineEmits<{ (e: "pick", name: string | null): void }>();
+/** clicking a row highlights that type in the chart; clicking it again shows everything */
+const pick = (name: string) => emit("pick", props.picked === name ? null : name);
+const rowClass = (name: string) => (props.picked === undefined ? "" : "cursor-pointer hover:bg-paper " + (props.picked === name ? "bg-paper ring-1 ring-felt rounded" : ""));
 interface Row { name: string; share: number; freqs: number[]; equity: number }
 
 const groups = computed(() => {
