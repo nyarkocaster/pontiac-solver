@@ -582,7 +582,7 @@ fn solve_with(spec: &PreSpec, solved: &std::collections::HashMap<usize, [Vec<f64
                     values: action_values[i].iter().map(|v| v.iter().map(|&x| r(x, 4)).collect()).collect() });
             }
             Kind::Flop { raiser } => {
-                let freq = share_of(&rc); if freq < 0.0005 { continue; }
+                let freq = share_of(&rc); if freq < 0.000001 { continue; }
                 let pot = n.put[0] + n.put[1] + 2.0 * spec.ante;
                 let (mut num, mut den) = (0.0, 0.0);
                 let got = g.solved.get(&i);
